@@ -1,0 +1,258 @@
+export interface TemplateManifest {
+  name: string;
+  version: string;
+  templates: TemplateName[];
+}
+
+export const templateProjectNameToken = "__tsu_project_name__";
+
+export interface TemplateFile {
+  path: string;
+  content: string;
+}
+
+export interface CreateTemplateFilesOptions {
+  projectName: string;
+  templateName?: string;
+}
+
+export type TemplateName = "default" | "monorepo";
+
+const templateNames: TemplateName[] = ["default", "monorepo"];
+
+export const templateManifest: TemplateManifest = {
+  name: "quick-start-template",
+  version: "0.0.0",
+  templates: templateNames
+};
+
+export function listTemplates() {
+  return [...templateNames];
+}
+
+export function createTemplateFiles(options: CreateTemplateFilesOptions): TemplateFile[] {
+  return renderTemplateFiles(createTemplateSourceFiles(options.templateName), options.projectName);
+}
+
+export function createTemplateSourceFiles(templateName?: string): TemplateFile[] {
+  const resolvedTemplateName = resolveTemplateName(templateName);
+
+  if (resolvedTemplateName === "monorepo") {
+    return createMonorepoTemplateFiles(templateProjectNameToken);
+  }
+
+  return createDefaultTemplateFiles(templateProjectNameToken);
+}
+
+export function renderTemplateFiles(files: TemplateFile[], projectName: string): TemplateFile[] {
+  const packageName = normalizePackageName(projectName);
+
+  return files.map((file) => ({
+    path: file.path,
+    content: file.content.replaceAll(templateProjectNameToken, packageName)
+  }));
+}
+
+
+function createDefaultTemplateFiles(packageName: string): TemplateFile[] {
+  return [
+    {
+      path: "package.json",
+      content: packageJson({
+        name: packageName,
+        version: "0.0.0",
+        type: "module",
+        scripts: {
+          dev: "node src/index.js"
+        }
+      })
+    },
+    {
+      path: "src/index.js",
+      content: `console.log("${packageName} is ready");\n`
+    }
+  ];
+}
+
+function createMonorepoTemplateFiles(packageName: string): TemplateFile[] {
+  return [
+    {
+      path: "package.json",
+      content: packageJson({
+        name: packageName,
+        private: true,
+        type: "module",
+        packageManager: "pnpm@8.15.9",
+        scripts: {
+          build: "turbo run build",
+          test: "turbo run test",
+          lint: "turbo run lint",
+          "release:version": "changeset version",
+          "release:publish": "changeset publish"
+        },
+        devDependencies: {
+          "@changesets/cli": "^2.31.0",
+          "@types/node": "^20.17.57",
+          turbo: "^2.5.3",
+          typescript: "^5.8.3"
+        }
+      })
+    },
+    {
+      path: "pnpm-workspace.yaml",
+      content: `packages:\n  - "cli"\n  - "template"\n  - "components/*"\n  - "utils/*"\n  - "sdk"\n  - "tests"\n  - "script"\n`
+    },
+    {
+      path: "turbo.json",
+      content: packageJson({
+        $schema: "https://turbo.build/schema.json",
+        tasks: {
+          build: {
+            dependsOn: ["^build"],
+            outputs: ["dist/**"]
+          },
+          lint: {
+            dependsOn: ["^lint"],
+            outputs: []
+          },
+          test: {
+            dependsOn: ["build"],
+            outputs: []
+          }
+        }
+      })
+    },
+    {
+      path: "tsconfig.base.json",
+      content: packageJson({
+        compilerOptions: {
+          target: "ES2022",
+          module: "NodeNext",
+          moduleResolution: "NodeNext",
+          declaration: true,
+          types: ["node"],
+          strict: true,
+          esModuleInterop: true,
+          forceConsistentCasingInFileNames: true,
+          skipLibCheck: true
+        }
+      })
+    },
+    {
+      path: ".gitignore",
+      content: `node_modules/\ndist/\n.turbo/\n*.log\n`
+    },
+    {
+      path: ".changeset/config.json",
+      content: packageJson({
+        $schema: "https://unpkg.com/@changesets/config@3.1.1/schema.json",
+        changelog: "@changesets/cli/changelog",
+        commit: false,
+        fixed: [],
+        linked: [],
+        access: "public",
+        baseBranch: "main",
+        updateInternalDependencies: "patch",
+        ignore: ["tests", "script"]
+      })
+    },
+    ...createPublishablePackageFiles("cli", "@tsu/cli", "cli package is ready", {
+      bin: {
+        "tsu-cli": "./dist/index.js"
+      },
+      dependencies: {
+        "@tsu/template": "workspace:*"
+      }
+    }),
+    ...createPublishablePackageFiles("template", "@tsu/template", "template package is ready"),
+    ...createPublishablePackageFiles("components/vue", "@tsu/components-vue", "vue components package is ready"),
+    ...createPublishablePackageFiles("components/react", "@tsu/components-react", "react components package is ready"),
+    ...createPublishablePackageFiles("utils/js", "@tsu/utils-js", "js utils package is ready"),
+    ...createPublishablePackageFiles("sdk", "@tsu/sdk", "sdk package is ready"),
+    {
+      path: "tests/package.json",
+      content: packageJson({
+        name: "@tsu/tests",
+        private: true,
+        type: "module"
+      })
+    },
+    {
+      path: "script/package.json",
+      content: packageJson({
+        name: "@tsu/script",
+        private: true,
+        type: "module"
+      })
+    }
+  ];
+}
+
+function createPublishablePackageFiles(
+  directory: string,
+  name: string,
+  message: string,
+  packageJsonOverrides: Record<string, unknown> = {}
+): TemplateFile[] {
+  const tsconfigPath = directory.includes("/") ? "../../tsconfig.base.json" : "../tsconfig.base.json";
+
+  return [
+    {
+      path: `${directory}/package.json`,
+      content: packageJson({
+        name,
+        version: "0.0.0",
+        type: "module",
+        ...packageJsonOverrides,
+        exports: {
+          ".": {
+            types: "./dist/index.d.ts",
+            import: "./dist/index.js"
+          }
+        },
+        types: "./dist/index.d.ts",
+        files: ["dist/index.js", "dist/index.d.ts"],
+        scripts: {
+          build: "tsc -p tsconfig.json",
+          lint: "tsc -p tsconfig.json --noEmit",
+          test: `node -e "console.log('No tests configured for ${name}')"`
+        }
+      })
+    },
+    {
+      path: `${directory}/tsconfig.json`,
+      content: packageJson({
+        extends: tsconfigPath,
+        compilerOptions: {
+          rootDir: "src",
+          outDir: "dist"
+        },
+        include: ["src"]
+      })
+    },
+    {
+      path: `${directory}/src/index.ts`,
+      content: `export const message = "${message}";\n`
+    }
+  ];
+}
+
+function resolveTemplateName(templateName = "default"): TemplateName {
+  if (templateNames.includes(templateName as TemplateName)) {
+    return templateName as TemplateName;
+  }
+
+  throw new Error(`Template "${templateName}" is not available. Available templates: ${templateNames.join(", ")}.`);
+}
+
+function normalizePackageName(projectName: string) {
+  return projectName
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9._-]+/g, "-")
+    .replace(/^-+|-+$/g, "") || "quick-start-app";
+}
+
+function packageJson(value: unknown) {
+  return `${JSON.stringify(value, null, 2)}\n`;
+}

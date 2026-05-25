@@ -1,0 +1,24 @@
+{
+  "name": "quick-start-monorepo",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@8.15.9",
+  "scripts": {
+    "build": "turbo run build",
+    "test": "turbo run test",
+    "lint": "turbo run lint",
+    "validate:generated-monorepo": "node script/validate-generated-monorepo.mjs",
+    "template:release:preflight": "node script/template-release-preflight.mjs",
+    "validate:template-release": "node script/validate-template-release.mjs",
+    "template:release:build": "node script/build-template-release.mjs",
+    "template:release:publish": "node script/publish-template-release.mjs",
+    "release:version": "changeset version",
+    "release:publish": "changeset publish"
+  },
+  "devDependencies": {
+    "@changesets/cli": "^2.29.4",
+    "@types/node": "^20.17.57",
+    "turbo": "^2.5.3",
+    "typescript": "^5.8.3"
+  }
+}

@@ -1,0 +1,21 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm --version)",
+      "Bash(corepack --version)",
+      "Bash(pnpm --version)",
+      "Bash(pnpm install *)",
+      "Bash(pnpm build *)",
+      "Bash(pnpm lint *)",
+      "Bash(pnpm test *)",
+      "Bash(pnpm --filter @tsu/cli build)",
+      "Bash(pnpm --filter @tsu/cli test)",
+      "Bash(node /e/project/quick-start/cli/dist/index.js init demo-app)",
+      "Bash(pnpm validate:generated-monorepo)",
+      "Bash(pnpm template:release:build --version=1.0.0)",
+      "Bash(TEMPLATE_VERSION=1.0.0 pnpm validate:template-release)",
+      "Bash(pnpm template:release:preflight --version=1.0.0)",
+      "Bash(pnpm validate:template-release)"
+    ]
+  }
+}

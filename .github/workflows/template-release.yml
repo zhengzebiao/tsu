@@ -1,0 +1,30 @@
+name: Template Release
+
+on:
+  push:
+    tags:
+      - "template-v*"
+
+permissions:
+  contents: write
+
+jobs:
+  publish-template-release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 8.15.9
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm build
+      - run: pnpm template:release:build --version=${GITHUB_REF_NAME#template-v}
+        shell: bash
+      - run: pnpm template:release:publish --version=${GITHUB_REF_NAME#template-v}
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}

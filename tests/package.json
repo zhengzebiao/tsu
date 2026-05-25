@@ -1,0 +1,5 @@
+{
+  "name": "@tsu/tests",
+  "private": true,
+  "type": "module"
+}
