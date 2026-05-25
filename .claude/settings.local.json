@@ -15,7 +15,8 @@
       "Bash(pnpm template:release:build --version=1.0.0)",
       "Bash(TEMPLATE_VERSION=1.0.0 pnpm validate:template-release)",
       "Bash(pnpm template:release:preflight --version=1.0.0)",
-      "Bash(pnpm validate:template-release)"
+      "Bash(pnpm validate:template-release)",
+      "Bash(pnpm template:release:publish --version=1.0.0)"
     ]
   }
 }

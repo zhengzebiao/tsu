@@ -150,7 +150,7 @@ TEMPLATE_VERSION=1.0.0 pnpm validate:template-release
 发布到 GitHub Release：
 
 ```bash
-pnpm template:release:publish --version=1.0.0
+GITHUB_TOKEN=... pnpm template:release:publish --version=1.0.0
 ```
 
 也可以推送 tag 触发 GitHub Actions 自动发布：
@@ -159,6 +159,13 @@ pnpm template:release:publish --version=1.0.0
 git tag template-v1.0.0
 git push origin template-v1.0.0
 ```
+
+本地执行发布脚本时，需要提供：
+
+- `GITHUB_TOKEN` 或 `GH_TOKEN`
+- `TSU_TEMPLATE_REPOSITORY` 或 `GITHUB_REPOSITORY`
+
+脚本会通过 GitHub API 创建或复用 `template-v<version>` Release，并上传 `tsu-templates-v<version>.tar.gz`。
 
 CLI 使用远程模板：
 
