@@ -4,6 +4,13 @@ import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 
+class ResponseError extends Error {
+  constructor(status, statusText, body) {
+    super(`GitHub API request failed: ${status} ${statusText}${body ? ` - ${body}` : ""}`);
+    this.status = status;
+  }
+}
+
 const execFileAsync = promisify(execFile);
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const version = readVersion();
@@ -148,9 +155,3 @@ async function request(url, init) {
   return response;
 }
 
-class ResponseError extends Error {
-  constructor(status, statusText, body) {
-    super(`GitHub API request failed: ${status} ${statusText}${body ? ` - ${body}` : ""}`);
-    this.status = status;
-  }
-}
