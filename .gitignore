@@ -2,3 +2,10 @@ node_modules/
 dist/
 .turbo/
 *.log
+# Local certificate files
+github.crt
+github.pem
+*.cer
+*.crt
+*.pem
+tmp-verify/
