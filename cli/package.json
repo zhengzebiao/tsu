@@ -16,9 +16,6 @@
     "dist/index.js",
     "dist/index.d.ts"
   ],
-  "dependencies": {
-    "@tsu/template": "workspace:*"
-  },
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "lint": "tsc -p tsconfig.json --noEmit",

@@ -21,15 +21,9 @@ importers:
         specifier: ^5.8.3
         version: 5.9.3
 
-  cli:
-    dependencies:
-      '@tsu/template':
-        specifier: workspace:*
-        version: link:../template
+  cli: {}
 
-  components/react: {}
-
-  components/vue: {}
+  components: {}
 
   script: {}
 
@@ -39,7 +33,7 @@ importers:
 
   tests: {}
 
-  utils/js: {}
+  utils: {}
 
 packages:
 

@@ -1,21 +1,6 @@
 {
   "name": "@tsu/components-react",
   "version": "0.0.0",
-  "type": "module",
-  "exports": {
-    ".": {
-      "types": "./dist/index.d.ts",
-      "import": "./dist/index.js"
-    }
-  },
-  "types": "./dist/index.d.ts",
-  "files": [
-    "dist/index.js",
-    "dist/index.d.ts"
-  ],
-  "scripts": {
-    "build": "tsc -p tsconfig.json",
-    "lint": "tsc -p tsconfig.json --noEmit",
-    "test": "node -e \"console.log('No tests configured for @tsu/components-react')\""
-  }
+  "private": true,
+  "type": "module"
 }

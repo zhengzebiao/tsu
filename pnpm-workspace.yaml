@@ -1,8 +1,8 @@
 packages:
   - "cli"
   - "template"
-  - "components/*"
-  - "utils/*"
+  - "components"
+  - "utils"
   - "sdk"
   - "tests"
   - "script"

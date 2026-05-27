@@ -34,12 +34,14 @@ test("monorepo template creates workspace files", () => {
   assert.ok(paths.includes("pnpm-workspace.yaml"));
   assert.ok(paths.includes(".changeset/config.json"));
   assert.ok(paths.includes("cli/package.json"));
-  assert.ok(paths.includes("components/vue/package.json"));
-  assert.ok(paths.includes("components/react/package.json"));
-  assert.ok(paths.includes("utils/js/package.json"));
+  assert.ok(paths.includes("components/package.json"));
+  assert.ok(paths.includes("utils/package.json"));
   assert.ok(paths.includes("sdk/package.json"));
   assert.ok(paths.includes("tests/package.json"));
   assert.ok(paths.includes("script/package.json"));
+  assert.match(files.find((file) => file.path === "components/package.json")?.content ?? "", /"\.\/vue"/);
+  assert.match(files.find((file) => file.path === "components/package.json")?.content ?? "", /"\.\/react"/);
+  assert.match(files.find((file) => file.path === "utils/package.json")?.content ?? "", /"\.\/js"/);
 });
 
 test("template source files use project name token", () => {

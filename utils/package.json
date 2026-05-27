@@ -1,0 +1,20 @@
+{
+  "name": "@tsu/utils",
+  "version": "0.0.0",
+  "type": "module",
+  "exports": {
+    "./js": {
+      "types": "./dist/js/index.d.ts",
+      "import": "./dist/js/index.js"
+    }
+  },
+  "files": [
+    "dist/js/index.js",
+    "dist/js/index.d.ts"
+  ],
+  "scripts": {
+    "build": "tsc -p js/tsconfig.json",
+    "lint": "tsc -p js/tsconfig.json --noEmit",
+    "test": "node -e \"console.log('No tests configured for @tsu/utils')\""
+  }
+}

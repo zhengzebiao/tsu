@@ -6,7 +6,7 @@ import { tmpdir } from "node:os";
 import { basename, dirname, join, resolve } from "node:path";
 import { promisify } from "node:util";
 import { fileURLToPath } from "node:url";
-import { createTemplateFiles, renderTemplateFiles, type TemplateFile } from "@tsu/template";
+import { createTemplateFiles, renderTemplateFiles, type TemplateFile } from "./template.js";
 
 const execFileAsync = promisify(execFile);
 const templateAssetNamePattern = /^tsu-templates-v(.+)\.tar\.gz$/;
@@ -42,8 +42,8 @@ interface RemoteTemplateManifest {
   templates: string[];
 }
 
-export function createCliMessage(templatePackage = "@tsu/template") {
-  return `tsu-cli is ready to pull ${templatePackage}`;
+export function createCliMessage() {
+  return "tsu-cli is ready to pull templates";
 }
 
 export function parseInitArgs(args: string[], cwd = process.cwd()): ParsedInitOptions {

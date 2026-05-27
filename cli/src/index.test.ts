@@ -5,8 +5,8 @@ import { join, resolve } from "node:path";
 import test from "node:test";
 import { createCliMessage, findTemplateAsset, getReleaseTag, initProject, normalizeTemplateVersion, parseInitArgs, runCli } from "./index.js";
 
-test("createCliMessage reports template package", () => {
-  assert.equal(createCliMessage(), "tsu-cli is ready to pull @tsu/template");
+test("createCliMessage reports template support", () => {
+  assert.equal(createCliMessage(), "tsu-cli is ready to pull templates");
 });
 
 test("parseInitArgs supports template cwd version source and force options", () => {
@@ -101,7 +101,7 @@ test("runCli initializes monorepo projects", async () => {
 
     assert.match(message, /^Created platform from monorepo@latest at /);
     assert.match(await readFile(join(cwd, "platform", "package.json"), "utf8"), /"name": "platform"/);
-    assert.match(await readFile(join(cwd, "platform", "pnpm-workspace.yaml"), "utf8"), /components\/\*/);
+    assert.match(await readFile(join(cwd, "platform", "pnpm-workspace.yaml"), "utf8"), /"components"/);
     assert.match(await readFile(join(cwd, "platform", "cli", "package.json"), "utf8"), /"name": "@tsu\/cli"/);
   } finally {
     await rm(cwd, { force: true, recursive: true });

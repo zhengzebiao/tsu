@@ -12,6 +12,8 @@
     "validate:template-release": "node script/validate-template-release.mjs",
     "template:release:build": "node script/build-template-release.mjs",
     "template:release:publish": "node script/publish-template-release.mjs",
+    "npm:release:preflight": "node script/npm-release-preflight.mjs",
+    "npm:release:pack": "node script/validate-npm-pack.mjs",
     "release:version": "changeset version",
     "release:publish": "changeset publish"
   },

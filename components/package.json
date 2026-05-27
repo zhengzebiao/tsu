@@ -1,0 +1,26 @@
+{
+  "name": "@tsu/components",
+  "version": "0.0.0",
+  "type": "module",
+  "exports": {
+    "./vue": {
+      "types": "./dist/vue/index.d.ts",
+      "import": "./dist/vue/index.js"
+    },
+    "./react": {
+      "types": "./dist/react/index.d.ts",
+      "import": "./dist/react/index.js"
+    }
+  },
+  "files": [
+    "dist/vue/index.js",
+    "dist/vue/index.d.ts",
+    "dist/react/index.js",
+    "dist/react/index.d.ts"
+  ],
+  "scripts": {
+    "build": "tsc -p vue/tsconfig.json && tsc -p react/tsconfig.json",
+    "lint": "tsc -p vue/tsconfig.json --noEmit && tsc -p react/tsconfig.json --noEmit",
+    "test": "node -e \"console.log('No tests configured for @tsu/components')\""
+  }
+}

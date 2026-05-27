@@ -125,6 +125,37 @@ pnpm lint
 pnpm test
 ```
 
+## npm 发布包
+
+完整发布流程见 [npm-release-flow.zh-CN.md](npm-release-flow.zh-CN.md)。
+
+npm 只发布以下顶层包：
+
+- `@tsu/cli`
+- `@tsu/components`
+- `@tsu/utils`
+- `@tsu/sdk`
+
+不发布 `template`、`tests`、`script`，也不拆分发布 `@tsu/components-vue`、`@tsu/components-react`、`@tsu/utils-js`。
+
+组件和工具通过 subpath exports 使用：
+
+```js
+import { vueComponentPreset } from "@tsu/components/vue";
+import { reactComponentPreset } from "@tsu/components/react";
+import { isPlainObject } from "@tsu/utils/js";
+```
+
+发布前本地校验：
+
+```bash
+pnpm build
+pnpm lint
+pnpm test
+pnpm npm:release:preflight
+pnpm npm:release:pack
+```
+
 ## 发布模板 Release asset
 
 模板 Release 使用当前仓库的 GitHub Release asset：

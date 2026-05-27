@@ -1,9 +1,3 @@
-export interface TemplateManifest {
-  name: string;
-  version: string;
-  templates: TemplateName[];
-}
-
 export interface TemplateFile {
   path: string;
   content: string;
@@ -17,17 +11,7 @@ export interface CreateTemplateFilesOptions {
 export type TemplateName = "default" | "monorepo";
 
 const templateNames: TemplateName[] = ["default", "monorepo"];
-export const templateProjectNameToken = "__tsu_project_name__";
-
-export const templateManifest: TemplateManifest = {
-  name: "quick-start-template",
-  version: "0.0.0",
-  templates: templateNames
-};
-
-export function listTemplates() {
-  return [...templateNames];
-}
+const templateProjectNameToken = "__tsu_project_name__";
 
 export function createTemplateFiles(options: CreateTemplateFilesOptions): TemplateFile[] {
   return renderTemplateFiles(createTemplateSourceFiles(options.templateName), options.projectName);
@@ -98,7 +82,7 @@ function createMonorepoTemplateFiles(packageName: string): TemplateFile[] {
     },
     {
       path: "pnpm-workspace.yaml",
-      content: `packages:\n  - "cli"\n  - "template"\n  - "components"\n  - "utils"\n  - "sdk"\n  - "tests"\n  - "script"\n`
+      content: `packages:\n  - "cli"\n  - "template"\n  - "components"\n  - "components/*"\n  - "utils"\n  - "utils/*"\n  - "sdk"\n  - "tests"\n  - "script"\n`
     },
     {
       path: "turbo.json",
@@ -162,19 +146,19 @@ function createMonorepoTemplateFiles(packageName: string): TemplateFile[] {
     ...createTopLevelPackageFiles("components", "@tsu/components", undefined, {
       exports: {
         "./vue": {
-          types: "./dist/vue/index.d.ts",
-          import: "./dist/vue/index.js"
+          types: "./vue/dist/index.d.ts",
+          import: "./vue/dist/index.js"
         },
         "./react": {
-          types: "./dist/react/index.d.ts",
-          import: "./dist/react/index.js"
+          types: "./react/dist/index.d.ts",
+          import: "./react/dist/index.js"
         }
       },
       files: [
-        "dist/vue/index.js",
-        "dist/vue/index.d.ts",
-        "dist/react/index.js",
-        "dist/react/index.d.ts"
+        "vue/dist/index.js",
+        "vue/dist/index.d.ts",
+        "react/dist/index.js",
+        "react/dist/index.d.ts"
       ],
       scripts: {
         build: "tsc -p vue/tsconfig.json && tsc -p react/tsconfig.json",
@@ -185,11 +169,11 @@ function createMonorepoTemplateFiles(packageName: string): TemplateFile[] {
     ...createTopLevelPackageFiles("utils", "@tsu/utils", undefined, {
       exports: {
         "./js": {
-          types: "./dist/js/index.d.ts",
-          import: "./dist/js/index.js"
+          types: "./js/dist/index.d.ts",
+          import: "./js/dist/index.js"
         }
       },
-      files: ["dist/js/index.js", "dist/js/index.d.ts"],
+      files: ["js/dist/index.js", "js/dist/index.d.ts"],
       scripts: {
         build: "tsc -p js/tsconfig.json",
         lint: "tsc -p js/tsconfig.json --noEmit",
@@ -217,6 +201,33 @@ function createMonorepoTemplateFiles(packageName: string): TemplateFile[] {
           lint: "tsc -p tsconfig.json --noEmit",
           test: "node --test dist/index.test.js"
         }
+      })
+    },
+    {
+      path: "components/vue/package.json",
+      content: packageJson({
+        name: "@tsu/components-vue",
+        version: "0.0.0",
+        private: true,
+        type: "module"
+      })
+    },
+    {
+      path: "components/react/package.json",
+      content: packageJson({
+        name: "@tsu/components-react",
+        version: "0.0.0",
+        private: true,
+        type: "module"
+      })
+    },
+    {
+      path: "utils/js/package.json",
+      content: packageJson({
+        name: "@tsu/utils-js",
+        version: "0.0.0",
+        private: true,
+        type: "module"
       })
     },
     {
