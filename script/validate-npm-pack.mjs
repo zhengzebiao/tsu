@@ -8,7 +8,6 @@ const execFileAsync = promisify(execFile);
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const publishablePackages = ["cli", "components", "utils", "sdk"];
 const forbiddenPackages = ["template", "tests", "script", "components/vue", "components/react", "utils/js"];
-const npmCli = join(dirname(process.execPath), "node_modules", "npm", "bin", "npm-cli.js");
 
 for (const packagePath of publishablePackages) {
   const manifest = await readPackageJson(packagePath);
@@ -26,10 +25,11 @@ for (const packagePath of forbiddenPackages) {
 process.stdout.write("npm pack validation ok\n");
 
 async function validatePack(packagePath, packageName) {
-  const { stdout } = await execFileAsync(process.execPath, [npmCli, "pack", "--json", "--dry-run"], {
+  const { stdout } = await execFileAsync("npm", ["pack", "--json", "--dry-run"], {
     cwd: join(repoRoot, packagePath),
     env: process.env,
-    maxBuffer: 10 * 1024 * 1024
+    maxBuffer: 10 * 1024 * 1024,
+    shell: process.platform === "win32"
   });
 
   const [result] = JSON.parse(stdout);
