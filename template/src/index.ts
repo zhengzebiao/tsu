@@ -151,7 +151,7 @@ function createMonorepoTemplateFiles(packageName: string): TemplateFile[] {
         access: "public",
         baseBranch: "master",
         updateInternalDependencies: "patch",
-        ignore: ["template", "tests", "script"]
+        ignore: ["@tsu/template", "@tsu/tests", "@tsu/script"]
       })
     },
     ...createTopLevelPackageFiles("cli", "@tsu/cli", "cli package is ready", {
