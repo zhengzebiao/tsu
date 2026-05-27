@@ -49,6 +49,7 @@ jobs:
           cache: pnpm
           registry-url: https://registry.npmjs.org
       - run: pnpm install --frozen-lockfile
+      - run: pnpm build
       - uses: changesets/action@v1
         with:
           version: pnpm release:version
