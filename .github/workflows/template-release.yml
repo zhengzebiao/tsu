@@ -28,3 +28,4 @@ jobs:
         shell: bash
         env:
           GITHUB_TOKEN: ${{ github.token }}
+          TSU_TEMPLATE_REPOSITORY: zhengzebiao/tsu

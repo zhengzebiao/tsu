@@ -85,7 +85,10 @@ async function getReleaseByTag(repositoryInfo, tagName, authToken) {
 async function createRelease(repositoryInfo, tagName, authToken) {
   return requestJson(`https://api.github.com/repos/${repositoryInfo.owner}/${repositoryInfo.repo}/releases`, {
     method: "POST",
-    headers: authHeaders(authToken),
+    headers: {
+      ...authHeaders(authToken),
+      "Content-Type": "application/json"
+    },
     body: JSON.stringify({
       tag_name: tagName,
       name: tagName,
@@ -139,15 +142,15 @@ async function request(url, init) {
   const response = await fetch(url, init);
 
   if (!response.ok) {
-    throw new ResponseError(response.status, response.statusText);
+    throw new ResponseError(response.status, response.statusText, await response.text());
   }
 
   return response;
 }
 
 class ResponseError extends Error {
-  constructor(status, statusText) {
-    super(`GitHub API request failed: ${status} ${statusText}`);
+  constructor(status, statusText, body) {
+    super(`GitHub API request failed: ${status} ${statusText}${body ? ` - ${body}` : ""}`);
     this.status = status;
   }
 }
