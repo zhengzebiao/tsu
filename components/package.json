@@ -22,5 +22,9 @@
     "build": "tsc -p vue/tsconfig.json && tsc -p react/tsconfig.json",
     "lint": "tsc -p vue/tsconfig.json --noEmit && tsc -p react/tsconfig.json --noEmit",
     "test": "node -e \"console.log('No tests configured for @tsuz/components')\""
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/zhengzebiao/tsu"
   }
 }

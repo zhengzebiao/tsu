@@ -16,5 +16,9 @@
     "build": "tsc -p js/tsconfig.json",
     "lint": "tsc -p js/tsconfig.json --noEmit",
     "test": "node -e \"console.log('No tests configured for @tsuz/utils')\""
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/zhengzebiao/tsu"
   }
 }

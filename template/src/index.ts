@@ -251,6 +251,10 @@ function createTopLevelPackageFiles(
         name,
         version: "0.0.0",
         type: "module",
+        repository: {
+          type: "git",
+          url: "https://github.com/zhengzebiao/tsu"
+        },
         ...packageJsonOverrides,
         ...(message
           ? {
