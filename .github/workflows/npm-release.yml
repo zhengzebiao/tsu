@@ -49,6 +49,8 @@ jobs:
           node-version: 20
           cache: pnpm
           registry-url: https://registry.npmjs.org
+      - run: npm install -g npm@latest
+      - run: npm --version
       - run: pnpm install --frozen-lockfile
       - run: pnpm build
       - uses: changesets/action@v1
