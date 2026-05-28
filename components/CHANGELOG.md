@@ -1,5 +1,11 @@
 # @tsuz/components
 
+## 0.1.1
+
+### Patch Changes
+
+- Validate trusted publishing with a patch release.
+
 ## 0.1.0
 
 ### Minor Changes
