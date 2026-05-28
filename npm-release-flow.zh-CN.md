@@ -57,26 +57,32 @@ pnpm npm:release:pack
 - `pnpm npm:release:preflight`：检查只有 4 个顶层包参与 npm 发布
 - `pnpm npm:release:pack`：执行 dry-run pack，确认 tarball 内容符合预期
 
-## NPM_TOKEN 配置
+## Trusted Publishing 配置
 
-自动发布需要在 GitHub 仓库配置 `NPM_TOKEN`：
+自动发布使用 npm Trusted Publishing，不再依赖 `NPM_TOKEN`。
 
-1. 登录 npmjs.com
-2. 进入 `Access Tokens`
-3. 创建 `Automation` token
-4. 进入 GitHub 仓库 `Settings -> Secrets and variables -> Actions`
-5. 新增 repository secret：
+npm 侧需要在每个发布包或 scope 上配置 GitHub trusted publisher：
 
 ```text
-Name: NPM_TOKEN
-Secret: npmjs 生成的 token
+Repository: zhengzebiao/tsu
+Workflow: npm-release.yml
+Branch: master
+Environment: 留空
 ```
 
-workflow 会通过以下环境变量使用它：
+GitHub workflow 需要允许 OIDC：
 
 ```yaml
-NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
-NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+permissions:
+  contents: write
+  pull-requests: write
+  id-token: write
+```
+
+发布时通过 provenance 让 npm 使用 GitHub OIDC 身份：
+
+```yaml
+NPM_CONFIG_PROVENANCE: true
 ```
 
 ## PR 校验流程
