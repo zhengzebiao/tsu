@@ -6,10 +6,10 @@
 
 npm 只发布 4 个顶层包：
 
-- `@tsu/cli`
-- `@tsu/components`
-- `@tsu/utils`
-- `@tsu/sdk`
+- `@tsuz/cli`
+- `@tsuz/components`
+- `@tsuz/utils`
+- `@tsuz/sdk`
 
 不发布以下目录：
 
@@ -24,17 +24,17 @@ npm 只发布 4 个顶层包：
 
 ## 导入方式
 
-`@tsu/components` 通过 subpath exports 暴露：
+`@tsuz/components` 通过 subpath exports 暴露：
 
 ```js
-import { vueComponentPreset } from "@tsu/components/vue";
-import { reactComponentPreset } from "@tsu/components/react";
+import { vueComponentPreset } from "@tsuz/components/vue";
+import { reactComponentPreset } from "@tsuz/components/react";
 ```
 
-`@tsu/utils` 通过 subpath exports 暴露：
+`@tsuz/utils` 通过 subpath exports 暴露：
 
 ```js
-import { isPlainObject, pick } from "@tsu/utils/js";
+import { isPlainObject, pick } from "@tsuz/utils/js";
 ```
 
 ## 本地发布前校验
@@ -138,8 +138,8 @@ pnpm changeset
 
 ```md
 ---
-"@tsu/components": patch
-"@tsu/utils": patch
+"@tsuz/components": patch
+"@tsuz/utils": patch
 ---
 
 Add subpath exports for components and utils.
@@ -174,16 +174,16 @@ Add subpath exports for components and utils.
 发布完成后可检查：
 
 ```bash
-npm view @tsu/cli version
-npm view @tsu/components version
-npm view @tsu/utils version
-npm view @tsu/sdk version
+npm view @tsuz/cli version
+npm view @tsuz/components version
+npm view @tsuz/utils version
+npm view @tsuz/sdk version
 ```
 
 也可以在测试项目中验证导入：
 
 ```js
-import { vueComponentPreset } from "@tsu/components/vue";
-import { reactComponentPreset } from "@tsu/components/react";
-import { isPlainObject } from "@tsu/utils/js";
+import { vueComponentPreset } from "@tsuz/components/vue";
+import { reactComponentPreset } from "@tsuz/components/react";
+import { isPlainObject } from "@tsuz/utils/js";
 ```

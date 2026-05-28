@@ -102,7 +102,7 @@ test("runCli initializes monorepo projects", async () => {
     assert.match(message, /^Created platform from monorepo@latest at /);
     assert.match(await readFile(join(cwd, "platform", "package.json"), "utf8"), /"name": "platform"/);
     assert.match(await readFile(join(cwd, "platform", "pnpm-workspace.yaml"), "utf8"), /"components"/);
-    assert.match(await readFile(join(cwd, "platform", "cli", "package.json"), "utf8"), /"name": "@tsu\/cli"/);
+    assert.match(await readFile(join(cwd, "platform", "cli", "package.json"), "utf8"), /"name": "@tsuz\/cli"/);
   } finally {
     await rm(cwd, { force: true, recursive: true });
   }

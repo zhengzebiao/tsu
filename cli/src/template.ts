@@ -135,15 +135,15 @@ function createMonorepoTemplateFiles(packageName: string): TemplateFile[] {
         access: "public",
         baseBranch: "master",
         updateInternalDependencies: "patch",
-        ignore: ["@tsu/template", "@tsu/tests", "@tsu/script"]
+        ignore: ["@tsuz/template", "@tsuz/tests", "@tsuz/script"]
       })
     },
-    ...createTopLevelPackageFiles("cli", "@tsu/cli", "cli package is ready", {
+    ...createTopLevelPackageFiles("cli", "@tsuz/cli", "cli package is ready", {
       bin: {
         "tsu-cli": "./dist/index.js"
       }
     }),
-    ...createTopLevelPackageFiles("components", "@tsu/components", undefined, {
+    ...createTopLevelPackageFiles("components", "@tsuz/components", undefined, {
       exports: {
         "./vue": {
           types: "./vue/dist/index.d.ts",
@@ -163,10 +163,10 @@ function createMonorepoTemplateFiles(packageName: string): TemplateFile[] {
       scripts: {
         build: "tsc -p vue/tsconfig.json && tsc -p react/tsconfig.json",
         lint: "tsc -p vue/tsconfig.json --noEmit && tsc -p react/tsconfig.json --noEmit",
-        test: "node -e \"console.log('No tests configured for @tsu/components')\""
+        test: "node -e \"console.log('No tests configured for @tsuz/components')\""
       }
     }),
-    ...createTopLevelPackageFiles("utils", "@tsu/utils", undefined, {
+    ...createTopLevelPackageFiles("utils", "@tsuz/utils", undefined, {
       exports: {
         "./js": {
           types: "./js/dist/index.d.ts",
@@ -177,14 +177,14 @@ function createMonorepoTemplateFiles(packageName: string): TemplateFile[] {
       scripts: {
         build: "tsc -p js/tsconfig.json",
         lint: "tsc -p js/tsconfig.json --noEmit",
-        test: "node -e \"console.log('No tests configured for @tsu/utils')\""
+        test: "node -e \"console.log('No tests configured for @tsuz/utils')\""
       }
     }),
-    ...createTopLevelPackageFiles("sdk", "@tsu/sdk", "sdk package is ready"),
+    ...createTopLevelPackageFiles("sdk", "@tsuz/sdk", "sdk package is ready"),
     {
       path: "template/package.json",
       content: packageJson({
-        name: "@tsu/template",
+        name: "@tsuz/template",
         version: "0.0.0",
         private: true,
         type: "module",
@@ -206,7 +206,7 @@ function createMonorepoTemplateFiles(packageName: string): TemplateFile[] {
     {
       path: "components/vue/package.json",
       content: packageJson({
-        name: "@tsu/components-vue",
+        name: "@tsuz/components-vue",
         version: "0.0.0",
         private: true,
         type: "module"
@@ -215,7 +215,7 @@ function createMonorepoTemplateFiles(packageName: string): TemplateFile[] {
     {
       path: "components/react/package.json",
       content: packageJson({
-        name: "@tsu/components-react",
+        name: "@tsuz/components-react",
         version: "0.0.0",
         private: true,
         type: "module"
@@ -224,7 +224,7 @@ function createMonorepoTemplateFiles(packageName: string): TemplateFile[] {
     {
       path: "utils/js/package.json",
       content: packageJson({
-        name: "@tsu/utils-js",
+        name: "@tsuz/utils-js",
         version: "0.0.0",
         private: true,
         type: "module"
@@ -233,7 +233,7 @@ function createMonorepoTemplateFiles(packageName: string): TemplateFile[] {
     {
       path: "tests/package.json",
       content: packageJson({
-        name: "@tsu/tests",
+        name: "@tsuz/tests",
         private: true,
         type: "module"
       })
@@ -241,7 +241,7 @@ function createMonorepoTemplateFiles(packageName: string): TemplateFile[] {
     {
       path: "script/package.json",
       content: packageJson({
-        name: "@tsu/script",
+        name: "@tsuz/script",
         private: true,
         type: "module"
       })

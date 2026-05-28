@@ -9,7 +9,7 @@ pnpm install
 ## 本地构建 CLI
 
 ```bash
-pnpm --filter @tsu/cli build
+pnpm --filter @tsuz/cli build
 ```
 
 ## 初始化项目
@@ -98,8 +98,8 @@ pnpm test
 只验证 CLI 包：
 
 ```bash
-pnpm --filter @tsu/cli build
-pnpm --filter @tsu/cli test
+pnpm --filter @tsuz/cli build
+pnpm --filter @tsuz/cli test
 ```
 
 ## 本地验证模板生成
@@ -131,19 +131,19 @@ pnpm test
 
 npm 只发布以下顶层包：
 
-- `@tsu/cli`
-- `@tsu/components`
-- `@tsu/utils`
-- `@tsu/sdk`
+- `@tsuz/cli`
+- `@tsuz/components`
+- `@tsuz/utils`
+- `@tsuz/sdk`
 
-不发布 `template`、`tests`、`script`，也不拆分发布 `@tsu/components-vue`、`@tsu/components-react`、`@tsu/utils-js`。
+不发布 `template`、`tests`、`script`，也不拆分发布 `@tsuz/components-vue`、`@tsuz/components-react`、`@tsuz/utils-js`。
 
 组件和工具通过 subpath exports 使用：
 
 ```js
-import { vueComponentPreset } from "@tsu/components/vue";
-import { reactComponentPreset } from "@tsu/components/react";
-import { isPlainObject } from "@tsu/utils/js";
+import { vueComponentPreset } from "@tsuz/components/vue";
+import { reactComponentPreset } from "@tsuz/components/react";
+import { isPlainObject } from "@tsuz/utils/js";
 ```
 
 发布前本地校验：

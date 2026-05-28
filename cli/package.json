@@ -1,5 +1,5 @@
 {
-  "name": "@tsu/cli",
+  "name": "@tsuz/cli",
   "version": "0.1.0",
   "type": "module",
   "bin": {

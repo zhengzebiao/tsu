@@ -1,4 +1,4 @@
-# @tsu/cli
+# @tsuz/cli
 
 ## 0.1.0
 

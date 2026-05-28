@@ -1,4 +1,4 @@
-# @tsu/components
+# @tsuz/components
 
 ## 0.1.0
 

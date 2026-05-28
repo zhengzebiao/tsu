@@ -5,10 +5,10 @@
 - 统一管理 `cli`、`template`、`components`、`utils`、`sdk`
 - `cli` 作为 npm 发布包，负责模板拉取、初始化和命令入口
 - `template` 作为 CLI 模板源，不发布到 npm，CLI 从 GitHub Release asset 拉取
-- npm 发布面收敛为 `@tsu/cli`、`@tsu/components`、`@tsu/utils`、`@tsu/sdk`
+- npm 发布面收敛为 `@tsuz/cli`、`@tsuz/components`、`@tsuz/utils`、`@tsuz/sdk`
 - 统一使用 `pnpm + Turborepo + Changesets`
 - 所有可发布包统一使用 ESM 输出
-- npm scope 统一命名为 `@tsu`
+- npm scope 统一命名为 `@tsuz`
 
 ## 2. 范围
 
@@ -16,8 +16,8 @@
 | --- | --- | --- |
 | `cli` | CLI 工具包 | 是 |
 | `template` | CLI 模板源包 | 否 |
-| `components` | Vue / React 组件包，发布为 `@tsu/components` | 是 |
-| `utils` | JS 工具包，发布为 `@tsu/utils` | 是 |
+| `components` | Vue / React 组件包，发布为 `@tsuz/components` | 是 |
+| `utils` | JS 工具包，发布为 `@tsuz/utils` | 是 |
 | `sdk` | SDK 包 | 是 |
 | `tests` | 测试资源 | 否 |
 | `script` | 构建/发布脚本 | 否 |
@@ -38,8 +38,8 @@
 └── script/
 ```
 
-- `components` 和 `utils` 保留二级源码目录，通过 npm subpath exports 暴露 `@tsu/components/vue`、`@tsu/components/react`、`@tsu/utils/js`
-- 实际 npm 包只发布 `@tsu/components` 和 `@tsu/utils`，不拆成 `@tsu/components-vue`、`@tsu/components-react`、`@tsu/utils-js`
+- `components` 和 `utils` 保留二级源码目录，通过 npm subpath exports 暴露 `@tsuz/components/vue`、`@tsuz/components/react`、`@tsuz/utils/js`
+- 实际 npm 包只发布 `@tsuz/components` 和 `@tsuz/utils`，不拆成 `@tsuz/components-vue`、`@tsuz/components-react`、`@tsuz/utils-js`
 - `cli/sdk` 可作为独立 package 发布
 - `template/tests/script` 为内部目录，必须标记为 `private`
 
@@ -110,8 +110,8 @@
 
 ## 9. 验收标准
 
-- `@tsu/cli`、`@tsu/components`、`@tsu/utils`、`@tsu/sdk` 可作为 npm 包正常安装和使用
-- `@tsu/components/vue`、`@tsu/components/react`、`@tsu/utils/js` 可作为 subpath import 正常导入
+- `@tsuz/cli`、`@tsuz/components`、`@tsuz/utils`、`@tsuz/sdk` 可作为 npm 包正常安装和使用
+- `@tsuz/components/vue`、`@tsuz/components/react`、`@tsuz/utils/js` 可作为 subpath import 正常导入
 - `template` 可通过 GitHub Release asset 被 CLI 拉取并初始化
 - 仓库采用 `pnpm + Turborepo + Changesets`
 - 所有可发布包均为 ESM

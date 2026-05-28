@@ -1,4 +1,4 @@
-# @tsu/sdk
+# @tsuz/sdk
 
 ## 0.1.0
 

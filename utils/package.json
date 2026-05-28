@@ -1,5 +1,5 @@
 {
-  "name": "@tsu/utils",
+  "name": "@tsuz/utils",
   "version": "0.1.0",
   "type": "module",
   "exports": {
@@ -15,6 +15,6 @@
   "scripts": {
     "build": "tsc -p js/tsconfig.json",
     "lint": "tsc -p js/tsconfig.json --noEmit",
-    "test": "node -e \"console.log('No tests configured for @tsu/utils')\""
+    "test": "node -e \"console.log('No tests configured for @tsuz/utils')\""
   }
 }

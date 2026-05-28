@@ -5,25 +5,25 @@ import { fileURLToPath } from "node:url";
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const publishablePackages = [
   {
-    name: "@tsu/cli",
+    name: "@tsuz/cli",
     path: "cli",
     entry: ".",
     files: ["dist/index.js", "dist/index.d.ts"]
   },
   {
-    name: "@tsu/components",
+    name: "@tsuz/components",
     path: "components",
     entry: ["./vue", "./react"],
     files: ["dist/vue/index.js", "dist/vue/index.d.ts", "dist/react/index.js", "dist/react/index.d.ts"]
   },
   {
-    name: "@tsu/utils",
+    name: "@tsuz/utils",
     path: "utils",
     entry: ["./js"],
     files: ["dist/js/index.js", "dist/js/index.d.ts"]
   },
   {
-    name: "@tsu/sdk",
+    name: "@tsuz/sdk",
     path: "sdk",
     entry: ".",
     files: ["dist/index.js", "dist/index.d.ts"]

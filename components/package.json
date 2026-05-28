@@ -1,5 +1,5 @@
 {
-  "name": "@tsu/components",
+  "name": "@tsuz/components",
   "version": "0.1.0",
   "type": "module",
   "exports": {
@@ -21,6 +21,6 @@
   "scripts": {
     "build": "tsc -p vue/tsconfig.json && tsc -p react/tsconfig.json",
     "lint": "tsc -p vue/tsconfig.json --noEmit && tsc -p react/tsconfig.json --noEmit",
-    "test": "node -e \"console.log('No tests configured for @tsu/components')\""
+    "test": "node -e \"console.log('No tests configured for @tsuz/components')\""
   }
 }

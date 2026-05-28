@@ -1,4 +1,4 @@
-# @tsu/utils
+# @tsuz/utils
 
 ## 0.1.0
 

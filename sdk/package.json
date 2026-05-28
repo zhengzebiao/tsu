@@ -1,5 +1,5 @@
 {
-  "name": "@tsu/sdk",
+  "name": "@tsuz/sdk",
   "version": "0.1.0",
   "type": "module",
   "exports": {
@@ -16,6 +16,6 @@
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "lint": "tsc -p tsconfig.json --noEmit",
-    "test": "node -e \"console.log('No tests configured for @tsu/sdk')\""
+    "test": "node -e \"console.log('No tests configured for @tsuz/sdk')\""
   }
 }
