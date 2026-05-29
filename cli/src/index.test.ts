@@ -93,6 +93,22 @@ test("runCli initializes projects", async () => {
   }
 });
 
+test("runCli initializes vue3 projects", async () => {
+  const cwd = await mkdtemp(join(tmpdir(), "quick-start-"));
+
+  try {
+    const message = await runCli(["init", "web-app", "--template", "vue3", "--local"], cwd);
+
+    assert.match(message, /^Created web-app from vue3@latest at /);
+    assert.match(await readFile(join(cwd, "web-app", "package.json"), "utf8"), /"vue-router": "\^4\.5\.1"/);
+    assert.match(await readFile(join(cwd, "web-app", "pnpm-workspace.yaml"), "utf8"), /packages: \[\]/);
+    assert.match(await readFile(join(cwd, "web-app", "src", "router", "index.ts"), "utf8"), /@\/views\/HomeView\.vue/);
+    assert.match(await readFile(join(cwd, "web-app", "src", "stores", "counter.ts"), "utf8"), /reset\(\)/);
+  } finally {
+    await rm(cwd, { force: true, recursive: true });
+  }
+});
+
 test("runCli initializes monorepo projects", async () => {
   const cwd = await mkdtemp(join(tmpdir(), "quick-start-"));
 

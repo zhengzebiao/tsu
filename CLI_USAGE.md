@@ -38,9 +38,30 @@ demo-app/
 | 模板 | 命令 | 说明 |
 | --- | --- | --- |
 | `default` | `tsu-cli init demo-app --template default` | 最小 Node ESM 项目模板 |
+| `vue3` | `tsu-cli init web-app --template vue3` | Vue 3 + Vite + Router + Pinia 前端项目模板 |
 | `monorepo` | `tsu-cli init platform --template monorepo` | 符合当前 PRD 的 pnpm + Turborepo + Changesets 多包仓库模板 |
 
 默认情况下，CLI 会尝试从 GitHub Release asset 拉取模板；如果提供了 `--local`，则使用本地模板生成。
+
+`vue3` 模板会生成以下核心结构：
+
+```text
+web-app/
+├── package.json
+├── index.html
+├── vite.config.ts
+├── eslint.config.js
+├── tsconfig.json
+├── tsconfig.app.json
+└── src/
+    ├── App.vue
+    ├── main.ts
+    ├── env.d.ts
+    ├── router/
+    ├── stores/
+    ├── styles/
+    └── views/
+```
 
 `monorepo` 模板会生成以下核心结构：
 
@@ -66,7 +87,7 @@ platform/
 | 参数 | 示例 | 说明 |
 | --- | --- | --- |
 | `<projectName>` | `tsu-cli init demo-app` | 项目目录名，默认 `quick-start-app` |
-| `--template` / `-t` | `tsu-cli init platform --template monorepo` | 指定模板名，目前支持 `default`、`monorepo` |
+| `--template` / `-t` | `tsu-cli init platform --template monorepo` | 指定模板名，目前支持 `default`、`vue3`、`monorepo` |
 | `--version` / `-v` | `tsu-cli init platform --template monorepo --version 1.2.3` | 指定模板 Release 版本，不传时使用最新版本 |
 | `--repo` | `tsu-cli init platform --repo owner/repo` | 指定 GitHub 仓库，默认读取 `TSU_TEMPLATE_REPOSITORY`、`GITHUB_REPOSITORY`，否则使用 `zhengzebiao/tsu` |
 | `--local` | `tsu-cli init demo-app --local` | 强制使用本地模板，适合离线或开发调试 |
@@ -107,6 +128,7 @@ pnpm --filter @tsuz/cli test
 ```bash
 pnpm build
 node cli/dist/index.js init demo-app --template default --cwd ./tmp
+node cli/dist/index.js init web-app --template vue3 --cwd ./tmp
 node cli/dist/index.js init platform --template monorepo --cwd ./tmp
 ```
 
@@ -201,8 +223,9 @@ git push origin template-v1.0.0
 CLI 使用远程模板：
 
 ```bash
+tsu-cli init web-app --template vue3
 tsu-cli init platform --template monorepo
-TSU_TEMPLATE_REPOSITORY=owner/repo tsu-cli init platform --template monorepo
+TSU_TEMPLATE_REPOSITORY=owner/repo tsu-cli init web-app --template vue3
 TSU_TEMPLATE_REPOSITORY=owner/repo tsu-cli init platform --template monorepo --version 1.0.0
 ```
 

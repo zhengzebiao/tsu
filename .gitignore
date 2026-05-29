@@ -9,3 +9,4 @@ github.pem
 *.crt
 *.pem
 tmp-verify/
+tmp/
