@@ -4,11 +4,11 @@ import { createTemplateFiles, createTemplateSourceFiles, listTemplates, renderTe
 
 test("template manifest exposes package metadata", () => {
   assert.equal(templateManifest.name, "quick-start-template");
-  assert.deepEqual(templateManifest.templates, ["default", "monorepo", "vue3", "mfe"]);
+  assert.deepEqual(templateManifest.templates, ["default", "monorepo", "vue3", "mfe", "react"]);
 });
 
 test("listTemplates returns available templates", () => {
-  assert.deepEqual(listTemplates(), ["default", "monorepo", "vue3", "mfe"]);
+  assert.deepEqual(listTemplates(), ["default", "monorepo", "vue3", "mfe", "react"]);
 });
 
 test("default template normalizes project names", () => {
@@ -97,6 +97,49 @@ test("vue3 template creates vite-based app files", () => {
   assert.match(files.find((file) => file.path === "src/views/AboutView.vue")?.content ?? "", /includes routing and Pinia/);
 });
 
+test("react template creates vite-based app files", () => {
+  const files = createTemplateFiles({ projectName: "React App", templateName: "react" });
+  const paths = files.map((file) => file.path);
+  const packageJson = files.find((file) => file.path === "package.json");
+
+  assert.ok(packageJson);
+  assert.match(packageJson.content, /"name": "react-app"/);
+  assert.match(packageJson.content, /"dev": "vite"/);
+  assert.match(packageJson.content, /"docker:build": "docker build -t react-app \./);
+  assert.match(packageJson.content, /"docker:run": "docker run --rm -p 8080:80 react-app"/);
+  assert.match(packageJson.content, /"react": "\^19\.1\.0"/);
+  assert.match(packageJson.content, /"react-dom": "\^19\.1\.0"/);
+  assert.match(packageJson.content, /"react-router-dom": "\^7\.6\.2"/);
+  assert.match(packageJson.content, /"@vitejs\/plugin-react": "\^4\.3\.4"/);
+  assert.ok(paths.includes("pnpm-workspace.yaml"));
+  assert.ok(paths.includes(".dockerignore"));
+  assert.ok(paths.includes(".gitignore"));
+  assert.ok(paths.includes("Dockerfile"));
+  assert.ok(paths.includes("nginx.conf"));
+  assert.ok(paths.includes(".github/workflows/ci.yml"));
+  assert.ok(paths.includes("index.html"));
+  assert.ok(paths.includes("vite.config.ts"));
+  assert.ok(paths.includes("eslint.config.js"));
+  assert.ok(paths.includes("tsconfig.json"));
+  assert.ok(paths.includes("tsconfig.app.json"));
+  assert.ok(paths.includes("src/main.tsx"));
+  assert.ok(paths.includes("src/App.tsx"));
+  assert.ok(paths.includes("src/styles/base.css"));
+  assert.ok(paths.includes("src/styles/main.css"));
+  assert.ok(paths.includes("src/views/HomeView.tsx"));
+  assert.ok(paths.includes("src/views/AboutView.tsx"));
+  assert.ok(paths.includes("src/vite-env.d.ts"));
+  assert.match(files.find((file) => file.path === "Dockerfile")?.content ?? "", /FROM node:20-alpine AS build/);
+  assert.match(files.find((file) => file.path === "Dockerfile")?.content ?? "", /FROM nginx:1\.27-alpine/);
+  assert.match(files.find((file) => file.path === "nginx.conf")?.content ?? "", /try_files \$uri \$uri\/ \/index\.html/);
+  assert.match(files.find((file) => file.path === ".github/workflows/ci.yml")?.content ?? "", /pnpm install --frozen-lockfile/);
+  assert.match(files.find((file) => file.path === ".github/workflows/ci.yml")?.content ?? "", /pnpm build/);
+  assert.match(files.find((file) => file.path === "eslint.config.js")?.content ?? "", /react-hooks/);
+  assert.match(files.find((file) => file.path === "src/App.tsx")?.content ?? "", /React \+ Router \+ Vite/);
+  assert.match(files.find((file) => file.path === "src/views/HomeView.tsx")?.content ?? "", /Current count:/);
+  assert.match(files.find((file) => file.path === "src/views/AboutView.tsx")?.content ?? "", /routing, TypeScript, CI, and Docker/);
+});
+
 test("mfe template creates qiankun workspace files", () => {
   const files = createTemplateFiles({ projectName: "MFE Platform", templateName: "mfe" });
   const paths = files.map((file) => file.path);
@@ -151,6 +194,6 @@ test("template source files use project name token", () => {
 test("createTemplateFiles rejects unknown templates", () => {
   assert.throws(
     () => createTemplateFiles({ projectName: "demo", templateName: "missing" }),
-    /Available templates: default, monorepo, vue3, mfe/
+    /Available templates: default, monorepo, vue3, mfe, react/
   );
 });

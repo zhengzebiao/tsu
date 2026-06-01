@@ -1,4 +1,5 @@
 import { createMfeTemplateFiles } from "./mfe.js";
+import { createReactTemplateFiles } from "./react.js";
 
 export interface TemplateFile {
   path: string;
@@ -10,9 +11,9 @@ export interface CreateTemplateFilesOptions {
   templateName?: string;
 }
 
-export type TemplateName = "default" | "monorepo" | "vue3" | "mfe";
+export type TemplateName = "default" | "monorepo" | "vue3" | "mfe" | "react";
 
-const templateNames: TemplateName[] = ["default", "monorepo", "vue3", "mfe"];
+const templateNames: TemplateName[] = ["default", "monorepo", "vue3", "mfe", "react"];
 const templateProjectNameToken = "__tsu_project_name__";
 
 export function createTemplateFiles(options: CreateTemplateFilesOptions): TemplateFile[] {
@@ -32,6 +33,10 @@ export function createTemplateSourceFiles(templateName?: string): TemplateFile[]
 
   if (resolvedTemplateName === "mfe") {
     return createMfeTemplateFiles(templateProjectNameToken);
+  }
+
+  if (resolvedTemplateName === "react") {
+    return createReactTemplateFiles(templateProjectNameToken);
   }
 
   return createDefaultTemplateFiles(templateProjectNameToken);

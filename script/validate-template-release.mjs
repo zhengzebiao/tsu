@@ -20,7 +20,7 @@ try {
   await cp(join(releaseDir, `tsu-templates-v${version}`), bundleDir, { recursive: true });
   const manifest = JSON.parse(await readFile(join(bundleDir, "manifest.json"), "utf8"));
 
-  if (!manifest.templates.includes("default") || !manifest.templates.includes("monorepo") || !manifest.templates.includes("vue3") || !manifest.templates.includes("mfe")) {
+  if (!manifest.templates.includes("default") || !manifest.templates.includes("monorepo") || !manifest.templates.includes("vue3") || !manifest.templates.includes("mfe") || !manifest.templates.includes("react")) {
     throw new Error("Release manifest does not include expected templates.");
   }
 
@@ -28,6 +28,7 @@ try {
   await access(join(bundleDir, "monorepo", "package.json"));
   await access(join(bundleDir, "vue3", "package.json"));
   await access(join(bundleDir, "mfe", "package.json"));
+  await access(join(bundleDir, "react", "package.json"));
   process.stdout.write(`Validated release archive ${archivePath}\n`);
 } finally {
   await rm(tempDir, { force: true, recursive: true });

@@ -113,6 +113,25 @@ test("runCli initializes vue3 projects", async () => {
   }
 });
 
+test("runCli initializes react projects", async () => {
+  const cwd = await mkdtemp(join(tmpdir(), "quick-start-"));
+
+  try {
+    const message = await runCli(["init", "react-app", "--template", "react", "--local"], cwd);
+
+    assert.match(message, /^Created react-app from react@latest at /);
+    assert.match(await readFile(join(cwd, "react-app", "package.json"), "utf8"), /"react": "\^19\.1\.0"/);
+    assert.match(await readFile(join(cwd, "react-app", "package.json"), "utf8"), /"docker:build": "docker build -t react-app \./);
+    assert.match(await readFile(join(cwd, "react-app", "Dockerfile"), "utf8"), /FROM nginx:1\.27-alpine/);
+    assert.match(await readFile(join(cwd, "react-app", "nginx.conf"), "utf8"), /try_files \$uri \$uri\/ \/index\.html/);
+    assert.match(await readFile(join(cwd, "react-app", ".github", "workflows", "ci.yml"), "utf8"), /pnpm install --frozen-lockfile/);
+    assert.match(await readFile(join(cwd, "react-app", "src", "App.tsx"), "utf8"), /React \+ Router \+ Vite/);
+    assert.match(await readFile(join(cwd, "react-app", "src", "views", "HomeView.tsx"), "utf8"), /Current count:/);
+  } finally {
+    await rm(cwd, { force: true, recursive: true });
+  }
+});
+
 test("runCli initializes mfe projects", async () => {
   const cwd = await mkdtemp(join(tmpdir(), "quick-start-"));
 
