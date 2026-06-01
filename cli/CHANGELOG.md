@@ -1,5 +1,11 @@
 # @tsuz/cli
 
+## 0.1.2
+
+### Patch Changes
+
+- Include all CLI runtime modules in the published npm package.
+
 ## 0.1.1
 
 ### Patch Changes
