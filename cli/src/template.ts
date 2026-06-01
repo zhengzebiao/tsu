@@ -1,3 +1,5 @@
+import { createMfeTemplateFiles } from "./mfe.js";
+
 export interface TemplateFile {
   path: string;
   content: string;
@@ -8,9 +10,9 @@ export interface CreateTemplateFilesOptions {
   templateName?: string;
 }
 
-export type TemplateName = "default" | "monorepo" | "vue3";
+export type TemplateName = "default" | "monorepo" | "vue3" | "mfe";
 
-const templateNames: TemplateName[] = ["default", "monorepo", "vue3"];
+const templateNames: TemplateName[] = ["default", "monorepo", "vue3", "mfe"];
 const templateProjectNameToken = "__tsu_project_name__";
 
 export function createTemplateFiles(options: CreateTemplateFilesOptions): TemplateFile[] {
@@ -26,6 +28,10 @@ export function createTemplateSourceFiles(templateName?: string): TemplateFile[]
 
   if (resolvedTemplateName === "vue3") {
     return createVue3TemplateFiles(templateProjectNameToken);
+  }
+
+  if (resolvedTemplateName === "mfe") {
+    return createMfeTemplateFiles(templateProjectNameToken);
   }
 
   return createDefaultTemplateFiles(templateProjectNameToken);

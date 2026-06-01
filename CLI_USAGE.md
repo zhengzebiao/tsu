@@ -39,6 +39,7 @@ demo-app/
 | --- | --- | --- |
 | `default` | `tsu-cli init demo-app --template default` | 最小 Node ESM 项目模板 |
 | `vue3` | `tsu-cli init web-app --template vue3` | Vue 3 + Vite + Router + Pinia 前端项目模板 |
+| `mfe` | `tsu-cli init mfe-app --template mfe` | Vue 3 + Vite + qiankun 微前端主子应用模板 |
 | `monorepo` | `tsu-cli init platform --template monorepo` | 符合当前 PRD 的 pnpm + Turborepo + Changesets 多包仓库模板 |
 
 默认情况下，CLI 会尝试从 GitHub Release asset 拉取模板；如果提供了 `--local`，则使用本地模板生成。
@@ -82,6 +83,48 @@ pnpm docker:run
 
 `nginx.conf` 已包含 Vue Router history 模式刷新回退配置。
 
+`mfe` 模板会生成以下核心结构：
+
+```text
+mfe-app/
+├── package.json
+├── pnpm-workspace.yaml
+├── tsconfig.base.json
+├── apps/
+│   ├── host/
+│   │   ├── package.json
+│   │   ├── vite.config.ts
+│   │   └── src/
+│   │       ├── main.ts
+│   │       ├── App.vue
+│   │       ├── micro-apps.ts
+│   │       └── styles.css
+│   └── subapp/
+│       ├── package.json
+│       ├── vite.config.ts
+│       └── src/
+│           ├── main.ts
+│           ├── App.vue
+│           ├── lifecycle.ts
+│           └── styles.css
+└── packages/
+    ├── shared/
+    │   └── src/index.ts
+    └── ui/
+        └── src/index.ts
+```
+
+`mfe` 模板默认生成一个 host 和一个 subapp。生成后可以执行：
+
+```bash
+pnpm install
+pnpm dev
+pnpm build
+pnpm lint
+```
+
+host 默认运行在 `http://localhost:7100`，subapp 默认运行在 `http://localhost:7101`。
+
 `monorepo` 模板会生成以下核心结构：
 
 ```text
@@ -106,7 +149,7 @@ platform/
 | 参数 | 示例 | 说明 |
 | --- | --- | --- |
 | `<projectName>` | `tsu-cli init demo-app` | 项目目录名，默认 `quick-start-app` |
-| `--template` / `-t` | `tsu-cli init platform --template monorepo` | 指定模板名，目前支持 `default`、`vue3`、`monorepo` |
+| `--template` / `-t` | `tsu-cli init platform --template monorepo` | 指定模板名，目前支持 `default`、`vue3`、`mfe`、`monorepo` |
 | `--version` / `-v` | `tsu-cli init platform --template monorepo --version 1.2.3` | 指定模板 Release 版本，不传时使用最新版本 |
 | `--repo` | `tsu-cli init platform --repo owner/repo` | 指定 GitHub 仓库，默认读取 `TSU_TEMPLATE_REPOSITORY`、`GITHUB_REPOSITORY`，否则使用 `zhengzebiao/tsu` |
 | `--local` | `tsu-cli init demo-app --local` | 强制使用本地模板，适合离线或开发调试 |
@@ -148,6 +191,7 @@ pnpm --filter @tsuz/cli test
 pnpm build
 node cli/dist/index.js init demo-app --template default --cwd ./tmp
 node cli/dist/index.js init web-app --template vue3 --cwd ./tmp
+node cli/dist/index.js init mfe-app --template mfe --cwd ./tmp
 node cli/dist/index.js init platform --template monorepo --cwd ./tmp
 ```
 

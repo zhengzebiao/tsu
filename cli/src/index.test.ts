@@ -113,6 +113,22 @@ test("runCli initializes vue3 projects", async () => {
   }
 });
 
+test("runCli initializes mfe projects", async () => {
+  const cwd = await mkdtemp(join(tmpdir(), "quick-start-"));
+
+  try {
+    const message = await runCli(["init", "mfe-app", "--template", "mfe", "--local"], cwd);
+
+    assert.match(message, /^Created mfe-app from mfe@latest at /);
+    assert.match(await readFile(join(cwd, "mfe-app", "package.json"), "utf8"), /"name": "mfe-app"/);
+    assert.match(await readFile(join(cwd, "mfe-app", "apps", "host", "src", "micro-apps.ts"), "utf8"), /subapp/);
+    assert.match(await readFile(join(cwd, "mfe-app", "apps", "subapp", "src", "lifecycle.ts"), "utf8"), /export function mount/);
+    assert.match(await readFile(join(cwd, "mfe-app", "packages", "shared", "src", "index.ts"), "utf8"), /microAppNames/);
+  } finally {
+    await rm(cwd, { force: true, recursive: true });
+  }
+});
+
 test("runCli initializes monorepo projects", async () => {
   const cwd = await mkdtemp(join(tmpdir(), "quick-start-"));
 

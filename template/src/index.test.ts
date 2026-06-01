@@ -4,11 +4,11 @@ import { createTemplateFiles, createTemplateSourceFiles, listTemplates, renderTe
 
 test("template manifest exposes package metadata", () => {
   assert.equal(templateManifest.name, "quick-start-template");
-  assert.deepEqual(templateManifest.templates, ["default", "monorepo", "vue3"]);
+  assert.deepEqual(templateManifest.templates, ["default", "monorepo", "vue3", "mfe"]);
 });
 
 test("listTemplates returns available templates", () => {
-  assert.deepEqual(listTemplates(), ["default", "monorepo", "vue3"]);
+  assert.deepEqual(listTemplates(), ["default", "monorepo", "vue3", "mfe"]);
 });
 
 test("default template normalizes project names", () => {
@@ -97,6 +97,28 @@ test("vue3 template creates vite-based app files", () => {
   assert.match(files.find((file) => file.path === "src/views/AboutView.vue")?.content ?? "", /includes routing and Pinia/);
 });
 
+test("mfe template creates qiankun workspace files", () => {
+  const files = createTemplateFiles({ projectName: "MFE Platform", templateName: "mfe" });
+  const paths = files.map((file) => file.path);
+  const packageJson = files.find((file) => file.path === "package.json");
+
+  assert.ok(packageJson);
+  assert.match(packageJson.content, /"name": "mfe-platform"/);
+  assert.match(packageJson.content, /"dev": "pnpm --parallel --filter/);
+  assert.ok(paths.includes("pnpm-workspace.yaml"));
+  assert.ok(paths.includes("tsconfig.base.json"));
+  assert.ok(paths.includes("apps/host/package.json"));
+  assert.ok(paths.includes("apps/host/src/micro-apps.ts"));
+  assert.ok(paths.includes("apps/subapp/package.json"));
+  assert.ok(paths.includes("apps/subapp/src/lifecycle.ts"));
+  assert.ok(paths.includes("packages/shared/src/index.ts"));
+  assert.ok(paths.includes("packages/ui/src/index.ts"));
+  assert.match(files.find((file) => file.path === "apps/host/package.json")?.content ?? "", /"qiankun": "\^2\.10\.16"/);
+  assert.match(files.find((file) => file.path === "apps/host/src/micro-apps.ts")?.content ?? "", /entry: "\/\/localhost:7101"/);
+  assert.match(files.find((file) => file.path === "apps/subapp/package.json")?.content ?? "", /"vite-plugin-qiankun": "\^1\.0\.15"/);
+  assert.match(files.find((file) => file.path === "apps/subapp/src/lifecycle.ts")?.content ?? "", /export function mount/);
+});
+
 test("template source files use project name token", () => {
   const sourceFiles = createTemplateSourceFiles("default");
   const packageJson = sourceFiles.find((file) => file.path === "package.json");
@@ -109,6 +131,6 @@ test("template source files use project name token", () => {
 test("createTemplateFiles rejects unknown templates", () => {
   assert.throws(
     () => createTemplateFiles({ projectName: "demo", templateName: "missing" }),
-    /Available templates: default, monorepo, vue3/
+    /Available templates: default, monorepo, vue3, mfe/
   );
 });
