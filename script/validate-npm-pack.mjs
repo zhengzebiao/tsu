@@ -34,7 +34,7 @@ async function validatePack(packagePath, packageName) {
 
   const [result] = JSON.parse(stdout);
   const files = (result.files ?? []).map((file) => file.path);
-  const unexpected = files.filter((file) => file.includes("template") || file.includes("tests") || file.includes("script"));
+  const unexpected = files.filter((file) => file.startsWith("template/") || file.startsWith("tests/") || file.startsWith("script/"));
 
   if (unexpected.length > 0) {
     throw new Error(`${packageName} pack output contains forbidden paths: ${unexpected.join(", ")}`);
@@ -42,6 +42,15 @@ async function validatePack(packagePath, packageName) {
 
   if (result.name !== packageName) {
     throw new Error(`npm pack returned ${result.name} for ${packagePath}, expected ${packageName}`);
+  }
+
+  if (packageName === "@tsuz/cli") {
+    const requiredCliFiles = ["dist/index.js", "dist/template.js", "dist/mfe.js", "dist/react.js"];
+    const missing = requiredCliFiles.filter((file) => !files.includes(file));
+
+    if (missing.length > 0) {
+      throw new Error(`${packageName} pack output is missing runtime files: ${missing.join(", ")}`);
+    }
   }
 }
 

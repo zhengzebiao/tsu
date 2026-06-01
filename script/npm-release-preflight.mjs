@@ -8,7 +8,7 @@ const publishablePackages = [
     name: "@tsuz/cli",
     path: "cli",
     entry: ".",
-    files: ["dist/index.js", "dist/index.d.ts"]
+    files: ["dist/*.js", "dist/*.d.ts"]
   },
   {
     name: "@tsuz/components",
