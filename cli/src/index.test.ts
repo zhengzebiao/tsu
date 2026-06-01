@@ -121,9 +121,16 @@ test("runCli initializes mfe projects", async () => {
 
     assert.match(message, /^Created mfe-app from mfe@latest at /);
     assert.match(await readFile(join(cwd, "mfe-app", "package.json"), "utf8"), /"name": "mfe-app"/);
-    assert.match(await readFile(join(cwd, "mfe-app", "apps", "host", "src", "micro-apps.ts"), "utf8"), /subapp/);
+    assert.match(await readFile(join(cwd, "mfe-app", "package.json"), "utf8"), /"docker:build": "docker build -t mfe-app \./);
+    assert.match(await readFile(join(cwd, "mfe-app", "Dockerfile"), "utf8"), /FROM nginx:1\.27-alpine/);
+    assert.match(await readFile(join(cwd, "mfe-app", "Dockerfile"), "utf8"), /apps\/subapp-two\/dist/);
+    assert.match(await readFile(join(cwd, "mfe-app", "nginx.conf"), "utf8"), /listen 7100/);
+    assert.match(await readFile(join(cwd, "mfe-app", "nginx.conf"), "utf8"), /listen 7102/);
+    assert.match(await readFile(join(cwd, "mfe-app", ".github", "workflows", "ci.yml"), "utf8"), /pnpm install --frozen-lockfile/);
+    assert.match(await readFile(join(cwd, "mfe-app", "apps", "host", "src", "micro-apps.ts"), "utf8"), /microAppMetas\.map/);
     assert.match(await readFile(join(cwd, "mfe-app", "apps", "subapp", "src", "lifecycle.ts"), "utf8"), /export function mount/);
-    assert.match(await readFile(join(cwd, "mfe-app", "packages", "shared", "src", "index.ts"), "utf8"), /microAppNames/);
+    assert.match(await readFile(join(cwd, "mfe-app", "apps", "subapp-two", "src", "App.vue"), "utf8"), /Sub App Two is ready/);
+    assert.match(await readFile(join(cwd, "mfe-app", "packages", "shared", "src", "index.ts"), "utf8"), /subapp-two/);
   } finally {
     await rm(cwd, { force: true, recursive: true });
   }
