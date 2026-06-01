@@ -48,6 +48,13 @@ demo-app/
 ```text
 web-app/
 ├── package.json
+├── pnpm-workspace.yaml
+├── Dockerfile
+├── .dockerignore
+├── .github/
+│   └── workflows/
+│       └── ci.yml
+├── nginx.conf
 ├── index.html
 ├── vite.config.ts
 ├── eslint.config.js
@@ -62,6 +69,18 @@ web-app/
     ├── styles/
     └── views/
 ```
+
+`vue3` 模板内置 GitHub CI 和 Docker 静态部署基础配置。生成后可以执行：
+
+```bash
+pnpm install
+pnpm lint
+pnpm build
+pnpm docker:build
+pnpm docker:run
+```
+
+`nginx.conf` 已包含 Vue Router history 模式刷新回退配置。
 
 `monorepo` 模板会生成以下核心结构：
 

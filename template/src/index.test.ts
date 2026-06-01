@@ -52,6 +52,8 @@ test("vue3 template creates vite-based app files", () => {
   assert.ok(packageJson);
   assert.match(packageJson.content, /"name": "my-app"/);
   assert.match(packageJson.content, /"dev": "vite"/);
+  assert.match(packageJson.content, /"docker:build": "docker build -t my-app \./);
+  assert.match(packageJson.content, /"docker:run": "docker run --rm -p 8080:80 my-app"/);
   assert.match(packageJson.content, /"vue": "\^3\.5\.13"/);
   assert.match(packageJson.content, /"pinia": "\^3\.0\.1"/);
   assert.match(packageJson.content, /"vue-router": "\^4\.5\.1"/);
@@ -60,7 +62,11 @@ test("vue3 template creates vite-based app files", () => {
   assert.match(packageJson.content, /"eslint-plugin-vue": "\^9\.32\.0"/);
   assert.match(packageJson.content, /"@types\/node": "\^20\.17\.57"/);
   assert.ok(paths.includes("pnpm-workspace.yaml"));
+  assert.ok(paths.includes(".dockerignore"));
   assert.ok(paths.includes(".gitignore"));
+  assert.ok(paths.includes("Dockerfile"));
+  assert.ok(paths.includes("nginx.conf"));
+  assert.ok(paths.includes(".github/workflows/ci.yml"));
   assert.ok(paths.includes("index.html"));
   assert.ok(paths.includes("vite.config.ts"));
   assert.ok(paths.includes("eslint.config.js"));
@@ -76,6 +82,11 @@ test("vue3 template creates vite-based app files", () => {
   assert.ok(paths.includes("src/views/HomeView.vue"));
   assert.ok(paths.includes("src/views/AboutView.vue"));
   assert.ok(paths.includes("src/vite-env.d.ts"));
+  assert.match(files.find((file) => file.path === "Dockerfile")?.content ?? "", /FROM node:20-alpine AS build/);
+  assert.match(files.find((file) => file.path === "Dockerfile")?.content ?? "", /FROM nginx:1\.27-alpine/);
+  assert.match(files.find((file) => file.path === "nginx.conf")?.content ?? "", /try_files \$uri \$uri\/ \/index\.html/);
+  assert.match(files.find((file) => file.path === ".github/workflows/ci.yml")?.content ?? "", /pnpm install --frozen-lockfile/);
+  assert.match(files.find((file) => file.path === ".github/workflows/ci.yml")?.content ?? "", /pnpm build/);
   assert.match(files.find((file) => file.path === "eslint.config.js")?.content ?? "", /flat\/recommended/);
   assert.match(files.find((file) => file.path === "tsconfig.json")?.content ?? "", /"@\/\*": \[\s*"src\/\*"\s*\]/);
   assert.match(files.find((file) => file.path === "src/env.d.ts")?.content ?? "", /declare module "\*\.vue"/);

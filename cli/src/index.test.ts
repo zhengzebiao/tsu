@@ -101,7 +101,11 @@ test("runCli initializes vue3 projects", async () => {
 
     assert.match(message, /^Created web-app from vue3@latest at /);
     assert.match(await readFile(join(cwd, "web-app", "package.json"), "utf8"), /"vue-router": "\^4\.5\.1"/);
+    assert.match(await readFile(join(cwd, "web-app", "package.json"), "utf8"), /"docker:build": "docker build -t web-app \./);
     assert.match(await readFile(join(cwd, "web-app", "pnpm-workspace.yaml"), "utf8"), /packages: \[\]/);
+    assert.match(await readFile(join(cwd, "web-app", "Dockerfile"), "utf8"), /FROM nginx:1\.27-alpine/);
+    assert.match(await readFile(join(cwd, "web-app", "nginx.conf"), "utf8"), /try_files \$uri \$uri\/ \/index\.html/);
+    assert.match(await readFile(join(cwd, "web-app", ".github", "workflows", "ci.yml"), "utf8"), /pnpm install --frozen-lockfile/);
     assert.match(await readFile(join(cwd, "web-app", "src", "router", "index.ts"), "utf8"), /@\/views\/HomeView\.vue/);
     assert.match(await readFile(join(cwd, "web-app", "src", "stores", "counter.ts"), "utf8"), /reset\(\)/);
   } finally {

@@ -89,7 +89,9 @@ function createVue3TemplateFiles(packageName: string): TemplateFile[] {
           dev: "vite",
           build: "vue-tsc --noEmit && vite build",
           preview: "vite preview",
-          lint: "eslint . --max-warnings 0 && vue-tsc --noEmit"
+          lint: "eslint . --max-warnings 0 && vue-tsc --noEmit",
+          "docker:build": `docker build -t ${packageName} .`,
+          "docker:run": `docker run --rm -p 8080:80 ${packageName}`
         },
         dependencies: {
           pinia: "^3.0.1",
@@ -115,8 +117,24 @@ function createVue3TemplateFiles(packageName: string): TemplateFile[] {
       content: `packages: []\n`
     },
     {
+      path: ".dockerignore",
+      content: `node_modules\ndist\n.git\n.github\n.turbo\n*.log\n*.local\n`
+    },
+    {
       path: ".gitignore",
       content: `node_modules/\ndist/\n*.local\n`
+    },
+    {
+      path: "Dockerfile",
+      content: `FROM node:20-alpine AS build\nWORKDIR /app\n\nRUN corepack enable\n\nCOPY package.json pnpm-lock.yaml* ./\nRUN pnpm install --frozen-lockfile\n\nCOPY . .\nRUN pnpm build\n\nFROM nginx:1.27-alpine\nCOPY nginx.conf /etc/nginx/conf.d/default.conf\nCOPY --from=build /app/dist /usr/share/nginx/html\nEXPOSE 80\nCMD ["nginx", "-g", "daemon off;"]\n`
+    },
+    {
+      path: "nginx.conf",
+      content: `server {\n  listen 80;\n  server_name _;\n  root /usr/share/nginx/html;\n  index index.html;\n\n  location / {\n    try_files $uri $uri/ /index.html;\n  }\n\n  location ~* \\.(js|css|png|jpg|jpeg|gif|svg|ico|woff|woff2)$ {\n    expires 1y;\n    add_header Cache-Control "public, immutable";\n  }\n}\n`
+    },
+    {
+      path: ".github/workflows/ci.yml",
+      content: `name: CI\n\non:\n  pull_request:\n    branches:\n      - master\n  push:\n    branches:\n      - master\n\njobs:\n  build:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/checkout@v4\n      - uses: pnpm/action-setup@v4\n        with:\n          version: 8.15.9\n      - uses: actions/setup-node@v4\n        with:\n          node-version: 20\n          cache: pnpm\n      - run: pnpm install --frozen-lockfile\n      - run: pnpm lint\n      - run: pnpm build\n`
     },
     {
       path: "index.html",
