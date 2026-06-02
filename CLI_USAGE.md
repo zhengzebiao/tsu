@@ -364,7 +364,63 @@ tsu-cli init react-test --template react --version 1.0.4 --force
 tsu-cli init mfe-test --template mfe --version 1.0.4 --force
 ```
 
-如果在 Git Bash / nvm4w 环境里 `tsu-cli` 没有任何输出，优先检查是否安装了 `@tsuz/cli@0.1.3` 或更高版本。`0.1.3` 修复了全局 shim 传入 `/c/.../dist/index.js` 路径时 CLI 入口判断不命中的问题。
+#### Git Bash / nvm4w 下 `tsu-cli` 无输出问题
+
+现象：
+
+```bash
+tsu-cli
+# 没有任何输出，但退出码是 0
+
+tsu-cli init react-test --template react --version 1.0.4
+# 也没有任何输出，且没有生成预期项目
+```
+
+原因：
+
+- Windows 全局安装 npm bin 时会生成多个 shim：`tsu-cli`、`tsu-cli.cmd`、`tsu-cli.ps1`。
+- 在 Git Bash / nvm4w 环境里，shell shim 可能会用 `/c/.../node_modules/@tsuz/cli/dist/index.js` 这种 Git Bash 风格路径启动入口文件。
+- 旧版本 CLI 用 `fileURLToPath(import.meta.url) === resolve(process.argv[1])` 判断“当前模块是否作为 CLI 入口运行”。
+- `import.meta.url` 得到的是 Windows 路径，例如 `C:\...\dist\index.js`；`process.argv[1]` 可能是 `/c/.../dist/index.js`。
+- 两者字符串不相等时，CLI 入口逻辑不会执行 `runCli(...)`，因此不会打印任何内容，也不会执行 `init`，但进程仍会正常退出。
+
+处理方案：
+
+1. 升级到 `@tsuz/cli@0.1.3` 或更高版本：
+
+   ```bash
+   npm uninstall -g @tsuz/cli
+   npm install -g @tsuz/cli@latest
+   npm list -g @tsuz/cli --depth=0
+   ```
+
+2. 确认 `PATH` 里实际执行的是当前 nvm Node 版本下的 shim：
+
+   ```bash
+   where tsu-cli
+   ```
+
+3. 验证基础输出：
+
+   ```bash
+   tsu-cli
+   ```
+
+   预期输出：
+
+   ```text
+   tsu-cli is ready to pull templates
+   ```
+
+4. 如果仍异常，直接用 Node 执行全局安装目录下的入口文件，判断是 shim 问题还是包入口问题：
+
+   ```bash
+   node C:\Users\<User>\AppData\Local\nvm\v20.20.2\node_modules\@tsuz\cli\dist\index.js
+   ```
+
+   如果直接执行有输出，而 `tsu-cli` 无输出，优先检查 `where tsu-cli` 指向和全局安装目录。
+
+`0.1.3` 的修复方式：入口判断会先把 `/c/...` 归一化为 Windows 路径，再通过真实路径比较，兼容 Git Bash、`.cmd`、`.ps1` 等 shim 形态。
 
 ## 发布模板 Release asset
 
