@@ -39,6 +39,7 @@ demo-app/
 | --- | --- | --- |
 | `default` | `tsu-cli init demo-app --template default` | 最小 Node ESM 项目模板 |
 | `vue3` | `tsu-cli init web-app --template vue3` | Vue 3 + Vite + Router + Pinia 前端项目模板 |
+| `react` | `tsu-cli init react-app --template react` | React + Vite + TypeScript + Router 前端项目模板 |
 | `mfe` | `tsu-cli init mfe-app --template mfe` | Vue 3 + Vite + qiankun 微前端主子应用模板 |
 | `monorepo` | `tsu-cli init platform --template monorepo` | 符合当前 PRD 的 pnpm + Turborepo + Changesets 多包仓库模板 |
 
@@ -83,6 +84,43 @@ pnpm docker:run
 
 `nginx.conf` 已包含 Vue Router history 模式刷新回退配置。
 
+`react` 模板会生成以下核心结构：
+
+```text
+react-app/
+├── package.json
+├── pnpm-workspace.yaml
+├── Dockerfile
+├── .dockerignore
+├── .github/
+│   └── workflows/
+│       └── ci.yml
+├── nginx.conf
+├── index.html
+├── vite.config.ts
+├── eslint.config.js
+├── tsconfig.json
+├── tsconfig.app.json
+└── src/
+    ├── App.tsx
+    ├── main.tsx
+    ├── vite-env.d.ts
+    ├── styles/
+    └── views/
+```
+
+`react` 模板内置 GitHub CI 和 Docker 静态部署基础配置。生成后可以执行：
+
+```bash
+pnpm install
+pnpm lint
+pnpm build
+pnpm docker:build
+pnpm docker:run
+```
+
+`nginx.conf` 已包含 React Router history 模式刷新回退配置。状态管理暂未内置，后续可以按需添加。
+
 `mfe` 模板会生成以下核心结构：
 
 ```text
@@ -99,7 +137,15 @@ mfe-app/
 │   │       ├── App.vue
 │   │       ├── micro-apps.ts
 │   │       └── styles.css
-│   └── subapp/
+│   ├── subapp/
+│   │   ├── package.json
+│   │   ├── vite.config.ts
+│   │   └── src/
+│   │       ├── main.ts
+│   │       ├── App.vue
+│   │       ├── lifecycle.ts
+│   │       └── styles.css
+│   └── subapp-two/
 │       ├── package.json
 │       ├── vite.config.ts
 │       └── src/
@@ -114,16 +160,24 @@ mfe-app/
         └── src/index.ts
 ```
 
-`mfe` 模板默认生成一个 host 和一个 subapp。生成后可以执行：
+`mfe` 模板默认生成一个 host 和两个子应用：`subapp`、`subapp-two`。生成后可以执行：
 
 ```bash
 pnpm install
 pnpm dev
 pnpm build
 pnpm lint
+pnpm docker:build
+pnpm docker:run
 ```
 
-host 默认运行在 `http://localhost:7100`，subapp 默认运行在 `http://localhost:7101`。
+默认端口：
+
+- host: `http://localhost:7100`
+- subapp: `http://localhost:7101`
+- subapp-two: `http://localhost:7102`
+
+子应用端口使用 `--strictPort`，避免端口被占用时 Vite 自动漂移导致 qiankun host 配置失配。
 
 `monorepo` 模板会生成以下核心结构：
 
@@ -149,7 +203,7 @@ platform/
 | 参数 | 示例 | 说明 |
 | --- | --- | --- |
 | `<projectName>` | `tsu-cli init demo-app` | 项目目录名，默认 `quick-start-app` |
-| `--template` / `-t` | `tsu-cli init platform --template monorepo` | 指定模板名，目前支持 `default`、`vue3`、`mfe`、`monorepo` |
+| `--template` / `-t` | `tsu-cli init platform --template monorepo` | 指定模板名，目前支持 `default`、`vue3`、`react`、`mfe`、`monorepo` |
 | `--version` / `-v` | `tsu-cli init platform --template monorepo --version 1.2.3` | 指定模板 Release 版本，不传时使用最新版本 |
 | `--repo` | `tsu-cli init platform --repo owner/repo` | 指定 GitHub 仓库，默认读取 `TSU_TEMPLATE_REPOSITORY`、`GITHUB_REPOSITORY`，否则使用 `zhengzebiao/tsu` |
 | `--local` | `tsu-cli init demo-app --local` | 强制使用本地模板，适合离线或开发调试 |
@@ -191,6 +245,7 @@ pnpm --filter @tsuz/cli test
 pnpm build
 node cli/dist/index.js init demo-app --template default --cwd ./tmp
 node cli/dist/index.js init web-app --template vue3 --cwd ./tmp
+node cli/dist/index.js init react-app --template react --cwd ./tmp
 node cli/dist/index.js init mfe-app --template mfe --cwd ./tmp
 node cli/dist/index.js init platform --template monorepo --cwd ./tmp
 ```
@@ -241,6 +296,76 @@ pnpm npm:release:preflight
 pnpm npm:release:pack
 ```
 
+如果 Windows 本地并行 `pnpm lint` 因 Node OOM 失败，可以先用串行方式确认类型检查：
+
+```bash
+pnpm turbo run lint --concurrency=1
+```
+
+### CLI npm 打包注意事项
+
+`@tsuz/cli` 的入口文件 `dist/index.js` 会运行时导入内部模块，例如：
+
+- `dist/template.js`
+- `dist/mfe.js`
+- `dist/react.js`
+
+因此 `cli/package.json` 的 `files` 不能只包含 `dist/index.js` 和 `dist/index.d.ts`，否则全局安装后会出现：
+
+```text
+Error [ERR_MODULE_NOT_FOUND]: Cannot find module '<global-node_modules>/@tsuz/cli/dist/template.js'
+```
+
+当前应发布：
+
+```json
+"files": [
+  "dist/*.js",
+  "dist/*.d.ts"
+]
+```
+
+`pnpm npm:release:pack` 会检查 `@tsuz/cli` 的 npm pack 产物必须包含运行时文件：
+
+```text
+dist/index.js
+dist/template.js
+dist/mfe.js
+dist/react.js
+```
+
+### 全局 CLI 更新和验证
+
+发布新版 npm 包后，重新安装全局 CLI：
+
+```bash
+npm uninstall -g @tsuz/cli
+npm install -g @tsuz/cli@latest
+npm list -g @tsuz/cli --depth=0
+where tsu-cli
+```
+
+验证基础输出：
+
+```bash
+tsu-cli
+```
+
+预期输出：
+
+```text
+tsu-cli is ready to pull templates
+```
+
+验证远程模板：
+
+```bash
+tsu-cli init react-test --template react --version 1.0.4 --force
+tsu-cli init mfe-test --template mfe --version 1.0.4 --force
+```
+
+如果在 Git Bash / nvm4w 环境里 `tsu-cli` 没有任何输出，优先检查是否安装了 `@tsuz/cli@0.1.3` 或更高版本。`0.1.3` 修复了全局 shim 传入 `/c/.../dist/index.js` 路径时 CLI 入口判断不命中的问题。
+
 ## 发布模板 Release asset
 
 模板 Release 使用当前仓库的 GitHub Release asset：
@@ -287,8 +412,11 @@ CLI 使用远程模板：
 
 ```bash
 tsu-cli init web-app --template vue3
+tsu-cli init react-app --template react --version 1.0.4
+tsu-cli init mfe-app --template mfe --version 1.0.4
 tsu-cli init platform --template monorepo
 TSU_TEMPLATE_REPOSITORY=owner/repo tsu-cli init web-app --template vue3
+TSU_TEMPLATE_REPOSITORY=owner/repo tsu-cli init react-app --template react --version 1.0.4
 TSU_TEMPLATE_REPOSITORY=owner/repo tsu-cli init platform --template monorepo --version 1.0.0
 ```
 
