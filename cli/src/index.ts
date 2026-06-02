@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 
+import { existsSync, realpathSync } from "node:fs";
 import { cp, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { execFile } from "node:child_process";
 import { tmpdir } from "node:os";
@@ -307,7 +308,7 @@ function isNodeError(error: unknown): error is NodeJS.ErrnoException {
   return error instanceof Error && "code" in error;
 }
 
-if (fileURLToPath(import.meta.url) === resolve(process.argv[1] ?? "")) {
+if (isCliEntrypoint()) {
   runCli(process.argv.slice(2))
     .then((message) => {
       console.log(message);
@@ -316,4 +317,22 @@ if (fileURLToPath(import.meta.url) === resolve(process.argv[1] ?? "")) {
       console.error(error instanceof Error ? error.message : String(error));
       process.exitCode = 1;
     });
+}
+
+export function isCliEntrypoint() {
+  const entrypoint = process.argv[1];
+
+  if (!entrypoint) {
+    return false;
+  }
+
+  return normalizeEntrypointPath(fileURLToPath(import.meta.url)) === normalizeEntrypointPath(entrypoint);
+}
+
+export function normalizeEntrypointPath(path: string) {
+  const platformPath = path.replace(/^\/([a-zA-Z])\//, "$1:/");
+  const resolvedPath = resolve(platformPath);
+  const realPath = existsSync(resolvedPath) ? realpathSync(resolvedPath) : resolvedPath;
+
+  return realPath.replaceAll("\\", "/").toLowerCase();
 }

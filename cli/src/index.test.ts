@@ -3,10 +3,17 @@ import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import test from "node:test";
-import { createCliMessage, findTemplateAsset, getReleaseTag, initProject, normalizeTemplateVersion, parseInitArgs, runCli } from "./index.js";
+import { createCliMessage, findTemplateAsset, getReleaseTag, initProject, normalizeEntrypointPath, normalizeTemplateVersion, parseInitArgs, runCli } from "./index.js";
 
 test("createCliMessage reports template support", () => {
   assert.equal(createCliMessage(), "tsu-cli is ready to pull templates");
+});
+
+test("normalizeEntrypointPath resolves equivalent shim paths", () => {
+  const windowsPath = "C:/nvm4w/nodejs/node_modules/@tsuz/cli/dist/index.js";
+  const gitBashPath = "/c/nvm4w/nodejs/node_modules/@tsuz/cli/dist/index.js";
+
+  assert.equal(normalizeEntrypointPath(gitBashPath), normalizeEntrypointPath(windowsPath));
 });
 
 test("parseInitArgs supports template cwd version source and force options", () => {
