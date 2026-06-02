@@ -1,5 +1,11 @@
 # @tsuz/cli
 
+## 0.1.3
+
+### Patch Changes
+
+- Fix CLI entrypoint detection when launched through global npm shims on Windows and Git Bash.
+
 ## 0.1.2
 
 ### Patch Changes
