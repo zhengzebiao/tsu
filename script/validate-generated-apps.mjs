@@ -1,4 +1,4 @@
-import { mkdir, rm } from "node:fs/promises";
+import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { execFile } from "node:child_process";
@@ -21,8 +21,8 @@ try {
     const projectRoot = join(tempRoot, template.projectName);
 
     await runNode(cliEntry, ["init", template.projectName, "--template", template.name, "--local", "--cwd", tempRoot]);
+    await useLocalPackages(projectRoot);
     await runPnpm(["install"], projectRoot);
-    await installLocalPackages(projectRoot);
     await runPnpm(["lint"], projectRoot);
     await runPnpm(["build"], projectRoot);
     process.stdout.write(`Validated generated ${template.name} app at ${projectRoot}\n`);
@@ -31,17 +31,18 @@ try {
   await rm(tempRoot, { recursive: true, force: true });
 }
 
-async function installLocalPackages(cwd) {
-  await runPnpm(
-    [
-      "add",
-      "-w",
-      `@tsuz/components@file:${join(repoRoot, "components")}`,
-      `@tsuz/utils@file:${join(repoRoot, "utils")}`,
-      `@tsuz/sdk@file:${join(repoRoot, "sdk")}`
-    ],
-    cwd
-  );
+async function useLocalPackages(projectRoot) {
+  const packageJsonPath = join(projectRoot, "package.json");
+  const packageJson = JSON.parse(await readFile(packageJsonPath, "utf8"));
+
+  packageJson.dependencies = {
+    ...packageJson.dependencies,
+    "@tsuz/components": `file:${join(repoRoot, "components")}`,
+    "@tsuz/utils": `file:${join(repoRoot, "utils")}`,
+    "@tsuz/sdk": `file:${join(repoRoot, "sdk")}`
+  };
+
+  await writeFile(packageJsonPath, `${JSON.stringify(packageJson, null, 2)}\n`, "utf8");
 }
 
 async function runNode(entry, args) {

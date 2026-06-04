@@ -21,7 +21,7 @@
   "scripts": {
     "build": "tsc -p vue/tsconfig.json && tsc -p react/tsconfig.json",
     "lint": "tsc -p vue/tsconfig.json --noEmit && tsc -p react/tsconfig.json --noEmit",
-    "test": "node -e \"console.log('No tests configured for @tsuz/components')\""
+    "test": "pnpm build && node --test test/index.test.mjs"
   },
   "peerDependencies": {
     "react": ">=18",

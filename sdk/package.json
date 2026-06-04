@@ -16,7 +16,7 @@
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "lint": "tsc -p tsconfig.json --noEmit",
-    "test": "node -e \"console.log('No tests configured for @tsuz/sdk')\""
+    "test": "pnpm build && node --test test/index.test.mjs"
   },
   "repository": {
     "type": "git",
