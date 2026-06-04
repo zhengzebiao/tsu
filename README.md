@@ -54,6 +54,7 @@ tsu-cli templates
 tsu-cli --help
 tsu-cli --version
 tsu-cli doctor [--cwd <path>]
+tsu-cli upgrade-check [--cwd <path>] [--repo <owner/repo>]
 tsu-cli templates
 tsu-cli template list
 tsu-cli template info <template-name>
@@ -92,6 +93,20 @@ tsu-cli doctor --cwd admin-console
 ```
 
 The first version is local-only. It reads `.tsu/template.json` to report the template name, version, source, and repository, then checks whether expected template files are still present.
+
+### `upgrade-check`
+
+Check whether a generated project has a newer template release available. This command is read-only.
+
+```bash
+tsu-cli upgrade-check --cwd admin-console
+```
+
+Use `--repo` to override the repository recorded in `.tsu/template.json`:
+
+```bash
+tsu-cli upgrade-check --cwd admin-console --repo company/frontend-templates
+```
 
 ## Template Metadata
 

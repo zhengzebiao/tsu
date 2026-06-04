@@ -82,6 +82,11 @@ export interface DoctorOptions {
   cwd: string;
 }
 
+export interface UpgradeCheckOptions {
+  cwd: string;
+  repository?: string;
+}
+
 export interface TemplateMetadata {
   template: {
     name: string;
@@ -104,6 +109,18 @@ export interface DoctorResult {
   nextSteps: string[];
 }
 
+export interface UpgradeCheckResult {
+  cwd: string;
+  status: UpgradeCheckStatus;
+  templateName?: string;
+  currentVersion?: string;
+  latestVersion?: string;
+  repository?: string;
+  availableVersions: string[];
+  warnings: string[];
+  nextSteps: string[];
+}
+
 export interface DoctorCheck {
   label: string;
   status: DoctorCheckStatus;
@@ -112,6 +129,7 @@ export interface DoctorCheck {
 
 export type DoctorStatus = "ok" | "warning" | "error";
 export type DoctorCheckStatus = "pass" | "warn" | "fail";
+export type UpgradeCheckStatus = "current" | "update_available" | "unknown";
 
 export function createCliMessage() {
   return createHelpMessage();
@@ -124,6 +142,7 @@ export function createHelpMessage() {
     "Usage:",
     "  tsu-cli init [project-name] [options]",
     "  tsu-cli doctor [--cwd <path>]",
+    "  tsu-cli upgrade-check [--cwd <path>] [--repo <owner/repo>]",
     "  tsu-cli templates",
     "  tsu-cli template info <name> [--version <value>] [--repo <owner/repo>]",
     "  tsu-cli template versions [name] [--repo <owner/repo>]",
@@ -133,6 +152,7 @@ export function createHelpMessage() {
     "Commands:",
     "  init [project-name]    Create a project from a template",
     "  doctor                 Check a generated project",
+    "  upgrade-check          Check for newer template releases",
     "  templates              List available templates",
     "  template info <name>   Show template details",
     "  template versions      List template release versions",
@@ -148,9 +168,14 @@ export function createHelpMessage() {
     "Doctor options:",
     "      --cwd <path>       Project directory to check",
     "",
+    "Upgrade-check options:",
+    "      --cwd <path>       Project directory to check",
+    "      --repo <owner/repo> Override the template release repository",
+    "",
     "Examples:",
     "  tsu-cli init my-app --template vue3",
     "  tsu-cli doctor --cwd my-app",
+    "  tsu-cli upgrade-check --cwd my-app",
     "  tsu-cli init my-app --template react --version 1.0.3",
     "  tsu-cli templates",
     "  tsu-cli template info vue3",
@@ -259,6 +284,20 @@ export function createDoctorMessage(result: DoctorResult) {
   ].join("\n");
 }
 
+export function createUpgradeCheckMessage(result: UpgradeCheckResult) {
+  return [
+    `Template upgrade check: ${result.status.toUpperCase()}`,
+    `Project: ${result.cwd}`,
+    ...(result.templateName ? [`Template: ${result.templateName}`] : []),
+    ...(result.currentVersion ? [`Current version: ${result.currentVersion}`] : []),
+    ...(result.latestVersion ? [`Latest version: ${result.latestVersion}`] : []),
+    ...(result.repository ? [`Repository: ${result.repository}`] : []),
+    ...(result.availableVersions.length ? [`Available versions: ${result.availableVersions.join(", ")}`] : []),
+    ...(result.warnings.length ? ["", "Warnings:", ...result.warnings.map((warning) => `  ${warning}`)] : []),
+    ...(result.nextSteps.length ? ["", "Next steps:", ...result.nextSteps.map((step) => `  ${step}`)] : [])
+  ].join("\n");
+}
+
 export function parseInitArgs(args: string[], cwd = process.cwd()): ParsedInitOptions {
   let projectName = "quick-start-app";
   let templateName = "default";
@@ -349,6 +388,38 @@ export function parseDoctorArgs(args: string[], cwd = process.cwd()): DoctorOpti
   }
 
   return { cwd: targetCwd };
+}
+
+export function parseUpgradeCheckArgs(args: string[], cwd = process.cwd()): UpgradeCheckOptions {
+  let targetCwd = cwd;
+  let repository: string | undefined;
+
+  for (let index = 0; index < args.length; index += 1) {
+    const arg = args[index];
+
+    if (arg === "--cwd") {
+      targetCwd = resolve(cwd, readOptionValue(args, index, arg));
+      index += 1;
+      continue;
+    }
+
+    if (arg === "--repo") {
+      repository = readOptionValue(args, index, arg);
+      index += 1;
+      continue;
+    }
+
+    if (arg.startsWith("-")) {
+      throw new Error(`Unknown option: ${arg}`);
+    }
+
+    throw new Error(`Unexpected argument: ${arg}`);
+  }
+
+  return {
+    cwd: targetCwd,
+    ...(repository ? { repository } : {})
+  };
 }
 
 export function parseTemplateInfoArgs(args: string[]): TemplateInfoOptions {
@@ -464,6 +535,14 @@ export async function runCli(args: string[], cwd = process.cwd()) {
     }
 
     return createDoctorMessage(await doctorProject(parseDoctorArgs(commandArgs, cwd)));
+  }
+
+  if (command === "upgrade-check") {
+    if (commandArgs.includes("--help") || commandArgs.includes("-h")) {
+      return createHelpMessage();
+    }
+
+    return createUpgradeCheckMessage(await upgradeCheckProject(parseUpgradeCheckArgs(commandArgs, cwd)));
   }
 
   if (command === "template" && commandArgs[0] === "info") {
@@ -633,6 +712,77 @@ export function createTemplateMetadata(options: InitProjectOptions): string {
   return `${JSON.stringify(metadata, null, 2)}\n`;
 }
 
+export async function upgradeCheckProject(options: UpgradeCheckOptions): Promise<UpgradeCheckResult> {
+  const metadata = await readTemplateMetadata(options.cwd);
+  const warnings: string[] = [];
+  const nextSteps: string[] = [];
+
+  if (!metadata) {
+    return {
+      cwd: options.cwd,
+      status: "unknown",
+      availableVersions: [],
+      warnings: ["Missing .tsu/template.json. Run this command inside a project generated by tsu-cli."],
+      nextSteps: ["Run tsu-cli doctor to inspect the project first."]
+    };
+  }
+
+  const repository = options.repository ?? metadata.template.repository ?? process.env.TSU_TEMPLATE_REPOSITORY ?? process.env.GITHUB_REPOSITORY ?? "zhengzebiao/tsu";
+  const versions = await resolveTemplateVersions({ repository });
+  const availableVersions = versions.map((version) => version.version);
+  const latestVersion = newestTemplateVersion(availableVersions);
+  const currentVersion = normalizeTemplateVersion(metadata.template.version);
+
+  if (!latestVersion) {
+    return {
+      cwd: options.cwd,
+      status: "unknown",
+      templateName: metadata.template.name,
+      currentVersion,
+      repository,
+      availableVersions,
+      warnings: [`No release versions found for template ${metadata.template.name}.`],
+      nextSteps: [`Run tsu-cli template versions ${metadata.template.name} --repo ${repository} to inspect available releases.`]
+    };
+  }
+
+  if (currentVersion === "latest") {
+    warnings.push("Current template version is recorded as latest, so an exact upgrade comparison is not possible.");
+    nextSteps.push(`Run tsu-cli template info ${metadata.template.name} --version ${latestVersion} --repo ${repository}`);
+
+    return {
+      cwd: options.cwd,
+      status: "unknown",
+      templateName: metadata.template.name,
+      currentVersion,
+      latestVersion,
+      repository,
+      availableVersions,
+      warnings,
+      nextSteps
+    };
+  }
+
+  const hasUpdate = compareTemplateVersions(latestVersion, currentVersion) > 0;
+
+  return {
+    cwd: options.cwd,
+    status: hasUpdate ? "update_available" : "current",
+    templateName: metadata.template.name,
+    currentVersion,
+    latestVersion,
+    repository,
+    availableVersions,
+    warnings,
+    nextSteps: hasUpdate
+      ? [
+          `Run tsu-cli template info ${metadata.template.name} --version ${latestVersion} --repo ${repository}`,
+          `Generate a fresh project with ${metadata.template.name}@${latestVersion} and compare changes.`
+        ]
+      : [`Template ${metadata.template.name}@${currentVersion} is current.`]
+  };
+}
+
 export async function doctorProject(options: DoctorOptions): Promise<DoctorResult> {
   const checks: DoctorCheck[] = [];
   const warnings: string[] = [];
@@ -688,6 +838,34 @@ export async function doctorProject(options: DoctorOptions): Promise<DoctorResul
     warnings,
     nextSteps
   };
+}
+
+export function newestTemplateVersion(versions: string[]) {
+  return [...versions].sort(compareTemplateVersions).at(-1);
+}
+
+export function compareTemplateVersions(a: string, b: string) {
+  const aParts = parseVersionParts(a);
+  const bParts = parseVersionParts(b);
+  const maxLength = Math.max(aParts.length, bParts.length);
+
+  for (let index = 0; index < maxLength; index += 1) {
+    const aPart = aParts[index] ?? 0;
+    const bPart = bParts[index] ?? 0;
+
+    if (aPart !== bPart) {
+      return aPart - bPart;
+    }
+  }
+
+  return normalizeTemplateVersion(a).localeCompare(normalizeTemplateVersion(b));
+}
+
+function parseVersionParts(version: string) {
+  return normalizeTemplateVersion(version)
+    .split(/[.-]/)
+    .map((part) => Number.parseInt(part, 10))
+    .filter((part) => Number.isFinite(part));
 }
 
 const templateExpectedFiles: Record<string, string[]> = {

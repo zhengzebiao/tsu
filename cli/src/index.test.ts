@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import test from "node:test";
 import { promisify } from "node:util";
-import { createCliMessage, createDoctorMessage, createHelpMessage, createRemoteTemplateInfoMessage, createTemplateInfoMessage, createTemplateListMessage, createTemplateMetadata, createTemplateVersionsMessage, createVersionMessage, doctorProject, findRemoteTemplateDefinition, findTemplateAsset, findTemplateVersionsFromReleases, getReleaseTag, initProject, normalizeEntrypointPath, normalizeTemplateVersion, parseDoctorArgs, parseInitArgs, parseTemplateAssetVersion, parseTemplateInfoArgs, parseTemplateVersionsArgs, remoteManifestIncludesTemplate, remoteManifestTemplateNames, runCli } from "./index.js";
+import { compareTemplateVersions, createCliMessage, createDoctorMessage, createHelpMessage, createRemoteTemplateInfoMessage, createTemplateInfoMessage, createTemplateListMessage, createTemplateMetadata, createTemplateVersionsMessage, createUpgradeCheckMessage, createVersionMessage, doctorProject, findRemoteTemplateDefinition, findTemplateAsset, findTemplateVersionsFromReleases, getReleaseTag, initProject, newestTemplateVersion, normalizeEntrypointPath, normalizeTemplateVersion, parseDoctorArgs, parseInitArgs, parseTemplateAssetVersion, parseTemplateInfoArgs, parseTemplateVersionsArgs, parseUpgradeCheckArgs, remoteManifestIncludesTemplate, remoteManifestTemplateNames, runCli, upgradeCheckProject } from "./index.js";
 
 const execFileAsync = promisify(execFile);
 
@@ -50,6 +50,27 @@ test("createDoctorMessage reports checks and next steps", () => {
   assert.match(message, /PASS package\.json - Found demo/);
   assert.match(message, /WARN Template files - Missing vite\.config\.ts/);
   assert.match(message, /Template version metadata is not recorded/);
+});
+
+test("createUpgradeCheckMessage reports upgrade suggestions", () => {
+  const message = createUpgradeCheckMessage({
+    cwd: "/workspace/app",
+    status: "update_available",
+    templateName: "vue3",
+    currentVersion: "1.0.0",
+    latestVersion: "1.2.0",
+    repository: "company/templates",
+    availableVersions: ["1.0.0", "1.2.0"],
+    warnings: [],
+    nextSteps: ["Run tsu-cli template info vue3 --version 1.2.0 --repo company/templates"]
+  });
+
+  assert.match(message, /Template upgrade check: UPDATE_AVAILABLE/);
+  assert.match(message, /Template: vue3/);
+  assert.match(message, /Current version: 1\.0\.0/);
+  assert.match(message, /Latest version: 1\.2\.0/);
+  assert.match(message, /Available versions: 1\.0\.0, 1\.2\.0/);
+  assert.match(message, /template info vue3 --version 1\.2\.0/);
 });
 
 test("createTemplateInfoMessage reports template details", () => {
@@ -148,6 +169,16 @@ test("parseDoctorArgs supports cwd", () => {
   assert.throws(() => parseDoctorArgs(["--unknown"], "/workspace"), /Unknown option: --unknown/);
 });
 
+test("parseUpgradeCheckArgs supports cwd and repo", () => {
+  assert.deepEqual(parseUpgradeCheckArgs([], "/workspace"), { cwd: "/workspace" });
+  assert.deepEqual(parseUpgradeCheckArgs(["--cwd", "apps/demo", "--repo", "company/templates"], "/workspace"), {
+    cwd: resolve("/workspace", "apps/demo"),
+    repository: "company/templates"
+  });
+  assert.throws(() => parseUpgradeCheckArgs(["demo"], "/workspace"), /Unexpected argument: demo/);
+  assert.throws(() => parseUpgradeCheckArgs(["--unknown"], "/workspace"), /Unknown option: --unknown/);
+});
+
 test("parseTemplateInfoArgs supports template version and repo", () => {
   assert.deepEqual(parseTemplateInfoArgs(["vue3"]), {
     repository: process.env.TSU_TEMPLATE_REPOSITORY || process.env.GITHUB_REPOSITORY || "zhengzebiao/tsu",
@@ -179,6 +210,9 @@ test("release helpers normalize versions and find assets", () => {
   assert.equal(normalizeTemplateVersion("v1.2.3"), "1.2.3");
   assert.equal(getReleaseTag("latest"), "latest");
   assert.equal(getReleaseTag("1.2.3"), "template-v1.2.3");
+  assert.equal(compareTemplateVersions("1.10.0", "1.2.0") > 0, true);
+  assert.equal(compareTemplateVersions("1.0.0", "1.0.0"), 0);
+  assert.equal(newestTemplateVersion(["1.0.0", "1.10.0", "1.2.0"]), "1.10.0");
   assert.equal(parseTemplateAssetVersion("tsu-templates-v1.2.3.tar.gz"), "1.2.3");
   assert.equal(parseTemplateAssetVersion("other.tar.gz"), undefined);
   assert.equal(
@@ -330,6 +364,91 @@ test("runCli reports remote template info from a versioned release", async () =>
     assert.match(message, /Tags: vue, vite/);
     assert.match(message, /Recommended for: admin, dashboard/);
     assert.match(message, /pnpm dev/);
+  } finally {
+    globalThis.fetch = originalFetch;
+    await rm(cwd, { force: true, recursive: true });
+  }
+});
+
+test("upgradeCheckProject reports available updates", async () => {
+  const cwd = await mkdtemp(join(tmpdir(), "quick-start-"));
+  const originalFetch = globalThis.fetch;
+  const requestedUrls: string[] = [];
+
+  try {
+    const result = await initProject({ cwd, source: "local", projectName: "demo", templateName: "vue3" });
+    await writeFile(join(result.targetDir, ".tsu/template.json"), createTemplateMetadata({ cwd, source: "remote", projectName: "demo", templateName: "vue3", version: "1.0.0", repository: "company/templates" }), "utf8");
+
+    globalThis.fetch = async (input) => {
+      requestedUrls.push(String(input));
+
+      return new Response(
+        JSON.stringify([
+          {
+            tag_name: "template-v1.0.0",
+            assets: [{ name: "tsu-templates-v1.0.0.tar.gz", browser_download_url: "https://example.com/1.0.0.tar.gz" }]
+          },
+          {
+            tag_name: "template-v1.2.0",
+            assets: [{ name: "tsu-templates-v1.2.0.tar.gz", browser_download_url: "https://example.com/1.2.0.tar.gz" }]
+          }
+        ]),
+        { status: 200 }
+      );
+    };
+
+    const upgrade = await upgradeCheckProject({ cwd: result.targetDir });
+
+    assert.deepEqual(requestedUrls, ["https://api.github.com/repos/company/templates/releases?per_page=100"]);
+    assert.equal(upgrade.status, "update_available");
+    assert.equal(upgrade.templateName, "vue3");
+    assert.equal(upgrade.currentVersion, "1.0.0");
+    assert.equal(upgrade.latestVersion, "1.2.0");
+    assert.deepEqual(upgrade.availableVersions, ["1.0.0", "1.2.0"]);
+    assert.match(createUpgradeCheckMessage(upgrade), /Template upgrade check: UPDATE_AVAILABLE/);
+  } finally {
+    globalThis.fetch = originalFetch;
+    await rm(cwd, { force: true, recursive: true });
+  }
+});
+
+test("upgradeCheckProject reports missing metadata", async () => {
+  const cwd = await mkdtemp(join(tmpdir(), "quick-start-"));
+
+  try {
+    const upgrade = await upgradeCheckProject({ cwd });
+
+    assert.equal(upgrade.status, "unknown");
+    assert.match(createUpgradeCheckMessage(upgrade), /Missing \.tsu\/template\.json/);
+  } finally {
+    await rm(cwd, { force: true, recursive: true });
+  }
+});
+
+test("runCli reports upgrade-check results", async () => {
+  const cwd = await mkdtemp(join(tmpdir(), "quick-start-"));
+  const originalFetch = globalThis.fetch;
+
+  try {
+    const result = await initProject({ cwd, source: "local", projectName: "demo", templateName: "vue3" });
+    await writeFile(join(result.targetDir, ".tsu/template.json"), createTemplateMetadata({ cwd, source: "remote", projectName: "demo", templateName: "vue3", version: "1.0.0", repository: "company/templates" }), "utf8");
+
+    globalThis.fetch = async () =>
+      new Response(
+        JSON.stringify([
+          {
+            tag_name: "template-v1.2.0",
+            assets: [{ name: "tsu-templates-v1.2.0.tar.gz", browser_download_url: "https://example.com/1.2.0.tar.gz" }]
+          }
+        ]),
+        { status: 200 }
+      );
+
+    const message = await runCli(["upgrade-check", "--cwd", result.targetDir], cwd);
+
+    assert.match(message, /Template upgrade check: UPDATE_AVAILABLE/);
+    assert.match(message, /Current version: 1\.0\.0/);
+    assert.match(message, /Latest version: 1\.2\.0/);
   } finally {
     globalThis.fetch = originalFetch;
     await rm(cwd, { force: true, recursive: true });
