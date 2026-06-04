@@ -1,15 +1,21 @@
 #!/usr/bin/env node
 
+import { execFile } from "node:child_process";
+import { stdin as input, stdout as output } from "node:process";
 import { existsSync, realpathSync } from "node:fs";
 import { cp, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
-import { execFile } from "node:child_process";
 import { tmpdir } from "node:os";
 import { basename, dirname, join, resolve } from "node:path";
+import { createRequire } from "node:module";
+import { createInterface } from "node:readline/promises";
 import { promisify } from "node:util";
 import { fileURLToPath } from "node:url";
-import { createTemplateFiles, renderTemplateFiles, type TemplateFile } from "./template.js";
+import { createTemplateFiles, renderTemplateFiles, templateDefinitions, templateNames, type TemplateFile, type TemplateName } from "./template.js";
 
 const execFileAsync = promisify(execFile);
+const require = createRequire(import.meta.url);
+const cliPackageJson = require("../package.json") as { version: string };
+const cliVersion = cliPackageJson.version;
 const templateAssetNamePattern = /^tsu-templates-v(.+)\.tar\.gz$/;
 
 export interface InitProjectOptions {
@@ -44,7 +50,64 @@ interface RemoteTemplateManifest {
 }
 
 export function createCliMessage() {
-  return "tsu-cli is ready to pull templates";
+  return createHelpMessage();
+}
+
+export function createHelpMessage() {
+  return [
+    "Tsu CLI - create versioned frontend project templates.",
+    "",
+    "Usage:",
+    "  tsu-cli init [project-name] [options]",
+    "  tsu-cli templates",
+    "  tsu-cli --help",
+    "  tsu-cli --version",
+    "",
+    "Commands:",
+    "  init [project-name]    Create a project from a template",
+    "  templates              List available templates",
+    "",
+    "Init options:",
+    "  -t, --template <name>  Template name: default, vue3, react, mfe, monorepo",
+    "  -v, --version <value>  Template version, for example 1.0.3 or latest",
+    "      --repo <owner/repo> Template release repository",
+    "      --cwd <path>       Directory to create the project in",
+    "      --local            Use bundled templates instead of GitHub releases",
+    "  -f, --force           Overwrite the target directory",
+    "",
+    "Examples:",
+    "  tsu-cli init my-app --template vue3",
+    "  tsu-cli init my-app --template react --version 1.0.3",
+    "  tsu-cli templates"
+  ].join("\n");
+}
+
+export function createVersionMessage() {
+  return cliVersion;
+}
+
+export function createTemplateListMessage() {
+  const rows = templateDefinitions.map((template) => [template.name, template.description, template.recommendedFor.join(", ")] as const);
+  const nameWidth = Math.max("Template".length, ...rows.map(([name]) => name.length));
+  const descriptionWidth = Math.max("Description".length, ...rows.map(([, description]) => description.length));
+  const header = `  ${"Template".padEnd(nameWidth)}  ${"Description".padEnd(descriptionWidth)}  Recommended for`;
+  const divider = `  ${"-".repeat(nameWidth)}  ${"-".repeat(descriptionWidth)}  ${"-".repeat("Recommended for".length)}`;
+  const lines = rows.map(([name, description, recommendedFor]) => `  ${name.padEnd(nameWidth)}  ${description.padEnd(descriptionWidth)}  ${recommendedFor}`);
+
+  return ["Available templates:", header, divider, ...lines].join("\n");
+}
+
+export function createSuccessMessage(options: ParsedInitOptions, targetDir: string) {
+  const definition = getTemplateDefinition(options.templateName);
+  const nextSteps = [`cd ${options.projectName}`, ...definition.nextSteps];
+
+  return [
+    `Created ${options.projectName} from ${options.templateName}@${options.version}`,
+    `Location: ${targetDir}`,
+    "",
+    "Next steps:",
+    ...nextSteps.map((step) => `  ${step}`)
+  ].join("\n");
 }
 
 export function parseInitArgs(args: string[], cwd = process.cwd()): ParsedInitOptions {
@@ -144,13 +207,46 @@ export async function initProject(options: InitProjectOptions) {
 export async function runCli(args: string[], cwd = process.cwd()) {
   const [command, ...commandArgs] = args;
 
-  if (command === "init") {
-    const options = parseInitArgs(commandArgs, cwd);
-    const result = await initProject(options);
-    return `Created ${options.projectName} from ${options.templateName}@${options.version} at ${result.targetDir}`;
+  if (!command || command === "--help" || command === "-h" || command === "help") {
+    return createHelpMessage();
   }
 
-  return createCliMessage();
+  if (command === "--version") {
+    return createVersionMessage();
+  }
+
+  if (command === "templates" || command === "list" || (command === "template" && commandArgs[0] === "list")) {
+    return createTemplateListMessage();
+  }
+
+  if (command === "init") {
+    if (commandArgs.includes("--help") || commandArgs.includes("-h")) {
+      return createHelpMessage();
+    }
+
+    const options = parseInitArgs(commandArgs, cwd);
+    const result = await initProject(options);
+    return createSuccessMessage(options, result.targetDir);
+  }
+
+  throw new Error(`Unknown command: ${command}. Run tsu-cli --help for usage.`);
+}
+
+export async function runInteractiveInit(cwd = process.cwd()) {
+  const rl = createInterface({ input, output });
+
+  try {
+    const projectNameAnswer = await rl.question("Project name (quick-start-app): ");
+    const templateNameAnswer = await rl.question(`Template (${templateNames.join("/")}) [default]: `);
+    const projectName = projectNameAnswer.trim() || "quick-start-app";
+    const templateName = (templateNameAnswer.trim() || "default") as TemplateName;
+    const options = parseInitArgs([projectName, "--template", templateName], cwd);
+    const result = await initProject(options);
+
+    return createSuccessMessage(options, result.targetDir);
+  } finally {
+    rl.close();
+  }
 }
 
 export function normalizeTemplateVersion(version: string) {
@@ -159,6 +255,16 @@ export function normalizeTemplateVersion(version: string) {
 
 export function getReleaseTag(version: string) {
   return normalizeTemplateVersion(version) === "latest" ? "latest" : `template-v${normalizeTemplateVersion(version)}`;
+}
+
+function getTemplateDefinition(templateName: string) {
+  const definition = templateDefinitions.find((template) => template.name === templateName);
+
+  if (!definition) {
+    throw new Error(`Template "${templateName}" is not available. Available templates: ${templateNames.join(", ")}.`);
+  }
+
+  return definition;
 }
 
 export function findTemplateAsset(release: GitHubRelease) {
@@ -309,7 +415,10 @@ function isNodeError(error: unknown): error is NodeJS.ErrnoException {
 }
 
 if (isCliEntrypoint()) {
-  runCli(process.argv.slice(2))
+  const args = process.argv.slice(2);
+  const cliAction = args.length === 0 && input.isTTY ? runInteractiveInit() : runCli(args);
+
+  cliAction
     .then((message) => {
       console.log(message);
     })
