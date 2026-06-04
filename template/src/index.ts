@@ -118,6 +118,9 @@ function createVue3TemplateFiles(packageName: string): TemplateFile[] {
           "docker:run": `docker run --rm -p 8080:80 ${packageName}`
         },
         dependencies: {
+          "@tsuz/components": "^0.1.1",
+          "@tsuz/sdk": "^0.1.1",
+          "@tsuz/utils": "^0.1.1",
           pinia: "^3.0.1",
           "vue-router": "^4.5.1",
           vue: "^3.5.13"
@@ -161,8 +164,9 @@ function createVue3TemplateFiles(packageName: string): TemplateFile[] {
         ],
         deployment: ["Run pnpm build to create dist/.", "Use docker:build for an nginx-based production image."],
         faq: [
+          ["How does the sample business loop work?", "HomeView uses @tsuz/components/vue for page states, @tsuz/sdk with a mock adapter for data loading, and @tsuz/utils/js for error messages."],
           ["How do I add pages?", "Add a view in src/views and register it in src/router/index.ts."],
-          ["How do I replace the sample state?", "Update or remove src/stores/counter.ts and the Home view usage."],
+          ["How do I replace the sample data?", "Replace the mock adapter in src/views/HomeView.vue with your real API endpoint."],
           ["Can I remove Docker?", "Yes. Delete Dockerfile, nginx.conf, .dockerignore, and the docker scripts."]
         ]
       })
@@ -247,7 +251,7 @@ function createVue3TemplateFiles(packageName: string): TemplateFile[] {
     },
     {
       path: "src/styles/main.css",
-      content: `@import "./base.css";\n\nbody {\n  min-height: 100vh;\n}\n`
+      content: `@import "./base.css";\n\nbody {\n  min-height: 100vh;\n}\n\n.tsu-page-container {\n  display: grid;\n  gap: 1.5rem;\n}\n\n.tsu-page-container__header {\n  display: flex;\n  align-items: flex-start;\n  justify-content: space-between;\n  gap: 1rem;\n}\n\n.tsu-page-container__title {\n  margin: 0;\n}\n\n.tsu-page-container__description,\n.tsu-state__description {\n  margin: 0.5rem 0 0;\n  color: #475569;\n}\n\n.tsu-page-container__actions,\n.tsu-state__actions {\n  display: flex;\n  gap: 0.75rem;\n}\n\n.tsu-state {\n  padding: 1rem;\n  border: 1px solid #e2e8f0;\n  border-radius: 0.5rem;\n  background: white;\n}\n\n.tsu-state__title {\n  color: #0f172a;\n}\n\n.tsu-state__button {\n  margin-top: 0.75rem;\n  padding: 0.5rem 0.875rem;\n  border: 0;\n  border-radius: 0.5rem;\n  color: white;\n  background: #2563eb;\n  cursor: pointer;\n}\n`
     },
     {
       path: "src/main.ts",
@@ -267,7 +271,7 @@ function createVue3TemplateFiles(packageName: string): TemplateFile[] {
     },
     {
       path: "src/views/HomeView.vue",
-      content: `<script setup lang="ts">\nimport { storeToRefs } from "pinia";\nimport { useCounterStore } from "@/stores/counter";\n\nconst projectName = "${packageName}";\nconst counterStore = useCounterStore();\nconst { count, doubleCount } = storeToRefs(counterStore);\n</script>\n\n<template>\n  <section class="home-view">\n    <p class="home-view__eyebrow">Vue 3 + Router + Pinia</p>\n    <h2>Welcome to {{ projectName }}</h2>\n    <p>Current count: {{ count }}</p>\n    <p>Double count: {{ doubleCount }}</p>\n    <div class="home-view__actions">\n      <button class="home-view__button" type="button" @click="counterStore.increment">Increment</button>\n      <button class="home-view__button home-view__button--secondary" type="button" @click="counterStore.reset">Reset</button>\n    </div>\n  </section>\n</template>\n\n<style scoped>\n.home-view {\n  display: grid;\n  gap: 0.75rem;\n  max-width: 32rem;\n}\n\n.home-view__eyebrow {\n  margin: 0;\n  color: #475569;\n  font-size: 0.875rem;\n  letter-spacing: 0.08em;\n  text-transform: uppercase;\n}\n\n.home-view__actions {\n  display: flex;\n  gap: 0.75rem;\n}\n\n.home-view__button {\n  width: fit-content;\n  padding: 0.625rem 1rem;\n  border: 0;\n  border-radius: 0.5rem;\n  color: white;\n  background: #2563eb;\n  cursor: pointer;\n}\n\n.home-view__button--secondary {\n  background: #64748b;\n}\n</style>\n`
+      content: `<script setup lang="ts">\nimport { onMounted, ref } from "vue";\nimport { EmptyState, ErrorState, LoadingState, PageContainer } from "@tsuz/components/vue";\nimport { createClient } from "@tsuz/sdk";\nimport { sleep, toErrorMessage } from "@tsuz/utils/js";\n\ninterface DashboardSummary {\n  id: number;\n  label: string;\n  value: string;\n}\n\nconst projectName = "${packageName}";\nconst summaries = ref<DashboardSummary[]>([]);\nconst isLoading = ref(true);\nconst errorMessage = ref("");\n\nconst api = createClient({\n  baseUrl: "https://example.tsu.local",\n  async adapter({ path }) {\n    await sleep(250);\n\n    if (path === "/dashboard/summary?fail=true") {\n      throw new Error("Mock request failed. Replace the adapter with your API when ready.");\n    }\n\n    return [\n      { id: 1, label: "Open tasks", value: "12" },\n      { id: 2, label: "Deployments", value: "3" },\n      { id: 3, label: "Template", value: "Vue 3" }\n    ];\n  }\n});\n\nasync function loadSummary(shouldFail = false) {\n  isLoading.value = true;\n  errorMessage.value = "";\n\n  try {\n    summaries.value = await api.get<DashboardSummary[]>(shouldFail ? "/dashboard/summary?fail=true" : "/dashboard/summary");\n  } catch (error: unknown) {\n    summaries.value = [];\n    errorMessage.value = toErrorMessage(error);\n  } finally {\n    isLoading.value = false;\n  }\n}\n\nonMounted(() => {\n  void loadSummary();\n});\n</script>\n\n<template>\n  <PageContainer\n    title="Dashboard starter"\n    :description="projectName + ' uses Tsu components, utils, and SDK in one replaceable example.'"\n  >\n    <template #actions>\n      <button class="home-view__button" type="button" @click="loadSummary(false)">Reload</button>\n      <button class="home-view__button home-view__button--secondary" type="button" @click="loadSummary(true)">Show error</button>\n    </template>\n\n    <LoadingState v-if="isLoading" label="Loading dashboard summary..." />\n    <ErrorState v-else-if="errorMessage" :message="errorMessage" :actions="['Retry']" @action="loadSummary(false)" />\n    <EmptyState v-else-if="summaries.length === 0" title="No summary data" description="Connect your API client to show real metrics." />\n    <div v-else class="summary-grid">\n      <article v-for="item in summaries" :key="item.id" class="summary-card">\n        <span>{{ item.label }}</span>\n        <strong>{{ item.value }}</strong>\n      </article>\n    </div>\n  </PageContainer>\n</template>\n\n<style scoped>\n.summary-grid {\n  display: grid;\n  grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr));\n  gap: 1rem;\n}\n\n.summary-card {\n  display: grid;\n  gap: 0.5rem;\n  padding: 1rem;\n  border: 1px solid #e2e8f0;\n  border-radius: 0.5rem;\n  background: white;\n}\n\n.summary-card span {\n  color: #475569;\n  font-size: 0.875rem;\n}\n\n.summary-card strong {\n  color: #0f172a;\n  font-size: 1.5rem;\n}\n\n.home-view__button {\n  width: fit-content;\n  padding: 0.625rem 1rem;\n  border: 0;\n  border-radius: 0.5rem;\n  color: white;\n  background: #2563eb;\n  cursor: pointer;\n}\n\n.home-view__button--secondary {\n  background: #64748b;\n}\n</style>\n`
     },
     {
       path: "src/views/AboutView.vue",

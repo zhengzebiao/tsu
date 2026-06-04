@@ -23,6 +23,15 @@
     "lint": "tsc -p vue/tsconfig.json --noEmit && tsc -p react/tsconfig.json --noEmit",
     "test": "node -e \"console.log('No tests configured for @tsuz/components')\""
   },
+  "peerDependencies": {
+    "react": ">=18",
+    "vue": ">=3"
+  },
+  "devDependencies": {
+    "@types/react": "^19.0.10",
+    "react": "^19.1.0",
+    "vue": "^3.5.13"
+  },
   "repository": {
     "type": "git",
     "url": "https://github.com/zhengzebiao/tsu"

@@ -8,3 +8,25 @@ export function pick<T extends Record<string, unknown>, K extends keyof T>(sourc
     return result;
   }, {} as Pick<T, K>);
 }
+
+export function toErrorMessage(error: unknown) {
+  if (error instanceof Error) {
+    return error.message;
+  }
+
+  if (typeof error === "string") {
+    return error;
+  }
+
+  if (isPlainObject(error) && typeof error.message === "string") {
+    return error.message;
+  }
+
+  return "Unexpected error";
+}
+
+export function sleep(ms: number) {
+  return new Promise<void>((resolve) => {
+    setTimeout(resolve, ms);
+  });
+}

@@ -22,12 +22,26 @@ try {
 
     await runNode(cliEntry, ["init", template.projectName, "--template", template.name, "--local", "--cwd", tempRoot]);
     await runPnpm(["install"], projectRoot);
+    await installLocalPackages(projectRoot);
     await runPnpm(["lint"], projectRoot);
     await runPnpm(["build"], projectRoot);
     process.stdout.write(`Validated generated ${template.name} app at ${projectRoot}\n`);
   }
 } finally {
   await rm(tempRoot, { recursive: true, force: true });
+}
+
+async function installLocalPackages(cwd) {
+  await runPnpm(
+    [
+      "add",
+      "-w",
+      `@tsuz/components@file:${join(repoRoot, "components")}`,
+      `@tsuz/utils@file:${join(repoRoot, "utils")}`,
+      `@tsuz/sdk@file:${join(repoRoot, "sdk")}`
+    ],
+    cwd
+  );
 }
 
 async function runNode(entry, args) {
