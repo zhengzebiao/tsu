@@ -51,8 +51,12 @@ tsu-cli templates
 ```bash
 tsu-cli --help
 tsu-cli --version
+tsu-cli doctor [--cwd <path>]
 tsu-cli templates
 tsu-cli template list
+tsu-cli template info <template-name>
+tsu-cli template info <template-name> --version <version>
+tsu-cli template versions [template-name]
 tsu-cli init <project-name> --template <template-name>
 ```
 
@@ -77,6 +81,33 @@ tsu-cli init admin-console --template vue3
 
 如果在交互式终端中直接运行 `tsu-cli` 且不带参数，CLI 会询问项目名称和模板。
 
+### `doctor`
+
+检查某个目录是否像是由 Tsu 生成的项目，以及预期模板文件是否仍然存在。
+
+```bash
+tsu-cli doctor --cwd admin-console
+```
+
+当前版本只做本地静态检查。它会读取 `.tsu/template.json` 展示模板名称、版本、来源和仓库，并检查预期模板文件是否仍然存在。
+
+## 模板元数据
+
+生成项目会包含 `.tsu/template.json`，方便后续工具识别它的模板来源：
+
+```json
+{
+  "template": {
+    "name": "vue3",
+    "version": "1.0.4",
+    "source": "remote",
+    "repository": "company/frontend-templates"
+  }
+}
+```
+
+该元数据会被 `tsu-cli doctor` 使用，也可以支撑后续的模板升级检查。
+
 ## 模板版本
 
 Tsu 支持在初始化时锁定模板版本：
@@ -86,6 +117,24 @@ tsu-cli init admin-console --template vue3 --version 1.0.4
 ```
 
 CLI 会解析到 GitHub release tag `template-v1.0.4`，并下载对应的模板资源。使用 `latest` 可以拉取最新模板 release。
+
+查看可用模板 release 版本：
+
+```bash
+tsu-cli template versions
+```
+
+只查看包含某个模板的版本：
+
+```bash
+tsu-cli template versions vue3
+```
+
+查看指定 release 版本里的模板详情：
+
+```bash
+tsu-cli template info vue3 --version 1.0.4
+```
 
 ## 私有模板仓库
 
