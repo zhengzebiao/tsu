@@ -3,7 +3,7 @@ import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import test from "node:test";
-import { createCliMessage, createHelpMessage, createTemplateListMessage, createVersionMessage, findTemplateAsset, getReleaseTag, initProject, normalizeEntrypointPath, normalizeTemplateVersion, parseInitArgs, runCli } from "./index.js";
+import { createCliMessage, createHelpMessage, createTemplateInfoMessage, createTemplateListMessage, createVersionMessage, findTemplateAsset, getReleaseTag, initProject, normalizeEntrypointPath, normalizeTemplateVersion, parseInitArgs, runCli } from "./index.js";
 
 test("createCliMessage reports CLI usage", () => {
   assert.equal(createCliMessage(), createHelpMessage());
@@ -24,6 +24,18 @@ test("createTemplateListMessage reports available templates", () => {
   assert.match(message, /react\s+React app.*react app, dashboard, web app/);
   assert.match(message, /mfe\s+Micro frontend workspace.*micro frontend, multi app/);
   assert.match(message, /monorepo\s+Multi-package workspace.*workspace, packages, team standard/);
+});
+
+test("createTemplateInfoMessage reports template details", () => {
+  const message = createTemplateInfoMessage("vue3");
+
+  assert.match(message, /Template: vue3/);
+  assert.match(message, /Description: Vue 3 app/);
+  assert.match(message, /Tags: vue, vite, spa, docker/);
+  assert.match(message, /Recommended for: admin, dashboard, web app/);
+  assert.match(message, /Node: >=20/);
+  assert.match(message, /Package managers: pnpm/);
+  assert.match(message, /pnpm install/);
 });
 
 test("normalizeEntrypointPath resolves equivalent shim paths", () => {
@@ -67,6 +79,8 @@ test("runCli reports help version and templates", async () => {
   assert.equal(await runCli(["--version"]), createVersionMessage());
   assert.equal(await runCli(["templates"]), createTemplateListMessage());
   assert.equal(await runCli(["template", "list"]), createTemplateListMessage());
+  assert.equal(await runCli(["template", "info", "vue3"]), createTemplateInfoMessage("vue3"));
+  await assert.rejects(() => runCli(["template", "info"]), /Missing value for template info/);
 });
 
 test("initProject writes template files", async () => {

@@ -60,12 +60,14 @@ export function createHelpMessage() {
     "Usage:",
     "  tsu-cli init [project-name] [options]",
     "  tsu-cli templates",
+    "  tsu-cli template info <name>",
     "  tsu-cli --help",
     "  tsu-cli --version",
     "",
     "Commands:",
     "  init [project-name]    Create a project from a template",
     "  templates              List available templates",
+    "  template info <name>   Show template details",
     "",
     "Init options:",
     "  -t, --template <name>  Template name: default, vue3, react, mfe, monorepo",
@@ -78,7 +80,8 @@ export function createHelpMessage() {
     "Examples:",
     "  tsu-cli init my-app --template vue3",
     "  tsu-cli init my-app --template react --version 1.0.3",
-    "  tsu-cli templates"
+    "  tsu-cli templates",
+    "  tsu-cli template info vue3"
   ].join("\n");
 }
 
@@ -95,6 +98,22 @@ export function createTemplateListMessage() {
   const lines = rows.map(([name, description, recommendedFor]) => `  ${name.padEnd(nameWidth)}  ${description.padEnd(descriptionWidth)}  ${recommendedFor}`);
 
   return ["Available templates:", header, divider, ...lines].join("\n");
+}
+
+export function createTemplateInfoMessage(templateName: string) {
+  const definition = getTemplateDefinition(templateName);
+
+  return [
+    `Template: ${definition.name}`,
+    `Description: ${definition.description}`,
+    `Tags: ${definition.tags.join(", ")}`,
+    `Recommended for: ${definition.recommendedFor.join(", ")}`,
+    `Node: ${definition.node}`,
+    `Package managers: ${definition.packageManagers.join(", ")}`,
+    "",
+    "Next steps:",
+    ...definition.nextSteps.map((step) => `  ${step}`)
+  ].join("\n");
 }
 
 export function createSuccessMessage(options: ParsedInitOptions, targetDir: string) {
@@ -217,6 +236,10 @@ export async function runCli(args: string[], cwd = process.cwd()) {
 
   if (command === "templates" || command === "list" || (command === "template" && commandArgs[0] === "list")) {
     return createTemplateListMessage();
+  }
+
+  if (command === "template" && commandArgs[0] === "info") {
+    return createTemplateInfoMessage(readCommandValue(commandArgs, 1, "template info"));
   }
 
   if (command === "init") {
@@ -386,6 +409,16 @@ async function collectTemplateFiles(root: string, directory: string, files: Temp
       content: await readFile(fullPath, "utf8")
     });
   }
+}
+
+function readCommandValue(args: string[], index: number, command: string) {
+  const value = args[index];
+
+  if (!value || value.startsWith("-")) {
+    throw new Error(`Missing value for ${command}`);
+  }
+
+  return value;
 }
 
 function readOptionValue(args: string[], index: number, option: string) {

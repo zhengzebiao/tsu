@@ -3,8 +3,19 @@ import test from "node:test";
 import { createTemplateFiles, createTemplateSourceFiles, listTemplates, renderTemplateFiles, templateManifest, templateProjectNameToken } from "./index.js";
 
 test("template manifest exposes package metadata", () => {
-  assert.equal(templateManifest.name, "quick-start-template");
-  assert.deepEqual(templateManifest.templates, ["default", "monorepo", "vue3", "mfe", "react"]);
+  assert.equal(templateManifest.name, "tsuz-template");
+  assert.deepEqual(
+    templateManifest.templates.map((template) => template.name),
+    ["default", "monorepo", "vue3", "mfe", "react"]
+  );
+  assert.deepEqual(templateManifest.templates.find((template) => template.name === "vue3"), {
+    name: "vue3",
+    description: "Vue 3 app with Vite, Router, Pinia, ESLint, Docker, and CI",
+    tags: ["vue", "vite", "spa", "docker"],
+    recommendedFor: ["admin", "dashboard", "web app"],
+    node: ">=20",
+    packageManagers: ["pnpm"]
+  });
 });
 
 test("listTemplates returns available templates", () => {

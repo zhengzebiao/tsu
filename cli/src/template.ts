@@ -16,7 +16,10 @@ export type TemplateName = "default" | "monorepo" | "vue3" | "mfe" | "react";
 export interface TemplateDefinition {
   name: TemplateName;
   description: string;
+  tags: string[];
   recommendedFor: string[];
+  node: string;
+  packageManagers: string[];
   nextSteps: string[];
 }
 
@@ -24,31 +27,46 @@ export const templateDefinitions: TemplateDefinition[] = [
   {
     name: "default",
     description: "Minimal Node.js starter",
+    tags: ["node", "minimal"],
     recommendedFor: ["node", "minimal"],
+    node: ">=20",
+    packageManagers: ["pnpm"],
     nextSteps: ["pnpm dev"]
   },
   {
     name: "vue3",
     description: "Vue 3 app with Vite, Router, Pinia, ESLint, Docker, and CI",
+    tags: ["vue", "vite", "spa", "docker"],
     recommendedFor: ["admin", "dashboard", "web app"],
+    node: ">=20",
+    packageManagers: ["pnpm"],
     nextSteps: ["pnpm install", "pnpm dev"]
   },
   {
     name: "react",
     description: "React app with Vite, TypeScript, Router, ESLint, Docker, and CI",
+    tags: ["react", "vite", "spa", "docker"],
     recommendedFor: ["react app", "dashboard", "web app"],
+    node: ">=20",
+    packageManagers: ["pnpm"],
     nextSteps: ["pnpm install", "pnpm dev"]
   },
   {
     name: "mfe",
     description: "Micro frontend workspace with host and Vue sub apps",
+    tags: ["mfe", "qiankun", "vue", "workspace"],
     recommendedFor: ["micro frontend", "multi app"],
+    node: ">=20",
+    packageManagers: ["pnpm"],
     nextSteps: ["pnpm install", "pnpm dev"]
   },
   {
     name: "monorepo",
     description: "Multi-package workspace with pnpm, Turbo, Changesets, and TypeScript",
+    tags: ["monorepo", "pnpm", "turbo", "changesets"],
     recommendedFor: ["workspace", "packages", "team standard"],
+    node: ">=20",
+    packageManagers: ["pnpm"],
     nextSteps: ["pnpm install", "pnpm build"]
   }
 ];

@@ -4,7 +4,16 @@ import { createReactTemplateFiles } from "./react.js";
 export interface TemplateManifest {
   name: string;
   version: string;
-  templates: TemplateName[];
+  templates: TemplateDefinition[];
+}
+
+export interface TemplateDefinition {
+  name: TemplateName;
+  description: string;
+  tags: string[];
+  recommendedFor: string[];
+  node: string;
+  packageManagers: string[];
 }
 
 export interface TemplateFile {
@@ -19,17 +28,63 @@ export interface CreateTemplateFilesOptions {
 
 export type TemplateName = "default" | "monorepo" | "vue3" | "mfe" | "react";
 
-const templateNames: TemplateName[] = ["default", "monorepo", "vue3", "mfe", "react"];
+const templateDefinitions: TemplateDefinition[] = [
+  {
+    name: "default",
+    description: "Minimal Node.js starter",
+    tags: ["node", "minimal"],
+    recommendedFor: ["node", "minimal"],
+    node: ">=20",
+    packageManagers: ["pnpm"]
+  },
+  {
+    name: "monorepo",
+    description: "Multi-package workspace with pnpm, Turbo, Changesets, and TypeScript",
+    tags: ["monorepo", "pnpm", "turbo", "changesets"],
+    recommendedFor: ["workspace", "packages", "team standard"],
+    node: ">=20",
+    packageManagers: ["pnpm"]
+  },
+  {
+    name: "vue3",
+    description: "Vue 3 app with Vite, Router, Pinia, ESLint, Docker, and CI",
+    tags: ["vue", "vite", "spa", "docker"],
+    recommendedFor: ["admin", "dashboard", "web app"],
+    node: ">=20",
+    packageManagers: ["pnpm"]
+  },
+  {
+    name: "mfe",
+    description: "Micro frontend workspace with host and Vue sub apps",
+    tags: ["mfe", "qiankun", "vue", "workspace"],
+    recommendedFor: ["micro frontend", "multi app"],
+    node: ">=20",
+    packageManagers: ["pnpm"]
+  },
+  {
+    name: "react",
+    description: "React app with Vite, TypeScript, Router, ESLint, Docker, and CI",
+    tags: ["react", "vite", "spa", "docker"],
+    recommendedFor: ["react app", "dashboard", "web app"],
+    node: ">=20",
+    packageManagers: ["pnpm"]
+  }
+];
+const templateNames = templateDefinitions.map((template) => template.name);
 export const templateProjectNameToken = "__tsu_project_name__";
 
 export const templateManifest: TemplateManifest = {
-  name: "quick-start-template",
+  name: "tsuz-template",
   version: "0.0.0",
-  templates: templateNames
+  templates: templateDefinitions
 };
 
 export function listTemplates() {
   return [...templateNames];
+}
+
+export function getTemplateDefinition(templateName: TemplateName) {
+  return templateDefinitions.find((template) => template.name === templateName);
 }
 
 export function createTemplateFiles(options: CreateTemplateFilesOptions): TemplateFile[] {
