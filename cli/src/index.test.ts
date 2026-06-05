@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { execFile } from "node:child_process";
 import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import test from "node:test";
@@ -8,6 +9,7 @@ import { promisify } from "node:util";
 import { compareTemplateVersions, createCliMessage, createDoctorMessage, createHelpMessage, createRemoteTemplateInfoMessage, createTemplateInfoMessage, createTemplateListMessage, createTemplateMetadata, createTemplateVersionsMessage, createUpgradeCheckMessage, createVersionMessage, doctorProject, findRemoteTemplateDefinition, findTemplateAsset, findTemplateVersionsFromReleases, getReleaseTag, initProject, newestTemplateVersion, normalizeEntrypointPath, normalizeTemplateVersion, parseDoctorArgs, parseInitArgs, parseTemplateAssetVersion, parseTemplateInfoArgs, parseTemplateVersionsArgs, parseUpgradeCheckArgs, remoteManifestIncludesTemplate, remoteManifestTemplateNames, runCli, upgradeCheckProject } from "./index.js";
 
 const execFileAsync = promisify(execFile);
+const cliPackageJson = createRequire(import.meta.url)("../package.json") as { version: string };
 
 test("createCliMessage reports CLI usage", () => {
   assert.equal(createCliMessage(), createHelpMessage());
@@ -15,7 +17,7 @@ test("createCliMessage reports CLI usage", () => {
 });
 
 test("createVersionMessage reports package version", () => {
-  assert.equal(createVersionMessage(), "0.1.3");
+  assert.equal(createVersionMessage(), cliPackageJson.version);
 });
 
 test("createTemplateListMessage reports available templates", () => {
