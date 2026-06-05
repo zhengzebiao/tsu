@@ -65,7 +65,12 @@
       "Bash(pnpm --filter @tsuz/cli build)",
       "Bash(node cli/dist/index.js init mfe-app --template mfe --cwd ./tmp --local --force)",
       "Bash(pnpm --dir e:/project/quick-start/tmp/mfe-app build)",
-      "Bash(pnpm --dir e:/project/quick-start/tmp/mfe-app lint)"
+      "Bash(pnpm --dir e:/project/quick-start/tmp/mfe-app lint)",
+      "Bash(pnpm --dir e:/project/quick-start/tmp/mfe-app dev)",
+      "mcp__chrome-devtools__new_page",
+      "mcp__chrome-devtools__take_snapshot",
+      "mcp__chrome-devtools__list_console_messages",
+      "mcp__chrome-devtools__list_network_requests"
     ]
   }
 }

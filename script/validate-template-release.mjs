@@ -20,8 +20,14 @@ try {
   await cp(join(releaseDir, `tsu-templates-v${version}`), bundleDir, { recursive: true });
   const manifest = JSON.parse(await readFile(join(bundleDir, "manifest.json"), "utf8"));
 
-  if (!manifest.templates.includes("default") || !manifest.templates.includes("monorepo") || !manifest.templates.includes("vue3") || !manifest.templates.includes("mfe") || !manifest.templates.includes("react")) {
+  const templateNames = manifest.templates.map((template) => template.name);
+
+  if (!templateNames.includes("default") || !templateNames.includes("monorepo") || !templateNames.includes("vue3") || !templateNames.includes("mfe") || !templateNames.includes("react")) {
     throw new Error("Release manifest does not include expected templates.");
+  }
+
+  if (!manifest.templates.find((template) => template.name === "vue3")?.description) {
+    throw new Error("Release manifest does not include template details.");
   }
 
   await access(join(bundleDir, "default", "package.json"));

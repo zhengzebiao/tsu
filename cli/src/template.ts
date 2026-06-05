@@ -13,7 +13,65 @@ export interface CreateTemplateFilesOptions {
 
 export type TemplateName = "default" | "monorepo" | "vue3" | "mfe" | "react";
 
-const templateNames: TemplateName[] = ["default", "monorepo", "vue3", "mfe", "react"];
+export interface TemplateDefinition {
+  name: TemplateName;
+  description: string;
+  tags: string[];
+  recommendedFor: string[];
+  node: string;
+  packageManagers: string[];
+  nextSteps: string[];
+}
+
+export const templateDefinitions: TemplateDefinition[] = [
+  {
+    name: "default",
+    description: "Minimal Node.js starter",
+    tags: ["node", "minimal"],
+    recommendedFor: ["node", "minimal"],
+    node: ">=20",
+    packageManagers: ["pnpm"],
+    nextSteps: ["pnpm dev"]
+  },
+  {
+    name: "vue3",
+    description: "Vue 3 app with Vite, Router, Pinia, ESLint, Docker, and CI",
+    tags: ["vue", "vite", "spa", "docker"],
+    recommendedFor: ["admin", "dashboard", "web app"],
+    node: ">=20",
+    packageManagers: ["pnpm"],
+    nextSteps: ["pnpm install", "pnpm dev"]
+  },
+  {
+    name: "react",
+    description: "React app with Vite, TypeScript, Router, ESLint, Docker, and CI",
+    tags: ["react", "vite", "spa", "docker"],
+    recommendedFor: ["react app", "dashboard", "web app"],
+    node: ">=20",
+    packageManagers: ["pnpm"],
+    nextSteps: ["pnpm install", "pnpm dev"]
+  },
+  {
+    name: "mfe",
+    description: "Micro frontend workspace with host and Vue sub apps",
+    tags: ["mfe", "qiankun", "vue", "workspace"],
+    recommendedFor: ["micro frontend", "multi app"],
+    node: ">=20",
+    packageManagers: ["pnpm"],
+    nextSteps: ["pnpm install", "pnpm dev"]
+  },
+  {
+    name: "monorepo",
+    description: "Multi-package workspace with pnpm, Turbo, Changesets, and TypeScript",
+    tags: ["monorepo", "pnpm", "turbo", "changesets"],
+    recommendedFor: ["workspace", "packages", "team standard"],
+    node: ">=20",
+    packageManagers: ["pnpm"],
+    nextSteps: ["pnpm install", "pnpm build"]
+  }
+];
+
+export const templateNames = templateDefinitions.map((template) => template.name);
 const templateProjectNameToken = "__tsu_project_name__";
 
 export function createTemplateFiles(options: CreateTemplateFilesOptions): TemplateFile[] {
@@ -65,6 +123,19 @@ function createDefaultTemplateFiles(packageName: string): TemplateFile[] {
       })
     },
     {
+      path: "README.md",
+      content: createTemplateReadme({
+        projectName: packageName,
+        templateName: "default",
+        techStack: ["Node.js", "ES modules"],
+        gettingStarted: ["pnpm dev"],
+        scripts: [["dev", "Run the Node.js starter entry"]],
+        projectStructure: [["src/index.js", "Application entry file"]],
+        deployment: ["Add the runtime or deployment target your team uses."],
+        faq: [["Can I add TypeScript?", "Yes. Add TypeScript and a build script when this project grows beyond the minimal starter."]]
+      })
+    },
+    {
       path: "src/index.js",
       content: `console.log("${packageName} is ready");\n`
     }
@@ -89,6 +160,9 @@ function createVue3TemplateFiles(packageName: string): TemplateFile[] {
           "docker:run": `docker run --rm -p 8080:80 ${packageName}`
         },
         dependencies: {
+          "@tsuz/components": "^0.1.1",
+          "@tsuz/sdk": "^0.1.1",
+          "@tsuz/utils": "^0.1.1",
           pinia: "^3.0.1",
           "vue-router": "^4.5.1",
           vue: "^3.5.13"
@@ -105,6 +179,38 @@ function createVue3TemplateFiles(packageName: string): TemplateFile[] {
           vite: "^6.2.0",
           "vue-tsc": "^2.2.8"
         }
+      })
+    },
+    {
+      path: "README.md",
+      content: createTemplateReadme({
+        projectName: packageName,
+        templateName: "vue3",
+        techStack: ["Vue 3", "Vite", "TypeScript", "Vue Router", "Pinia", "ESLint", "Docker", "GitHub Actions"],
+        gettingStarted: ["pnpm install", "pnpm dev"],
+        scripts: [
+          ["dev", "Start the Vite development server"],
+          ["lint", "Run ESLint and vue-tsc checks"],
+          ["build", "Type-check and build production assets"],
+          ["preview", "Preview the production build"],
+          ["docker:build", "Build the nginx production image"],
+          ["docker:run", "Run the production image on port 8080"]
+        ],
+        projectStructure: [
+          ["src/main.ts", "Vue application bootstrap"],
+          ["src/router/", "Route definitions"],
+          ["src/stores/", "Pinia stores"],
+          ["src/views/", "Route-level views"],
+          [".github/workflows/ci.yml", "Install, lint, and build workflow"],
+          ["Dockerfile", "Production container build"]
+        ],
+        deployment: ["Run pnpm build to create dist/.", "Use docker:build for an nginx-based production image."],
+        faq: [
+          ["How does the sample business loop work?", "HomeView uses @tsuz/components/vue for page states, @tsuz/sdk with a mock adapter for data loading, and @tsuz/utils/js for error messages."],
+          ["How do I add pages?", "Add a view in src/views and register it in src/router/index.ts."],
+          ["How do I replace the sample data?", "Replace the mock adapter in src/views/HomeView.vue with your real API endpoint."],
+          ["Can I remove Docker?", "Yes. Delete Dockerfile, nginx.conf, .dockerignore, and the docker scripts."]
+        ]
       })
     },
     {
@@ -187,7 +293,7 @@ function createVue3TemplateFiles(packageName: string): TemplateFile[] {
     },
     {
       path: "src/styles/main.css",
-      content: `@import "./base.css";\n\nbody {\n  min-height: 100vh;\n}\n`
+      content: `@import "./base.css";\n\nbody {\n  min-height: 100vh;\n}\n\n.tsu-page-container {\n  display: grid;\n  gap: 1.5rem;\n}\n\n.tsu-page-container__header {\n  display: flex;\n  align-items: flex-start;\n  justify-content: space-between;\n  gap: 1rem;\n}\n\n.tsu-page-container__title {\n  margin: 0;\n}\n\n.tsu-page-container__description,\n.tsu-state__description {\n  margin: 0.5rem 0 0;\n  color: #475569;\n}\n\n.tsu-page-container__actions,\n.tsu-state__actions {\n  display: flex;\n  gap: 0.75rem;\n}\n\n.tsu-state {\n  padding: 1rem;\n  border: 1px solid #e2e8f0;\n  border-radius: 0.5rem;\n  background: white;\n}\n\n.tsu-state__title {\n  color: #0f172a;\n}\n\n.tsu-state__button {\n  margin-top: 0.75rem;\n  padding: 0.5rem 0.875rem;\n  border: 0;\n  border-radius: 0.5rem;\n  color: white;\n  background: #2563eb;\n  cursor: pointer;\n}\n`
     },
     {
       path: "src/main.ts",
@@ -207,7 +313,7 @@ function createVue3TemplateFiles(packageName: string): TemplateFile[] {
     },
     {
       path: "src/views/HomeView.vue",
-      content: `<script setup lang="ts">\nimport { storeToRefs } from "pinia";\nimport { useCounterStore } from "@/stores/counter";\n\nconst projectName = "${packageName}";\nconst counterStore = useCounterStore();\nconst { count, doubleCount } = storeToRefs(counterStore);\n</script>\n\n<template>\n  <section class="home-view">\n    <p class="home-view__eyebrow">Vue 3 + Router + Pinia</p>\n    <h2>Welcome to {{ projectName }}</h2>\n    <p>Current count: {{ count }}</p>\n    <p>Double count: {{ doubleCount }}</p>\n    <div class="home-view__actions">\n      <button class="home-view__button" type="button" @click="counterStore.increment">Increment</button>\n      <button class="home-view__button home-view__button--secondary" type="button" @click="counterStore.reset">Reset</button>\n    </div>\n  </section>\n</template>\n\n<style scoped>\n.home-view {\n  display: grid;\n  gap: 0.75rem;\n  max-width: 32rem;\n}\n\n.home-view__eyebrow {\n  margin: 0;\n  color: #475569;\n  font-size: 0.875rem;\n  letter-spacing: 0.08em;\n  text-transform: uppercase;\n}\n\n.home-view__actions {\n  display: flex;\n  gap: 0.75rem;\n}\n\n.home-view__button {\n  width: fit-content;\n  padding: 0.625rem 1rem;\n  border: 0;\n  border-radius: 0.5rem;\n  color: white;\n  background: #2563eb;\n  cursor: pointer;\n}\n\n.home-view__button--secondary {\n  background: #64748b;\n}\n</style>\n`
+      content: `<script setup lang="ts">\nimport { onMounted, ref } from "vue";\nimport { EmptyState, ErrorState, LoadingState, PageContainer } from "@tsuz/components/vue";\nimport { createClient } from "@tsuz/sdk";\nimport { sleep, toErrorMessage } from "@tsuz/utils/js";\n\ninterface DashboardSummary {\n  id: number;\n  label: string;\n  value: string;\n}\n\nconst projectName = "${packageName}";\nconst summaries = ref<DashboardSummary[]>([]);\nconst isLoading = ref(true);\nconst errorMessage = ref("");\n\nconst api = createClient({\n  baseUrl: "https://example.tsu.local",\n  async adapter({ path }) {\n    await sleep(250);\n\n    if (path === "/dashboard/summary?fail=true") {\n      throw new Error("Mock request failed. Replace the adapter with your API when ready.");\n    }\n\n    return [\n      { id: 1, label: "Open tasks", value: "12" },\n      { id: 2, label: "Deployments", value: "3" },\n      { id: 3, label: "Template", value: "Vue 3" }\n    ];\n  }\n});\n\nasync function loadSummary(shouldFail = false) {\n  isLoading.value = true;\n  errorMessage.value = "";\n\n  try {\n    summaries.value = await api.get<DashboardSummary[]>(shouldFail ? "/dashboard/summary?fail=true" : "/dashboard/summary");\n  } catch (error: unknown) {\n    summaries.value = [];\n    errorMessage.value = toErrorMessage(error);\n  } finally {\n    isLoading.value = false;\n  }\n}\n\nonMounted(() => {\n  void loadSummary();\n});\n</script>\n\n<template>\n  <PageContainer\n    title="Dashboard starter"\n    :description="projectName + ' uses Tsu components, utils, and SDK in one replaceable example.'"\n  >\n    <template #actions>\n      <button class="home-view__button" type="button" @click="loadSummary(false)">Reload</button>\n      <button class="home-view__button home-view__button--secondary" type="button" @click="loadSummary(true)">Show error</button>\n    </template>\n\n    <LoadingState v-if="isLoading" label="Loading dashboard summary..." />\n    <ErrorState v-else-if="errorMessage" :message="errorMessage" :actions="['Retry']" @action="loadSummary(false)" />\n    <EmptyState v-else-if="summaries.length === 0" title="No summary data" description="Connect your API client to show real metrics." />\n    <div v-else class="summary-grid">\n      <article v-for="item in summaries" :key="item.id" class="summary-card">\n        <span>{{ item.label }}</span>\n        <strong>{{ item.value }}</strong>\n      </article>\n    </div>\n  </PageContainer>\n</template>\n\n<style scoped>\n.summary-grid {\n  display: grid;\n  grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr));\n  gap: 1rem;\n}\n\n.summary-card {\n  display: grid;\n  gap: 0.5rem;\n  padding: 1rem;\n  border: 1px solid #e2e8f0;\n  border-radius: 0.5rem;\n  background: white;\n}\n\n.summary-card span {\n  color: #475569;\n  font-size: 0.875rem;\n}\n\n.summary-card strong {\n  color: #0f172a;\n  font-size: 1.5rem;\n}\n\n.home-view__button {\n  width: fit-content;\n  padding: 0.625rem 1rem;\n  border: 0;\n  border-radius: 0.5rem;\n  color: white;\n  background: #2563eb;\n  cursor: pointer;\n}\n\n.home-view__button--secondary {\n  background: #64748b;\n}\n</style>\n`
     },
     {
       path: "src/views/AboutView.vue",
@@ -242,6 +348,36 @@ function createMonorepoTemplateFiles(packageName: string): TemplateFile[] {
           turbo: "^2.5.3",
           typescript: "^5.8.3"
         }
+      })
+    },
+    {
+      path: "README.md",
+      content: createTemplateReadme({
+        projectName: packageName,
+        templateName: "monorepo",
+        techStack: ["pnpm workspace", "Turborepo", "Changesets", "TypeScript", "Node.js packages"],
+        gettingStarted: ["pnpm install", "pnpm build", "pnpm lint"],
+        scripts: [
+          ["build", "Build all workspace packages through Turbo"],
+          ["lint", "Run TypeScript no-emit checks across packages"],
+          ["test", "Run package tests after build"],
+          ["release:version", "Apply Changesets version updates"],
+          ["release:publish", "Publish changed packages with Changesets"]
+        ],
+        projectStructure: [
+          ["cli/", "CLI package entry point"],
+          ["template/", "Template source package"],
+          ["components/", "Vue and React component package surfaces"],
+          ["utils/", "Shared utility package surfaces"],
+          ["sdk/", "SDK package surface"],
+          ["script/", "Release and validation scripts"]
+        ],
+        deployment: ["Use Changesets for package versioning and publishing.", "Run pnpm build and pnpm lint before release."],
+        faq: [
+          ["How do I add a package?", "Add the package directory, include it in pnpm-workspace.yaml, and wire its scripts into Turbo."],
+          ["Can I remove unused packages?", "Yes. Remove the package folder and update pnpm-workspace.yaml, turbo tasks, and Changesets ignore settings."],
+          ["How do I publish packages?", "Use release:version to apply Changesets, then release:publish after validation."]
+        ]
       })
     },
     {
@@ -470,6 +606,58 @@ function createTopLevelPackageFiles(
         ]
       : [])
   ];
+}
+
+interface TemplateReadmeOptions {
+  projectName: string;
+  templateName: string;
+  techStack: string[];
+  gettingStarted: string[];
+  scripts: [string, string][];
+  projectStructure: [string, string][];
+  deployment: string[];
+  faq: [string, string][];
+}
+
+function createTemplateReadme(options: TemplateReadmeOptions) {
+  return `# ${options.projectName}
+
+Generated by Tsu from the \`${options.templateName}\` template.
+
+## Tech Stack
+
+${markdownList(options.techStack)}
+
+## Getting Started
+
+\`\`\`bash
+${options.gettingStarted.join("\n")}
+\`\`\`
+
+## Scripts
+
+${markdownTable(["Script", "Description"], options.scripts.map(([script, description]) => [`\`pnpm ${script}\``, description]))}
+
+## Project Structure
+
+${markdownTable(["Path", "Purpose"], options.projectStructure.map(([path, purpose]) => [`\`${path}\``, purpose]))}
+
+## Deployment
+
+${markdownList(options.deployment)}
+
+## FAQ
+
+${options.faq.map(([question, answer]) => `### ${question}\n\n${answer}`).join("\n\n")}
+`;
+}
+
+function markdownList(items: string[]) {
+  return items.map((item) => `- ${item}`).join("\n");
+}
+
+function markdownTable(headers: [string, string], rows: [string, string][]) {
+  return [`| ${headers[0]} | ${headers[1]} |`, "| --- | --- |", ...rows.map(([first, second]) => `| ${first} | ${second} |`)].join("\n");
 }
 
 function resolveTemplateName(templateName = "default"): TemplateName {
