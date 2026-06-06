@@ -1,5 +1,11 @@
 # @tsuz/cli
 
+## 0.2.1
+
+### Patch Changes
+
+- Improve the bundled MFE template with production-safe sub app entries, ESLint and Vitest validation, shared communication examples, automated generated-project validation, and expanded usage documentation.
+
 ## 0.2.0
 
 ### Minor Changes
