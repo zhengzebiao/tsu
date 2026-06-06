@@ -70,7 +70,30 @@
       "mcp__chrome-devtools__new_page",
       "mcp__chrome-devtools__take_snapshot",
       "mcp__chrome-devtools__list_console_messages",
-      "mcp__chrome-devtools__list_network_requests"
+      "mcp__chrome-devtools__list_network_requests",
+      "Bash(git fetch *)",
+      "Bash(node -e \"let s='';process.stdin.on\\('data',d=>s+=d\\).on\\('end',\\(\\)=>console.log\\('cli version:',JSON.parse\\(s\\).version\\)\\)\")",
+      "Bash(git ls-tree *)",
+      "Bash(npm view *)",
+      "Bash(git checkout *)",
+      "Bash(node -e \"console.log\\('cli pkg version:', require\\('./cli/package.json'\\).version\\)\")",
+      "Bash(node -e \"let s='';process.stdin.on\\('data',d=>s+=d\\).on\\('end',\\(\\)=>console.log\\(JSON.parse\\(s\\).version\\)\\)\")",
+      "Bash(node --test dist/index.test.js)",
+      "Bash(rm -rf tmp/validate-generated-mfe)",
+      "Bash(mkdir -p tmp/validate-generated-mfe)",
+      "Bash(node cli/dist/index.js init mfe-platform --template mfe --local --cwd tmp/validate-generated-mfe)",
+      "Bash(TEMPLATE_VERSION=1.0.0 pnpm template:release:build)",
+      "Bash(pnpm template:sync:mfe:check)",
+      "Bash(pnpm validate:generated-apps)",
+      "Bash(pnpm template:sync:mfe)",
+      "WebFetch(domain:api.github.com)",
+      "Bash(pnpm template:release:build --version=1.0.5)",
+      "Bash(pnpm validate:template-release --version=1.0.5)",
+      "Bash(TEMPLATE_VERSION=1.0.5 pnpm validate:template-release)",
+      "Bash(node cli/dist/index.js template info mfe --version 1.0.5)",
+      "Bash(rm -rf tmp/verify-template-1.0.5)",
+      "Bash(node cli/dist/index.js init verify-mfe --template mfe --version 1.0.5 --cwd tmp/verify-template-1.0.5)",
+      "Bash(node -e \"const fs=require\\('fs'\\); const readme=fs.readFileSync\\('tmp/verify-template-1.0.5/verify-mfe/README.md','utf8'\\); if \\(!readme.includes\\('Micro Frontend Choice Guide'\\)\\) throw new Error\\('missing guide'\\); console.log\\('remote mfe template 1.0.5 README verified'\\);\")"
     ]
   }
 }
