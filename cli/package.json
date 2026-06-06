@@ -17,7 +17,7 @@
     "dist/*.d.ts"
   ],
   "scripts": {
-    "build": "tsc -p tsconfig.json",
+    "build": "node ../script/sync-mfe-template.mjs && tsc -p tsconfig.json",
     "lint": "tsc -p tsconfig.json --noEmit",
     "test": "node --test dist/"
   },

@@ -69,11 +69,13 @@ export interface TemplateInfoOptions {
 
 export interface DoctorOptions {
   cwd: string;
+  json?: boolean;
 }
 
 export interface UpgradeCheckOptions {
   cwd: string;
   repository?: string;
+  json?: boolean;
 }
 
 export interface TemplateMetadata {
@@ -130,8 +132,8 @@ export function createHelpMessage() {
     "",
     "Usage:",
     "  tsu-cli init [project-name] [options]",
-    "  tsu-cli doctor [--cwd <path>]",
-    "  tsu-cli upgrade-check [--cwd <path>] [--repo <owner/repo>]",
+    "  tsu-cli doctor [--cwd <path>] [--json]",
+    "  tsu-cli upgrade-check [--cwd <path>] [--repo <owner/repo>] [--json]",
     "  tsu-cli templates",
     "  tsu-cli template info <name> [--version <value>] [--repo <owner/repo>]",
     "  tsu-cli template versions [name] [--repo <owner/repo>]",
@@ -156,15 +158,19 @@ export function createHelpMessage() {
     "",
     "Doctor options:",
     "      --cwd <path>       Project directory to check",
+    "      --json             Output the result as JSON",
     "",
     "Upgrade-check options:",
     "      --cwd <path>       Project directory to check",
     "      --repo <owner/repo> Override the template release repository",
+    "      --json             Output the result as JSON",
     "",
     "Examples:",
     "  tsu-cli init my-app --template vue3",
     "  tsu-cli doctor --cwd my-app",
+    "  tsu-cli doctor --cwd my-app --json",
     "  tsu-cli upgrade-check --cwd my-app",
+    "  tsu-cli upgrade-check --cwd my-app --json",
     "  tsu-cli init my-app --template react --version 1.0.3",
     "  tsu-cli templates",
     "  tsu-cli template info vue3",
@@ -359,6 +365,7 @@ export function parseInitArgs(args: string[], cwd = process.cwd()): ParsedInitOp
 
 export function parseDoctorArgs(args: string[], cwd = process.cwd()): DoctorOptions {
   let targetCwd = cwd;
+  let json = false;
 
   for (let index = 0; index < args.length; index += 1) {
     const arg = args[index];
@@ -369,6 +376,11 @@ export function parseDoctorArgs(args: string[], cwd = process.cwd()): DoctorOpti
       continue;
     }
 
+    if (arg === "--json") {
+      json = true;
+      continue;
+    }
+
     if (arg.startsWith("-")) {
       throw new Error(`Unknown option: ${arg}`);
     }
@@ -376,12 +388,16 @@ export function parseDoctorArgs(args: string[], cwd = process.cwd()): DoctorOpti
     throw new Error(`Unexpected argument: ${arg}`);
   }
 
-  return { cwd: targetCwd };
+  return {
+    cwd: targetCwd,
+    ...(json ? { json } : {})
+  };
 }
 
 export function parseUpgradeCheckArgs(args: string[], cwd = process.cwd()): UpgradeCheckOptions {
   let targetCwd = cwd;
   let repository: string | undefined;
+  let json = false;
 
   for (let index = 0; index < args.length; index += 1) {
     const arg = args[index];
@@ -398,6 +414,11 @@ export function parseUpgradeCheckArgs(args: string[], cwd = process.cwd()): Upgr
       continue;
     }
 
+    if (arg === "--json") {
+      json = true;
+      continue;
+    }
+
     if (arg.startsWith("-")) {
       throw new Error(`Unknown option: ${arg}`);
     }
@@ -407,7 +428,8 @@ export function parseUpgradeCheckArgs(args: string[], cwd = process.cwd()): Upgr
 
   return {
     cwd: targetCwd,
-    ...(repository ? { repository } : {})
+    ...(repository ? { repository } : {}),
+    ...(json ? { json } : {})
   };
 }
 
@@ -523,7 +545,9 @@ export async function runCli(args: string[], cwd = process.cwd()) {
       return createHelpMessage();
     }
 
-    return createDoctorMessage(await doctorProject(parseDoctorArgs(commandArgs, cwd)));
+    const options = parseDoctorArgs(commandArgs, cwd);
+    const result = await doctorProject(options);
+    return options.json ? JSON.stringify(result, null, 2) : createDoctorMessage(result);
   }
 
   if (command === "upgrade-check") {
@@ -531,7 +555,9 @@ export async function runCli(args: string[], cwd = process.cwd()) {
       return createHelpMessage();
     }
 
-    return createUpgradeCheckMessage(await upgradeCheckProject(parseUpgradeCheckArgs(commandArgs, cwd)));
+    const options = parseUpgradeCheckArgs(commandArgs, cwd);
+    const result = await upgradeCheckProject(options);
+    return options.json ? JSON.stringify(result, null, 2) : createUpgradeCheckMessage(result);
   }
 
   if (command === "template" && commandArgs[0] === "info") {

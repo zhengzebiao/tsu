@@ -51,8 +51,8 @@ tsu-cli templates
 ```bash
 tsu-cli --help
 tsu-cli --version
-tsu-cli doctor [--cwd <path>]
-tsu-cli upgrade-check [--cwd <path>] [--repo <owner/repo>]
+tsu-cli doctor [--cwd <path>] [--json]
+tsu-cli upgrade-check [--cwd <path>] [--repo <owner/repo>] [--json]
 tsu-cli templates
 tsu-cli template list
 tsu-cli template info <template-name>
@@ -92,6 +92,14 @@ tsu-cli doctor --cwd admin-console
 
 当前版本只做本地静态检查。它会读取 `.tsu/template.json` 展示模板名称、版本、来源和仓库，并检查预期模板文件是否仍然存在。
 
+加 `--json` 可输出机器可读结果，便于 CI 流水线消费：
+
+```bash
+tsu-cli doctor --cwd admin-console --json
+```
+
+JSON 包含 `status`（`ok` / `warning` / `error`）、解析出的模板元数据，以及完整的 `checks` 数组。
+
 ### `upgrade-check`
 
 检查生成项目是否有更新的模板 release 可用。该命令只读，不会修改项目文件。
@@ -104,6 +112,12 @@ tsu-cli upgrade-check --cwd admin-console
 
 ```bash
 tsu-cli upgrade-check --cwd admin-console --repo company/frontend-templates
+```
+
+加 `--json` 供 CI 消费，JSON 包含 `status`（`current` / `update_available` / `unknown`）、`currentVersion`、`latestVersion` 和 `availableVersions`：
+
+```bash
+tsu-cli upgrade-check --cwd admin-console --json
 ```
 
 ## 模板元数据
