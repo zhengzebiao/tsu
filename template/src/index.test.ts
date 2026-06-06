@@ -228,8 +228,11 @@ test("mfe template creates qiankun workspace files", () => {
   assert.match(files.find((file) => file.path === "apps/host/src/main.ts")?.content ?? "", /setDefaultMountApp/);
   assert.match(files.find((file) => file.path === "apps/host/src/App.vue")?.content ?? "", /id="subapp-container"/);
   assert.match(files.find((file) => file.path === "apps/host/src/App.vue")?.content ?? "", /hostEventBus\.emit/);
+  assert.match(files.find((file) => file.path === "apps/host/src/App.vue")?.content ?? "", /matchesActiveRule/);
+  assert.doesNotMatch(files.find((file) => file.path === "apps/host/src/App.vue")?.content ?? "", /startsWith\(app\.activeRule\)/);
   assert.match(files.find((file) => file.path === "packages/shared/src/index.ts")?.content ?? "", /subapp-two/);
   assert.match(files.find((file) => file.path === "packages/shared/src/index.ts")?.content ?? "", /7102/);
+  assert.match(files.find((file) => file.path === "packages/shared/src/index.ts")?.content ?? "", /export function createBrowserEventBus/);
   assert.match(files.find((file) => file.path === "packages/shared/src/index.ts")?.content ?? "", /export const hostEventBus/);
   assert.match(files.find((file) => file.path === "packages/ui/src/index.ts")?.content ?? "", /export const BrandBadge/);
   assert.match(files.find((file) => file.path === "packages/ui/package.json")?.content ?? "", /"vue": "\^3\.5\.13"/);

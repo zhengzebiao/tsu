@@ -740,7 +740,11 @@ test("runCli initializes mfe projects", async () => {
     assert.match(microApps, /microAppMetas\.map/);
     assert.match(microApps, /VITE_ENTRY_/);
     assert.match(microApps, /container: "#subapp-container"/);
-    assert.match(await readFile(join(cwd, "mfe-app", "apps", "host", "src", "App.vue"), "utf8"), /hostEventBus\.emit/);
+    const hostApp = await readFile(join(cwd, "mfe-app", "apps", "host", "src", "App.vue"), "utf8");
+
+    assert.match(hostApp, /hostEventBus\.emit/);
+    assert.match(hostApp, /matchesActiveRule/);
+    assert.doesNotMatch(hostApp, /startsWith\(app\.activeRule\)/);
     assert.match(lifecycle, /export function mount/);
     assert.match(lifecycle, /export function update/);
     assert.match(await readFile(join(cwd, "mfe-app", "apps", "subapp-two", "src", "App.vue"), "utf8"), /Sub App Two is ready/);
