@@ -1,5 +1,11 @@
 # @tsuz/cli
 
+## 0.2.2
+
+### Patch Changes
+
+- Fix MFE template runtime active-app detection and cross-application theme events.
+
 ## 0.2.1
 
 ### Patch Changes
