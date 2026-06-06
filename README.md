@@ -53,8 +53,8 @@ tsu-cli templates
 ```bash
 tsu-cli --help
 tsu-cli --version
-tsu-cli doctor [--cwd <path>]
-tsu-cli upgrade-check [--cwd <path>] [--repo <owner/repo>]
+tsu-cli doctor [--cwd <path>] [--json]
+tsu-cli upgrade-check [--cwd <path>] [--repo <owner/repo>] [--json]
 tsu-cli templates
 tsu-cli template list
 tsu-cli template info <template-name>
@@ -94,6 +94,14 @@ tsu-cli doctor --cwd admin-console
 
 The first version is local-only. It reads `.tsu/template.json` to report the template name, version, source, and repository, then checks whether expected template files are still present.
 
+Add `--json` to get a machine-readable result for CI pipelines:
+
+```bash
+tsu-cli doctor --cwd admin-console --json
+```
+
+The JSON payload includes `status` (`ok` / `warning` / `error`), the resolved template metadata, and the full `checks` array.
+
 ### `upgrade-check`
 
 Check whether a generated project has a newer template release available. This command is read-only.
@@ -106,6 +114,12 @@ Use `--repo` to override the repository recorded in `.tsu/template.json`:
 
 ```bash
 tsu-cli upgrade-check --cwd admin-console --repo company/frontend-templates
+```
+
+Add `--json` for CI consumption. The JSON payload includes `status` (`current` / `update_available` / `unknown`), `currentVersion`, `latestVersion`, and `availableVersions`:
+
+```bash
+tsu-cli upgrade-check --cwd admin-console --json
 ```
 
 ## Template Metadata

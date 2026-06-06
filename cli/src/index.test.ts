@@ -164,18 +164,23 @@ test("parseInitArgs supports template cwd version source and force options", () 
   });
 });
 
-test("parseDoctorArgs supports cwd", () => {
+test("parseDoctorArgs supports cwd and json", () => {
   assert.deepEqual(parseDoctorArgs([], "/workspace"), { cwd: "/workspace" });
   assert.deepEqual(parseDoctorArgs(["--cwd", "apps/demo"], "/workspace"), { cwd: resolve("/workspace", "apps/demo") });
+  assert.deepEqual(parseDoctorArgs(["--cwd", "apps/demo", "--json"], "/workspace"), { cwd: resolve("/workspace", "apps/demo"), json: true });
   assert.throws(() => parseDoctorArgs(["demo"], "/workspace"), /Unexpected argument: demo/);
   assert.throws(() => parseDoctorArgs(["--unknown"], "/workspace"), /Unknown option: --unknown/);
 });
 
-test("parseUpgradeCheckArgs supports cwd and repo", () => {
+test("parseUpgradeCheckArgs supports cwd repo and json", () => {
   assert.deepEqual(parseUpgradeCheckArgs([], "/workspace"), { cwd: "/workspace" });
   assert.deepEqual(parseUpgradeCheckArgs(["--cwd", "apps/demo", "--repo", "company/templates"], "/workspace"), {
     cwd: resolve("/workspace", "apps/demo"),
     repository: "company/templates"
+  });
+  assert.deepEqual(parseUpgradeCheckArgs(["--cwd", "apps/demo", "--json"], "/workspace"), {
+    cwd: resolve("/workspace", "apps/demo"),
+    json: true
   });
   assert.throws(() => parseUpgradeCheckArgs(["demo"], "/workspace"), /Unexpected argument: demo/);
   assert.throws(() => parseUpgradeCheckArgs(["--unknown"], "/workspace"), /Unknown option: --unknown/);
@@ -519,6 +524,58 @@ test("runCli reports doctor results", async () => {
     assert.match(message, /Template: default/);
     assert.match(message, /Version: latest/);
   } finally {
+    await rm(cwd, { force: true, recursive: true });
+  }
+});
+
+test("runCli reports doctor results as JSON", async () => {
+  const cwd = await mkdtemp(join(tmpdir(), "quick-start-"));
+
+  try {
+    const result = await initProject({ cwd, source: "local", projectName: "demo" });
+    const message = await runCli(["doctor", "--cwd", result.targetDir, "--json"], cwd);
+    const parsed = JSON.parse(message);
+
+    assert.equal(parsed.status, "ok");
+    assert.equal(parsed.projectName, "demo");
+    assert.equal(parsed.templateName, "default");
+    assert.equal(parsed.templateVersion, "latest");
+    assert.ok(Array.isArray(parsed.checks));
+    assert.doesNotMatch(message, /Tsu doctor:/);
+  } finally {
+    await rm(cwd, { force: true, recursive: true });
+  }
+});
+
+test("runCli reports upgrade-check results as JSON", async () => {
+  const cwd = await mkdtemp(join(tmpdir(), "quick-start-"));
+  const originalFetch = globalThis.fetch;
+
+  try {
+    const result = await initProject({ cwd, source: "local", projectName: "demo", templateName: "vue3" });
+    await writeFile(join(result.targetDir, ".tsu/template.json"), createTemplateMetadata({ cwd, source: "remote", projectName: "demo", templateName: "vue3", version: "1.0.0", repository: "company/templates" }), "utf8");
+
+    globalThis.fetch = async () =>
+      new Response(
+        JSON.stringify([
+          {
+            tag_name: "template-v1.2.0",
+            assets: [{ name: "tsu-templates-v1.2.0.tar.gz", browser_download_url: "https://example.com/1.2.0.tar.gz" }]
+          }
+        ]),
+        { status: 200 }
+      );
+
+    const message = await runCli(["upgrade-check", "--cwd", result.targetDir, "--json"], cwd);
+    const parsed = JSON.parse(message);
+
+    assert.equal(parsed.status, "update_available");
+    assert.equal(parsed.currentVersion, "1.0.0");
+    assert.equal(parsed.latestVersion, "1.2.0");
+    assert.deepEqual(parsed.availableVersions, ["1.2.0"]);
+    assert.doesNotMatch(message, /Template upgrade check:/);
+  } finally {
+    globalThis.fetch = originalFetch;
     await rm(cwd, { force: true, recursive: true });
   }
 });
