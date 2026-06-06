@@ -721,11 +721,27 @@ test("runCli initializes mfe projects", async () => {
     assert.match(await readFile(join(cwd, "mfe-app", "Dockerfile"), "utf8"), /apps\/subapp-two\/dist/);
     assert.match(await readFile(join(cwd, "mfe-app", "nginx.conf"), "utf8"), /listen 7100/);
     assert.match(await readFile(join(cwd, "mfe-app", "nginx.conf"), "utf8"), /listen 7102/);
-    assert.match(await readFile(join(cwd, "mfe-app", ".github", "workflows", "ci.yml"), "utf8"), /pnpm install --frozen-lockfile/);
-    assert.match(await readFile(join(cwd, "mfe-app", "apps", "host", "src", "micro-apps.ts"), "utf8"), /microAppMetas\.map/);
-    assert.match(await readFile(join(cwd, "mfe-app", "apps", "subapp", "src", "lifecycle.ts"), "utf8"), /export function mount/);
+    const ci = await readFile(join(cwd, "mfe-app", ".github", "workflows", "ci.yml"), "utf8");
+    const microApps = await readFile(join(cwd, "mfe-app", "apps", "host", "src", "micro-apps.ts"), "utf8");
+    const lifecycle = await readFile(join(cwd, "mfe-app", "apps", "subapp", "src", "lifecycle.ts"), "utf8");
+    const shared = await readFile(join(cwd, "mfe-app", "packages", "shared", "src", "index.ts"), "utf8");
+
+    assert.match(ci, /run: pnpm install\n/);
+    assert.doesNotMatch(ci, /--frozen-lockfile/);
+    assert.match(ci, /pnpm test/);
+    assert.match(await readFile(join(cwd, "mfe-app", "package.json"), "utf8"), /"test": "vitest run"/);
+    assert.match(await readFile(join(cwd, "mfe-app", "eslint.config.js"), "utf8"), /flat\/recommended/);
+    assert.match(await readFile(join(cwd, "mfe-app", ".env.example"), "utf8"), /VITE_ENTRY_SUBAPP_TWO=/);
+    assert.match(microApps, /microAppMetas\.map/);
+    assert.match(microApps, /VITE_ENTRY_/);
+    assert.match(microApps, /container: "#subapp-container"/);
+    assert.match(await readFile(join(cwd, "mfe-app", "apps", "host", "src", "App.vue"), "utf8"), /hostEventBus\.emit/);
+    assert.match(lifecycle, /export function mount/);
+    assert.match(lifecycle, /export function update/);
     assert.match(await readFile(join(cwd, "mfe-app", "apps", "subapp-two", "src", "App.vue"), "utf8"), /Sub App Two is ready/);
-    assert.match(await readFile(join(cwd, "mfe-app", "packages", "shared", "src", "index.ts"), "utf8"), /subapp-two/);
+    assert.match(await readFile(join(cwd, "mfe-app", "apps", "subapp-two", "src", "App.vue"), "utf8"), /hostEventBus\.on/);
+    assert.match(shared, /subapp-two/);
+    assert.match(shared, /export const hostEventBus/);
   } finally {
     await rm(cwd, { force: true, recursive: true });
   }

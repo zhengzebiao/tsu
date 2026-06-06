@@ -8,8 +8,9 @@ const execFileAsync = promisify(execFile);
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const cliEntry = join(repoRoot, "cli", "dist", "index.js");
 const appTemplates = [
-  { name: "vue3", projectName: "web-app" },
-  { name: "react", projectName: "react-app" }
+  { name: "vue3", projectName: "web-app", useLocalPackages: true },
+  { name: "react", projectName: "react-app", useLocalPackages: true },
+  { name: "mfe", projectName: "mfe-platform", useLocalPackages: false }
 ];
 const tempRoot = join(repoRoot, "tmp", "validate-generated-apps");
 
@@ -21,7 +22,9 @@ try {
     const projectRoot = join(tempRoot, template.projectName);
 
     await runNode(cliEntry, ["init", template.projectName, "--template", template.name, "--local", "--cwd", tempRoot]);
-    await useLocalPackages(projectRoot);
+    if (template.useLocalPackages) {
+      await useLocalPackages(projectRoot);
+    }
     await runPnpm(["install"], projectRoot);
     await runPnpm(["lint"], projectRoot);
     await runPnpm(["build"], projectRoot);

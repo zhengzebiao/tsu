@@ -9,6 +9,8 @@
     "lint": "turbo run lint",
     "validate:generated-apps": "node script/validate-generated-apps.mjs",
     "validate:generated-monorepo": "node script/validate-generated-monorepo.mjs",
+    "template:sync:mfe": "node script/sync-mfe-template.mjs",
+    "template:sync:mfe:check": "node script/sync-mfe-template.mjs --check",
     "template:release:preflight": "node script/template-release-preflight.mjs",
     "validate:template-release": "node script/validate-template-release.mjs",
     "template:release:build": "node script/build-template-release.mjs",

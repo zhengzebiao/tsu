@@ -35,14 +35,20 @@ export function createMfeTemplateFiles(packageName: string): TemplateFile[] {
         scripts: {
           dev: "pnpm --parallel --filter \"./apps/*\" dev",
           build: "pnpm -r build",
-          lint: "pnpm -r lint",
-          test: "node -e \"console.log('No tests configured for mfe template')\"",
+          lint: "eslint . && pnpm -r lint",
+          test: "vitest run",
           "docker:build": `docker build -t ${packageName} .`,
           "docker:run": createDockerRunCommand(packageName)
         },
         devDependencies: {
+          "@eslint/js": "^9.21.0",
           "@types/node": "^20.17.57",
-          typescript: "^5.8.3"
+          eslint: "^9.21.0",
+          "eslint-plugin-vue": "^9.32.0",
+          globals: "^16.0.0",
+          "typescript-eslint": "^8.26.1",
+          typescript: "^5.8.3",
+          vitest: "^3.0.5"
         }
       })
     },
@@ -51,27 +57,31 @@ export function createMfeTemplateFiles(packageName: string): TemplateFile[] {
       content: createTemplateReadme({
         projectName: packageName,
         templateName: "mfe",
-        techStack: ["pnpm workspace", "Vue 3", "Vite", "qiankun", "TypeScript", "Docker", "GitHub Actions"],
+        techStack: ["pnpm workspace", "Vue 3", "Vite", "qiankun", "TypeScript", "ESLint", "Vitest", "Docker", "GitHub Actions"],
         gettingStarted: ["pnpm install", "pnpm dev"],
         scripts: [
           ["dev", "Start the host and sub apps in parallel"],
-          ["lint", "Run TypeScript checks across workspace packages"],
+          ["lint", "Run ESLint and per-package TypeScript checks"],
           ["build", "Build host, sub apps, and shared packages"],
-          ["test", "Run the placeholder test command"],
+          ["test", "Run Vitest unit tests"],
           ["docker:build", "Build the nginx production image"],
           ["docker:run", "Run host and sub app nginx servers"]
         ],
         projectStructure: [
-          ["apps/host/", `Host application on port ${hostPort}`],
+          ["apps/host/", `Host shell and qiankun registry on port ${hostPort}`],
           ["apps/subapp/", "First qiankun sub application on port 7101"],
           ["apps/subapp-two/", "Second qiankun sub application on port 7102"],
-          ["packages/shared/", "Shared micro frontend metadata"],
-          ["packages/ui/", "Shared UI helpers"],
+          ["packages/shared/", "Micro app metadata and the cross-app event bus"],
+          ["packages/ui/", "Shared UI component (BrandBadge) and tokens"],
+          ["eslint.config.js", "Workspace ESLint flat config"],
+          [".env.example", "Override sub app entry URLs per environment"],
           ["nginx.conf", "Production routing for host and sub apps"]
         ],
         deployment: ["Run pnpm build to build all apps and packages.", "Use docker:build for an nginx image that serves the host and sub apps."],
         faq: [
           ["Where does local development start?", `Open the host app at http://localhost:${hostPort} after pnpm dev.`],
+          ["How do the host and sub apps communicate?", "Import hostEventBus from @tsuz/shared. The host emits events (for example theme:change) and each sub app subscribes in onMounted and unsubscribes in onUnmounted."],
+          ["How do I point the host at deployed sub apps?", "Sub app entries default to the current hostname plus each app port. Override them with VITE_ENTRY_<NAME> variables (see .env.example) when serving sub apps from other domains or paths."],
           ["How do I add another sub app?", "Add a new app under apps/, update the micro app metadata, and add its nginx server mapping."],
           ["Can I use only one sub app?", "Yes. Remove the unused app folder and update packages/shared plus nginx.conf."]
         ]
@@ -88,6 +98,7 @@ export function createMfeTemplateFiles(packageName: string): TemplateFile[] {
           target: "ES2022",
           module: "NodeNext",
           moduleResolution: "NodeNext",
+          lib: ["ES2022", "DOM", "DOM.Iterable"],
           declaration: true,
           types: ["node"],
           strict: true,
@@ -116,7 +127,15 @@ export function createMfeTemplateFiles(packageName: string): TemplateFile[] {
     },
     {
       path: ".github/workflows/ci.yml",
-      content: `name: CI\n\non:\n  pull_request:\n    branches:\n      - master\n  push:\n    branches:\n      - master\n\njobs:\n  build:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/checkout@v4\n      - uses: pnpm/action-setup@v4\n        with:\n          version: 8.15.9\n      - uses: actions/setup-node@v4\n        with:\n          node-version: 20\n          cache: pnpm\n      - run: pnpm install --frozen-lockfile\n      - run: pnpm lint\n      - run: pnpm build\n`
+      content: `name: CI\n\non:\n  pull_request:\n    branches:\n      - master\n  push:\n    branches:\n      - master\n\njobs:\n  build:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/checkout@v4\n      - uses: pnpm/action-setup@v4\n        with:\n          version: 8.15.9\n      - uses: actions/setup-node@v4\n        with:\n          node-version: 20\n          cache: pnpm\n      - run: pnpm install\n      - run: pnpm lint\n      - run: pnpm test\n      - run: pnpm build\n`
+    },
+    {
+      path: "eslint.config.js",
+      content: `import js from "@eslint/js";\nimport globals from "globals";\nimport tseslint from "typescript-eslint";\nimport pluginVue from "eslint-plugin-vue";\n\nexport default tseslint.config(\n  {\n    ignores: ["**/dist", "**/node_modules", "**/*.d.ts"]\n  },\n  js.configs.recommended,\n  ...tseslint.configs.recommended,\n  ...pluginVue.configs["flat/recommended"],\n  {\n    files: ["**/*.{ts,vue}"],\n    languageOptions: {\n      ecmaVersion: "latest",\n      sourceType: "module",\n      globals: globals.browser,\n      parserOptions: {\n        parser: tseslint.parser\n      }\n    },\n    rules: {\n      "vue/max-attributes-per-line": "off",\n      "vue/multi-word-component-names": "off",\n      "vue/singleline-html-element-content-newline": "off"\n    }\n  }\n);\n`
+    },
+    {
+      path: ".env.example",
+      content: `# Override sub app entry URLs used by the host qiankun registry.\n# Defaults to the current hostname plus each app port when unset.\n# Use these when sub apps are served from another domain or path in production.\n${mfeApps.map((app) => `# VITE_ENTRY_${app.name.toUpperCase().replace(/-/g, "_")}=//localhost:${app.port}`).join("\n")}\n`
     },
     ...createHostFiles(packageName),
     ...mfeApps.flatMap((app) => createSubAppFiles(packageName, app)),
@@ -202,15 +221,19 @@ function createHostFiles(packageName: string): TemplateFile[] {
     },
     {
       path: "apps/host/src/main.ts",
-      content: `import { createApp } from "vue";\nimport { registerMicroApps, start } from "qiankun";\nimport App from "./App.vue";\nimport { microApps } from "./micro-apps";\nimport "./styles.css";\n\ncreateApp(App).mount("#app");\nregisterMicroApps(microApps);\nstart();\n`
+      content: `import { createApp } from "vue";\nimport { registerMicroApps, setDefaultMountApp, start } from "qiankun";\nimport App from "./App.vue";\nimport { microApps } from "./micro-apps";\nimport "./styles.css";\n\ncreateApp(App).mount("#app");\n\nregisterMicroApps(microApps);\n\nif (microApps.length > 0) {\n  setDefaultMountApp(microApps[0].activeRule);\n}\n\nstart();\n`
+    },
+    {
+      path: "apps/host/src/env.d.ts",
+      content: `/// <reference types="vite/client" />\ndeclare module "*.vue" {\n  import type { DefineComponent } from "vue";\n\n  const component: DefineComponent<Record<string, never>, Record<string, never>, unknown>;\n  export default component;\n}\n`
     },
     {
       path: "apps/host/src/App.vue",
-      content: `<script setup lang="ts">\nimport { microAppMetas } from "@tsuz/shared";\nimport { uiBrandName } from "@tsuz/ui";\n</script>\n\n<template>\n  <main class="host-shell">\n    <header class="host-header">\n      <div>\n        <p class="host-eyebrow">{{ uiBrandName }}</p>\n        <h1>MFE Host</h1>\n      </div>\n      <nav class="host-nav">\n        <a href="/">Home</a>\n        <a v-for="app in microAppMetas" :key="app.name" :href="app.activeRule">{{ app.title }}</a>\n      </nav>\n    </header>\n\n    <section class="host-panel">\n      <h2>Registered apps</h2>\n      <ul>\n        <li v-for="app in microAppMetas" :key="app.name">{{ app.title }} ({{ app.name }})</li>\n      </ul>\n    </section>\n\n    <section class="host-containers">\n      <section\n        v-for="app in microAppMetas"\n        :id="app.name + '-container'"\n        :key="app.name"\n        class="host-container"\n        :aria-label="app.title + ' container'"\n      ></section>\n    </section>\n  </main>\n</template>\n\n<style scoped>\n.host-shell {\n  min-height: 100vh;\n  padding: 2rem;\n  display: grid;\n  gap: 1.5rem;\n  font-family: system-ui, sans-serif;\n}\n\n.host-header {\n  display: flex;\n  justify-content: space-between;\n  align-items: center;\n  gap: 1rem;\n}\n\n.host-eyebrow {\n  margin: 0 0 0.5rem;\n  color: #475569;\n  font-size: 0.875rem;\n  text-transform: uppercase;\n  letter-spacing: 0.08em;\n}\n\n.host-nav,\n.host-containers {\n  display: grid;\n  gap: 1rem;\n}\n\n.host-nav {\n  grid-auto-flow: column;\n}\n\n.host-container {\n  min-height: 320px;\n  border: 1px dashed #94a3b8;\n  border-radius: 0.75rem;\n  padding: 1rem;\n}\n</style>\n`
+      content: `<script setup lang="ts">\nimport { computed, onMounted, onUnmounted, ref } from "vue";\nimport { hostEventBus, microAppMetas } from "@tsuz/shared";\nimport { BrandBadge } from "@tsuz/ui";\n\nconst currentPath = ref(window.location.pathname);\nconst theme = ref<"light" | "dark">("light");\n\nconst activeApp = computed(() => microAppMetas.find((app) => currentPath.value.startsWith(app.activeRule)));\n\nfunction navigate(rule: string) {\n  if (window.location.pathname === rule) {\n    return;\n  }\n\n  // qiankun patches history, so pushState triggers the matching sub app to mount.\n  window.history.pushState(null, "", rule);\n  syncPath();\n}\n\nfunction syncPath() {\n  currentPath.value = window.location.pathname;\n}\n\nfunction toggleTheme() {\n  theme.value = theme.value === "light" ? "dark" : "light";\n  // Broadcast to every mounted sub app through the shared event bus.\n  hostEventBus.emit("theme:change", { theme: theme.value });\n}\n\nonMounted(() => window.addEventListener("popstate", syncPath));\nonUnmounted(() => window.removeEventListener("popstate", syncPath));\n</script>\n\n<template>\n  <main class="host-shell">\n    <header class="host-header">\n      <div>\n        <BrandBadge />\n        <h1>MFE Host</h1>\n      </div>\n      <nav class="host-nav">\n        <button\n          v-for="app in microAppMetas"\n          :key="app.name"\n          type="button"\n          class="host-nav__link"\n          :class="{ 'host-nav__link--active': app.name === activeApp?.name }"\n          @click="navigate(app.activeRule)"\n        >\n          {{ app.title }}\n        </button>\n        <button type="button" class="host-nav__link" @click="toggleTheme">Theme: {{ theme }}</button>\n      </nav>\n    </header>\n\n    <p class="host-hint">Active app: {{ activeApp?.title ?? "none" }}. Use the nav to switch sub apps.</p>\n\n    <section id="subapp-container" class="host-container" aria-label="Active sub app container" />\n  </main>\n</template>\n\n<style scoped>\n.host-shell {\n  min-height: 100vh;\n  padding: 2rem;\n  display: grid;\n  gap: 1.5rem;\n  font-family: system-ui, sans-serif;\n}\n\n.host-header {\n  display: flex;\n  justify-content: space-between;\n  align-items: center;\n  gap: 1rem;\n}\n\n.host-nav {\n  display: flex;\n  gap: 0.75rem;\n}\n\n.host-nav__link {\n  padding: 0.5rem 0.875rem;\n  border: 1px solid #cbd5f5;\n  border-radius: 0.5rem;\n  background: white;\n  color: #0f172a;\n  cursor: pointer;\n}\n\n.host-nav__link--active {\n  border-color: #2563eb;\n  color: #2563eb;\n}\n\n.host-hint {\n  margin: 0;\n  color: #475569;\n}\n\n.host-container {\n  min-height: 320px;\n  border: 1px dashed #94a3b8;\n  border-radius: 0.75rem;\n  padding: 1rem;\n}\n</style>\n`
     },
     {
       path: "apps/host/src/micro-apps.ts",
-      content: `import { microAppMetas, type MicroAppConfig } from "@tsuz/shared";\n\nexport const microApps: MicroAppConfig[] = microAppMetas.map((app) => ({\n  ...app,\n  entry: "//localhost:" + app.port,\n  container: "#" + app.name + "-container"\n}));\n`
+      content: `import { microAppMetas, type MicroAppConfig, type MicroAppMeta } from "@tsuz/shared";\n\nconst env = import.meta.env as unknown as Record<string, string | undefined>;\n\nexport const microApps: MicroAppConfig[] = microAppMetas.map((app) => ({\n  ...app,\n  entry: resolveEntry(app),\n  container: "#subapp-container"\n}));\n\n// Sub apps are loaded by URL at runtime. Default to the current hostname plus\n// each app port so Docker and remote hosts work without code changes, and allow\n// VITE_ENTRY_<NAME> overrides for custom domains or path based routing.\nfunction resolveEntry(app: MicroAppMeta): string {\n  const override = env["VITE_ENTRY_" + app.name.toUpperCase().replace(/-/g, "_")];\n\n  if (override) {\n    return override;\n  }\n\n  const hostname = typeof window === "undefined" ? "localhost" : window.location.hostname;\n  return "//" + hostname + ":" + app.port;\n}\n`
     },
     {
       path: "apps/host/src/styles.css",
@@ -273,15 +296,19 @@ function createSubAppFiles(packageName: string, app: MfeAppDefinition): Template
     },
     {
       path: `apps/${app.name}/src/main.ts`,
-      content: `import { qiankunWindow, renderWithQiankun } from "vite-plugin-qiankun/dist/helper";\nimport { createApp } from "vue";\nimport App from "./App.vue";\nimport { bootstrap, mount, unmount } from "./lifecycle";\nimport "./styles.css";\n\nrenderWithQiankun({ bootstrap, mount, unmount, update: mount });\n\nif (!qiankunWindow.__POWERED_BY_QIANKUN__) {\n  createApp(App).mount("#app");\n}\n\nexport { bootstrap, mount, unmount };\n`
+      content: `import { qiankunWindow, renderWithQiankun } from "vite-plugin-qiankun/dist/helper";\nimport { createApp } from "vue";\nimport App from "./App.vue";\nimport { bootstrap, mount, unmount, update } from "./lifecycle";\nimport "./styles.css";\n\nrenderWithQiankun({ bootstrap, mount, unmount, update });\n\nif (!qiankunWindow.__POWERED_BY_QIANKUN__) {\n  createApp(App).mount("#app");\n}\n\nexport { bootstrap, mount, unmount, update };\n`
+    },
+    {
+      path: `apps/${app.name}/src/env.d.ts`,
+      content: `/// <reference types="vite/client" />\ndeclare module "*.vue" {\n  import type { DefineComponent } from "vue";\n\n  const component: DefineComponent<Record<string, never>, Record<string, never>, unknown>;\n  export default component;\n}\n`
     },
     {
       path: `apps/${app.name}/src/App.vue`,
-      content: `<script setup lang="ts">\nimport { uiBrandName } from "@tsuz/ui";\n</script>\n\n<template>\n  <section class="subapp-shell">\n    <p class="subapp-eyebrow">{{ uiBrandName }}</p>\n    <h2>${app.title} is ready</h2>\n    <p>This app can run standalone or be mounted by qiankun.</p>\n  </section>\n</template>\n\n<style scoped>\n.subapp-shell {\n  min-height: 240px;\n  display: grid;\n  place-content: center;\n  gap: 0.75rem;\n  font-family: system-ui, sans-serif;\n}\n\n.subapp-eyebrow {\n  margin: 0;\n  color: #475569;\n  font-size: 0.875rem;\n  text-transform: uppercase;\n  letter-spacing: 0.08em;\n}\n</style>\n`
+      content: `<script setup lang="ts">\nimport { onMounted, onUnmounted, ref } from "vue";\nimport { hostEventBus } from "@tsuz/shared";\nimport { BrandBadge } from "@tsuz/ui";\n\n// Subscribe to host broadcasts to demonstrate cross-app communication.\nconst theme = ref<"light" | "dark">("light");\nlet unsubscribe: (() => void) | undefined;\n\nonMounted(() => {\n  unsubscribe = hostEventBus.on("theme:change", (payload) => {\n    theme.value = payload.theme;\n  });\n});\n\nonUnmounted(() => unsubscribe?.());\n</script>\n\n<template>\n  <section class="subapp-shell" :data-theme="theme">\n    <BrandBadge />\n    <h2>${app.title} is ready</h2>\n    <p>This app can run standalone or be mounted by qiankun.</p>\n    <p class="subapp-theme">Host theme: {{ theme }}</p>\n  </section>\n</template>\n\n<style scoped>\n.subapp-shell {\n  min-height: 240px;\n  display: grid;\n  place-content: center;\n  gap: 0.75rem;\n  font-family: system-ui, sans-serif;\n}\n\n.subapp-shell[data-theme="dark"] {\n  background: #0f172a;\n  color: #e2e8f0;\n}\n\n.subapp-theme {\n  margin: 0;\n  color: #475569;\n  font-size: 0.875rem;\n}\n</style>\n`
     },
     {
       path: `apps/${app.name}/src/lifecycle.ts`,
-      content: `import { createApp } from "vue";\nimport App from "./App.vue";\n\nlet appInstance: ReturnType<typeof createApp> | null = null;\n\nexport function bootstrap() {\n  return Promise.resolve();\n}\n\nexport function mount(props: { container?: Element } = {}) {\n  const container = props.container?.querySelector("#app") ?? document.querySelector("#app");\n\n  if (!container) {\n    throw new Error("Missing mount container for ${app.name}");\n  }\n\n  appInstance = createApp(App);\n  appInstance.mount(container as Element);\n  return Promise.resolve();\n}\n\nexport function unmount() {\n  appInstance?.unmount();\n  appInstance = null;\n  return Promise.resolve();\n}\n`
+      content: `import { createApp } from "vue";\nimport App from "./App.vue";\n\ntype QiankunProps = { container?: Element };\n\nlet appInstance: ReturnType<typeof createApp> | null = null;\n\nexport function bootstrap() {\n  return Promise.resolve();\n}\n\nexport function mount(props: QiankunProps = {}) {\n  // Guard against a double mount leaking the previous Vue instance.\n  unmountInstance();\n\n  const container = props.container?.querySelector("#app") ?? document.querySelector("#app");\n\n  if (!container) {\n    throw new Error("Missing mount container for ${app.name}");\n  }\n\n  appInstance = createApp(App);\n  appInstance.mount(container);\n  return Promise.resolve();\n}\n\nexport function update(props: QiankunProps = {}) {\n  // qiankun calls update when the host passes new props; remount with them.\n  return mount(props);\n}\n\nexport function unmount() {\n  unmountInstance();\n  return Promise.resolve();\n}\n\nfunction unmountInstance() {\n  appInstance?.unmount();\n  appInstance = null;\n}\n`
     },
     {
       path: `apps/${app.name}/src/styles.css`,
@@ -328,12 +355,17 @@ function createSharedFiles(): TemplateFile[] {
           rootDir: "src",
           outDir: "dist"
         },
-        include: ["src"]
+        include: ["src"],
+        exclude: ["src/**/*.test.ts"]
       })
     },
     {
       path: "packages/shared/src/index.ts",
-      content: `export interface MicroAppMeta {\n  name: string;\n  title: string;\n  port: number;\n  activeRule: string;\n}\n\nexport interface MicroAppConfig extends MicroAppMeta {\n  entry: string;\n  container: string;\n}\n\nexport const microAppMetas = ${packageJson(microAppMetas).trim()} as const satisfies readonly MicroAppMeta[];\n\nexport const microAppNames = microAppMetas.map((app) => app.name);\n`
+      content: `export interface MicroAppMeta {\n  name: string;\n  title: string;\n  port: number;\n  activeRule: string;\n}\n\nexport interface MicroAppConfig extends MicroAppMeta {\n  entry: string;\n  container: string;\n}\n\nexport const microAppMetas = ${packageJson(microAppMetas).trim()} as const satisfies readonly MicroAppMeta[];\n\nexport const microAppNames = microAppMetas.map((app) => app.name);\n\n// Strongly typed pub/sub bus shared by the host and every sub app. Extend\n// HostEvents with your own channels to coordinate auth, theme, routing, etc.\nexport interface HostEvents {\n  "theme:change": { theme: "light" | "dark" };\n  "user:change": { userId: string | null };\n}\n\ntype EventListener<Payload> = (payload: Payload) => void;\n\nexport function createEventBus<Events extends object>() {\n  const listeners = new Map<keyof Events, Set<EventListener<unknown>>>();\n\n  return {\n    on<Key extends keyof Events>(type: Key, listener: EventListener<Events[Key]>): () => void {\n      const set = listeners.get(type) ?? new Set<EventListener<unknown>>();\n      set.add(listener as EventListener<unknown>);\n      listeners.set(type, set);\n      return () => set.delete(listener as EventListener<unknown>);\n    },\n    emit<Key extends keyof Events>(type: Key, payload: Events[Key]): void {\n      listeners.get(type)?.forEach((listener) => (listener as EventListener<Events[Key]>)(payload));\n    },\n    clear(): void {\n      listeners.clear();\n    }\n  };\n}\n\nexport const hostEventBus = createEventBus<HostEvents>();\n`
+    },
+    {
+      path: "packages/shared/src/index.test.ts",
+      content: `import { describe, expect, it } from "vitest";\nimport { createEventBus, microAppMetas, microAppNames } from "./index";\n\ndescribe("micro app metadata", () => {\n  it("exposes a name for every registered app", () => {\n    expect(microAppNames).toHaveLength(microAppMetas.length);\n    expect(microAppNames).toContain("subapp");\n  });\n\n  it("uses unique ports", () => {\n    const ports = microAppMetas.map((app) => app.port);\n    expect(new Set(ports).size).toBe(ports.length);\n  });\n});\n\ndescribe("event bus", () => {\n  it("delivers events to subscribers and supports unsubscribe", () => {\n    const bus = createEventBus<{ ping: number }>();\n    const received: number[] = [];\n\n    const off = bus.on("ping", (value) => received.push(value));\n    bus.emit("ping", 1);\n    off();\n    bus.emit("ping", 2);\n\n    expect(received).toEqual([1]);\n  });\n});\n`
     }
   ];
 }
@@ -358,6 +390,9 @@ function createUiFiles(): TemplateFile[] {
           build: "tsc -p tsconfig.json",
           lint: "tsc -p tsconfig.json --noEmit",
           test: "node -e \"console.log('No tests configured for @tsuz/ui')\""
+        },
+        dependencies: {
+          vue: "^3.5.13"
         }
       })
     },
@@ -374,7 +409,7 @@ function createUiFiles(): TemplateFile[] {
     },
     {
       path: "packages/ui/src/index.ts",
-      content: `export const uiBrandName = "Tsu MFE UI";\n`
+      content: `import { defineComponent, h } from "vue";\n\nexport const uiBrandName = "Tsu MFE UI";\n\n// A tiny shared component imported by the host and every sub app, so the\n// workspace demonstrates real shared UI rather than a single string constant.\nexport const BrandBadge = defineComponent({\n  name: "BrandBadge",\n  props: {\n    label: { type: String, default: uiBrandName }\n  },\n  setup(props) {\n    return () => h("span", { class: "tsu-brand-badge" }, props.label);\n  }\n});\n`
     }
   ];
 }
