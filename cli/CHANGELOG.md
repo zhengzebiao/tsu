@@ -1,5 +1,13 @@
 # @tsuz/cli
 
+## 0.2.3
+
+### Patch Changes
+
+- e429979: Publish the template core package and make the CLI reuse it for local template generation.
+- Updated dependencies [e429979]
+  - @tsuz/template@0.1.0
+
 ## 0.2.2
 
 ### Patch Changes
