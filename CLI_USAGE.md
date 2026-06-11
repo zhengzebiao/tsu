@@ -269,14 +269,15 @@ pnpm test
 
 完整发布流程见 [npm-release-flow.zh-CN.md](npm-release-flow.zh-CN.md)。
 
-npm 只发布以下顶层包：
+npm 发布以下顶层包：
 
 - `@tsuz/cli`
+- `@tsuz/template`
 - `@tsuz/components`
 - `@tsuz/utils`
 - `@tsuz/sdk`
 
-不发布 `template`、`tests`、`script`，也不拆分发布 `@tsuz/components-vue`、`@tsuz/components-react`、`@tsuz/utils-js`。
+不发布 `tests`、`script`，也不拆分发布 `@tsuz/components-vue`、`@tsuz/components-react`、`@tsuz/utils-js`。
 
 组件和工具通过 subpath exports 使用：
 
@@ -307,8 +308,8 @@ pnpm turbo run lint --concurrency=1
 `@tsuz/cli` 的入口文件 `dist/index.js` 会运行时导入内部模块，例如：
 
 - `dist/template.js`
-- `dist/mfe.js`
-- `dist/react.js`
+
+模板实现由 `@tsuz/template` 提供，不再由 CLI 包内的 `dist/mfe.js` / `dist/react.js` 维护。
 
 因此 `cli/package.json` 的 `files` 不能只包含 `dist/index.js` 和 `dist/index.d.ts`，否则全局安装后会出现：
 
@@ -330,6 +331,13 @@ Error [ERR_MODULE_NOT_FOUND]: Cannot find module '<global-node_modules>/@tsuz/cl
 ```text
 dist/index.js
 dist/template.js
+```
+
+同时会检查 `@tsuz/template` 的 npm pack 产物包含模板运行时文件：
+
+```text
+dist/index.js
+dist/index.d.ts
 dist/mfe.js
 dist/react.js
 ```

@@ -4,8 +4,8 @@
 
 - 统一管理 `cli`、`template`、`components`、`utils`、`sdk`
 - `cli` 作为 npm 发布包，负责模板拉取、初始化和命令入口
-- `template` 作为 CLI 模板源，不发布到 npm，CLI 从 GitHub Release asset 拉取
-- npm 发布面收敛为 `@tsuz/cli`、`@tsuz/components`、`@tsuz/utils`、`@tsuz/sdk`
+- `template` 作为共享模板核心包发布到 npm，同时用于构建 GitHub Release asset
+- npm 发布面收敛为 `@tsuz/cli`、`@tsuz/template`、`@tsuz/components`、`@tsuz/utils`、`@tsuz/sdk`
 - 统一使用 `pnpm + Turborepo + Changesets`
 - 所有可发布包统一使用 ESM 输出
 - npm scope 统一命名为 `@tsuz`
@@ -15,7 +15,7 @@
 | 目录 | 角色 | 发布到 npm |
 | --- | --- | --- |
 | `cli` | CLI 工具包 | 是 |
-| `template` | CLI 模板源包 | 否 |
+| `template` | 共享模板核心包，发布为 `@tsuz/template` | 是 |
 | `components` | Vue / React 组件包，发布为 `@tsuz/components` | 是 |
 | `utils` | JS 工具包，发布为 `@tsuz/utils` | 是 |
 | `sdk` | SDK 包 | 是 |
@@ -40,8 +40,8 @@
 
 - `components` 和 `utils` 保留二级源码目录，通过 npm subpath exports 暴露 `@tsuz/components/vue`、`@tsuz/components/react`、`@tsuz/utils/js`
 - 实际 npm 包只发布 `@tsuz/components` 和 `@tsuz/utils`，不拆成 `@tsuz/components-vue`、`@tsuz/components-react`、`@tsuz/utils-js`
-- `cli/sdk` 可作为独立 package 发布
-- `template/tests/script` 为内部目录，必须标记为 `private`
+- `cli`、`template`、`sdk` 均作为独立 package 发布
+- `tests/script` 为内部目录，必须标记为 `private`
 
 ## 4. 技术栈
 
@@ -70,10 +70,10 @@
 
 ## 6. Template 分发
 
-- `template/` 作为模板源码仓库
-- 通过同步流程将模板推送到远程仓库
-- CLI 从远程仓库按名称/版本拉取模板
-- 模板需保证拉取后可直接初始化运行
+- `template/` 是内置模板定义和渲染逻辑的唯一源码目录
+- CLI 本地生成通过 `@tsuz/template` 复用模板核心逻辑
+- GitHub Release asset 从同一模板核心构建，CLI 可按名称/版本拉取
+- 模板需保证本地生成和远程拉取后都可直接初始化运行
 
 ## 7. 构建与发布
 
@@ -110,9 +110,10 @@
 
 ## 9. 验收标准
 
-- `@tsuz/cli`、`@tsuz/components`、`@tsuz/utils`、`@tsuz/sdk` 可作为 npm 包正常安装和使用
+- `@tsuz/cli`、`@tsuz/template`、`@tsuz/components`、`@tsuz/utils`、`@tsuz/sdk` 可作为 npm 包正常安装和使用
 - `@tsuz/components/vue`、`@tsuz/components/react`、`@tsuz/utils/js` 可作为 subpath import 正常导入
-- `template` 可通过 GitHub Release asset 被 CLI 拉取并初始化
+- `@tsuz/cli` 可复用 `@tsuz/template` 进行本地模板初始化
+- 模板可通过 GitHub Release asset 被 CLI 拉取并初始化
 - 仓库采用 `pnpm + Turborepo + Changesets`
 - 所有可发布包均为 ESM
-- `template/tests/script` 不参与发布
+- `tests/script` 不参与发布

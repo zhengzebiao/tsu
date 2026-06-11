@@ -1,7 +1,6 @@
 {
   "name": "@tsuz/template",
   "version": "0.0.0",
-  "private": true,
   "type": "module",
   "exports": {
     ".": {
@@ -11,12 +10,16 @@
   },
   "types": "./dist/index.d.ts",
   "files": [
-    "dist/index.js",
-    "dist/index.d.ts"
+    "dist/*.js",
+    "dist/*.d.ts"
   ],
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "lint": "tsc -p tsconfig.json --noEmit",
     "test": "node --test dist/index.test.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/zhengzebiao/tsu"
   }
 }

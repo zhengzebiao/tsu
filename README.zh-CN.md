@@ -201,7 +201,7 @@ Tsu 由多个包组成，但产品入口和短期核心价值集中在 CLI 与�
 | 包 | 角色 |
 | --- | --- |
 | `@tsuz/cli` | 面向用户的项目创建 CLI |
-| `@tsuz/template` | 内部模板 release asset 源 |
+| `@tsuz/template` | CLI 本地生成与模板 release asset 共用的模板核心包 |
 | `@tsuz/components` | 面向模板项目的 UI 组件和页面骨架 |
 | `@tsuz/utils` | 面向模板项目的前端工具函数 |
 | `@tsuz/sdk` | 面向模板项目的 API Client 基础层 |

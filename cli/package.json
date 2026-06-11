@@ -17,9 +17,12 @@
     "dist/*.d.ts"
   ],
   "scripts": {
-    "build": "node ../script/sync-mfe-template.mjs && tsc -p tsconfig.json",
+    "build": "tsc -p tsconfig.json",
     "lint": "tsc -p tsconfig.json --noEmit",
     "test": "node --test dist/"
+  },
+  "dependencies": {
+    "@tsuz/template": "workspace:*"
   },
   "repository": {
     "type": "git",
