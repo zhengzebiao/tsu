@@ -4,16 +4,16 @@
 
 ## 发布包范围
 
-npm 只发布 4 个顶层包：
+npm 发布 5 个顶层包：
 
 - `@tsuz/cli`
+- `@tsuz/template`
 - `@tsuz/components`
 - `@tsuz/utils`
 - `@tsuz/sdk`
 
 不发布以下目录：
 
-- `template`
 - `tests`
 - `script`
 - `components/vue`
@@ -54,7 +54,7 @@ pnpm npm:release:pack
 - `pnpm build`：构建所有包
 - `pnpm lint`：TypeScript 无输出校验
 - `pnpm test`：运行测试
-- `pnpm npm:release:preflight`：检查只有 4 个顶层包参与 npm 发布
+- `pnpm npm:release:preflight`：检查只有 5 个顶层包参与 npm 发布
 - `pnpm npm:release:pack`：执行 dry-run pack，确认 tarball 内容符合预期
 
 ## Trusted Publishing 配置

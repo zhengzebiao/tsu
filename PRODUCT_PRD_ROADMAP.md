@@ -13,7 +13,7 @@
 - `@tsuz/cli` 支持 `init` 初始化项目。
 - 模板支持 `default`、`vue3`、`react`、`mfe`、`monorepo`。
 - 模板可通过 GitHub Release asset 按版本分发。
-- npm 发布面规划为 `@tsuz/cli`、`@tsuz/components`、`@tsuz/utils`、`@tsuz/sdk`。
+- npm 发布面规划为 `@tsuz/cli`、`@tsuz/template`、`@tsuz/components`、`@tsuz/utils`、`@tsuz/sdk`。
 
 但当前产品仍偏工程实现，缺少清晰的用户入口、CLI 体验、模板解释、模板质量验证和市场差异化表达。
 

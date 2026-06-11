@@ -25,10 +25,11 @@ GitHub Actions + Changesets + npm Trusted Publishing + OIDC provenance
 
 ## 最终包结构
 
-npm 只发布 4 个顶层包：
+npm 发布 5 个顶层包：
 
 ```text
 @tsuz/cli
+@tsuz/template
 @tsuz/components
 @tsuz/sdk
 @tsuz/utils
@@ -37,7 +38,6 @@ npm 只发布 4 个顶层包：
 不发布：
 
 ```text
-template
 tests
 script
 components/vue
@@ -342,10 +342,10 @@ The package or glob expression "template" is specified in the ignore option but 
 
 原因：Changesets 这里校验的是 package name，不是目录名。
 
-正确配置：
+正确配置应使用 package name。当前 `@tsuz/template` 已作为模板核心包发布，因此只忽略内部测试和脚本包：
 
 ```json
-"ignore": ["@tsuz/template", "@tsuz/tests", "@tsuz/script"]
+"ignore": ["@tsuz/tests", "@tsuz/script"]
 ```
 
 ### 7. release job 没有 build，导致发布包缺少 dist

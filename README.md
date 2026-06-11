@@ -203,7 +203,7 @@ Tsu is organized as a small product suite:
 | Package | Role |
 | --- | --- |
 | `@tsuz/cli` | User-facing project creation CLI |
-| `@tsuz/template` | Internal template release asset source |
+| `@tsuz/template` | Shared template core used by CLI local generation and template release assets |
 | `@tsuz/components` | Template-oriented UI components and page building blocks |
 | `@tsuz/utils` | Template-oriented frontend utility functions |
 | `@tsuz/sdk` | Template-oriented API client foundation |

@@ -70,7 +70,23 @@
       "mcp__chrome-devtools__new_page",
       "mcp__chrome-devtools__take_snapshot",
       "mcp__chrome-devtools__list_console_messages",
-      "mcp__chrome-devtools__list_network_requests"
+      "mcp__chrome-devtools__list_network_requests",
+      "Bash(pnpm validate:generated-apps)",
+      "Bash(pnpm template:release:build --version=1.0.6)",
+      "Bash(TEMPLATE_VERSION=1.0.6 pnpm validate:template-release)",
+      "Bash(npm view *)",
+      "Bash(node cli/dist/index.js template info mfe --version 1.0.6)",
+      "Bash(curl -s https://api.github.com/repos/zhengzebiao/tsu/actions/workflows/npm-release.yml/runs?branch=master\\\\&per_page=3)",
+      "Bash(rm -rf tmp/verify-template-1.0.6)",
+      "Bash(node cli/dist/index.js init verify-mfe --template mfe --version 1.0.6 --cwd tmp/verify-template-1.0.6)",
+      "Bash(node -e \"const fs=require\\('fs'\\); const app=fs.readFileSync\\('tmp/verify-template-1.0.6/verify-mfe/apps/host/src/App.vue','utf8'\\); const shared=fs.readFileSync\\('tmp/verify-template-1.0.6/verify-mfe/packages/shared/src/index.ts','utf8'\\); if \\(!app.includes\\('matchesActiveRule'\\)\\) throw new Error\\('missing route fix'\\); if \\(!shared.includes\\('createBrowserEventBus'\\)\\) throw new Error\\('missing browser event bus'\\); console.log\\('remote mfe template 1.0.6 runtime fixes verified'\\);\")",
+      "Bash(corepack pnpm *)",
+      "Bash(cmd.exe /c pnpm build)",
+      "Bash(cmd.exe /d /s /c \"pnpm build\")",
+      "Bash(where.exe pnpm *)",
+      "Bash(powershell.exe -NoProfile -Command 'Get-Command pnpm -ErrorAction SilentlyContinue | Select-Object -ExpandProperty Source')",
+      "Bash(corepack prepare *)",
+      "Bash(git switch *)"
     ]
   }
 }

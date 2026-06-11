@@ -14,6 +14,7 @@ export interface TemplateDefinition {
   recommendedFor: string[];
   node: string;
   packageManagers: string[];
+  nextSteps: string[];
 }
 
 export interface TemplateFile {
@@ -28,14 +29,15 @@ export interface CreateTemplateFilesOptions {
 
 export type TemplateName = "default" | "monorepo" | "vue3" | "mfe" | "react";
 
-const templateDefinitions: TemplateDefinition[] = [
+export const templateDefinitions: TemplateDefinition[] = [
   {
     name: "default",
     description: "Minimal Node.js starter",
     tags: ["node", "minimal"],
     recommendedFor: ["node", "minimal"],
     node: ">=20",
-    packageManagers: ["pnpm"]
+    packageManagers: ["pnpm"],
+    nextSteps: ["pnpm dev"]
   },
   {
     name: "monorepo",
@@ -43,7 +45,8 @@ const templateDefinitions: TemplateDefinition[] = [
     tags: ["monorepo", "pnpm", "turbo", "changesets"],
     recommendedFor: ["workspace", "packages", "team standard"],
     node: ">=20",
-    packageManagers: ["pnpm"]
+    packageManagers: ["pnpm"],
+    nextSteps: ["pnpm install", "pnpm build"]
   },
   {
     name: "vue3",
@@ -51,7 +54,8 @@ const templateDefinitions: TemplateDefinition[] = [
     tags: ["vue", "vite", "spa", "docker"],
     recommendedFor: ["admin", "dashboard", "web app"],
     node: ">=20",
-    packageManagers: ["pnpm"]
+    packageManagers: ["pnpm"],
+    nextSteps: ["pnpm install", "pnpm dev"]
   },
   {
     name: "mfe",
@@ -59,7 +63,8 @@ const templateDefinitions: TemplateDefinition[] = [
     tags: ["mfe", "qiankun", "vue", "workspace"],
     recommendedFor: ["micro frontend", "multi app"],
     node: ">=20",
-    packageManagers: ["pnpm"]
+    packageManagers: ["pnpm"],
+    nextSteps: ["pnpm install", "pnpm dev"]
   },
   {
     name: "react",
@@ -67,10 +72,11 @@ const templateDefinitions: TemplateDefinition[] = [
     tags: ["react", "vite", "spa", "docker"],
     recommendedFor: ["react app", "dashboard", "web app"],
     node: ">=20",
-    packageManagers: ["pnpm"]
+    packageManagers: ["pnpm"],
+    nextSteps: ["pnpm install", "pnpm dev"]
   }
 ];
-const templateNames = templateDefinitions.map((template) => template.name);
+export const templateNames = templateDefinitions.map((template) => template.name);
 export const templateProjectNameToken = "__tsu_project_name__";
 
 export const templateManifest: TemplateManifest = {
@@ -448,12 +454,15 @@ function createMonorepoTemplateFiles(packageName: string): TemplateFile[] {
         access: "public",
         baseBranch: "master",
         updateInternalDependencies: "patch",
-        ignore: ["@tsuz/template", "@tsuz/tests", "@tsuz/script"]
+        ignore: ["@tsuz/tests", "@tsuz/script"]
       })
     },
     ...createTopLevelPackageFiles("cli", "@tsuz/cli", "cli package is ready", {
       bin: {
         "tsu-cli": "./dist/index.js"
+      },
+      dependencies: {
+        "@tsuz/template": "workspace:*"
       }
     }),
     ...createTopLevelPackageFiles("components", "@tsuz/components", undefined, {
@@ -499,7 +508,6 @@ function createMonorepoTemplateFiles(packageName: string): TemplateFile[] {
       content: packageJson({
         name: "@tsuz/template",
         version: "0.0.0",
-        private: true,
         type: "module",
         exports: {
           ".": {
@@ -508,11 +516,15 @@ function createMonorepoTemplateFiles(packageName: string): TemplateFile[] {
           }
         },
         types: "./dist/index.d.ts",
-        files: ["dist/index.js", "dist/index.d.ts"],
+        files: ["dist/*.js", "dist/*.d.ts"],
         scripts: {
           build: "tsc -p tsconfig.json",
           lint: "tsc -p tsconfig.json --noEmit",
           test: "node --test dist/index.test.js"
+        },
+        repository: {
+          type: "git",
+          url: "https://github.com/zhengzebiao/tsu"
         }
       })
     },

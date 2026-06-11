@@ -11,6 +11,12 @@ const publishablePackages = [
     files: ["dist/*.js", "dist/*.d.ts"]
   },
   {
+    name: "@tsuz/template",
+    path: "template",
+    entry: ".",
+    files: ["dist/*.js", "dist/*.d.ts"]
+  },
+  {
     name: "@tsuz/components",
     path: "components",
     entry: ["./vue", "./react"],
@@ -30,7 +36,6 @@ const publishablePackages = [
   }
 ];
 const privatePackages = [
-  "template",
   "tests",
   "script",
   "components/vue",

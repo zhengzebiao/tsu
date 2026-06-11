@@ -14,7 +14,8 @@ test("template manifest exposes package metadata", () => {
     tags: ["vue", "vite", "spa", "docker"],
     recommendedFor: ["admin", "dashboard", "web app"],
     node: ">=20",
-    packageManagers: ["pnpm"]
+    packageManagers: ["pnpm"],
+    nextSteps: ["pnpm install", "pnpm dev"]
   });
 });
 
@@ -52,6 +53,7 @@ test("monorepo template creates workspace files", () => {
   assert.ok(paths.includes("sdk/package.json"));
   assert.ok(paths.includes("tests/package.json"));
   assert.ok(paths.includes("script/package.json"));
+  assert.match(files.find((file) => file.path === "cli/package.json")?.content ?? "", /"@tsuz\/template": "workspace:\*"/);
   assert.match(files.find((file) => file.path === "components/package.json")?.content ?? "", /"\.\/vue"/);
   assert.match(files.find((file) => file.path === "components/package.json")?.content ?? "", /"\.\/react"/);
   assert.match(files.find((file) => file.path === "utils/package.json")?.content ?? "", /"\.\/js"/);
