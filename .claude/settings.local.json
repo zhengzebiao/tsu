@@ -86,7 +86,24 @@
       "Bash(where.exe pnpm *)",
       "Bash(powershell.exe -NoProfile -Command 'Get-Command pnpm -ErrorAction SilentlyContinue | Select-Object -ExpandProperty Source')",
       "Bash(corepack prepare *)",
-      "Bash(git switch *)"
+      "Bash(git switch *)",
+      "Bash(git fetch *)",
+      "Bash(gh pr *)",
+      "Bash(git merge *)",
+      "Bash(curl -s 'https://api.github.com/repos/zhengzebiao/tsu/actions/runs?branch=master&per_page=5')",
+      "WebFetch(domain:api.github.com)",
+      "Bash(mkdir -p tmp/post-release-verify-__CMDSUB_OUTPUT__)",
+      "Bash(node --input-type=module -e \"import { templateNames } from '@tsuz/template'; console.log\\('templateNames=' + templateNames.join\\(','\\)\\); if \\(!templateNames.includes\\('mfe'\\)\\) throw new Error\\('missing mfe template'\\);\")",
+      "Bash(npx tsu-cli *)",
+      "Bash(node -e \"const fs=require\\('fs'\\); const app=fs.readFileSync\\('verify-mfe/apps/host/src/App.vue','utf8'\\); const shared=fs.readFileSync\\('verify-mfe/packages/shared/src/index.ts','utf8'\\); if \\(!app.includes\\('matchesActiveRule'\\)\\) throw new Error\\('missing matchesActiveRule'\\); if \\(!shared.includes\\('createBrowserEventBus'\\)\\) throw new Error\\('missing createBrowserEventBus'\\); console.log\\('mfe smoke ok'\\);\")",
+      "Bash(rm -rf tmp/post-release-verify-* && git status --short --branch)",
+      "Bash(rm -rf tmp/post-release-verify-mfe)",
+      "Bash(mkdir -p tmp/post-release-verify-mfe)",
+      "Bash(node --input-type=module -e \"import { templateNames, createTemplateFiles } from '@tsuz/template'; console.log\\('templateNames=' + templateNames.join\\(','\\)\\); if \\(!templateNames.includes\\('mfe'\\)\\) throw new Error\\('missing mfe template'\\); const paths = createTemplateFiles\\({ projectName: 'verify-mfe', templateName: 'mfe' }\\).map\\(file => file.path\\); for \\(const required of ['apps/host/src/App.vue','apps/host/src/micro-apps.ts','apps/subapp/src/lifecycle.ts','apps/subapp-two/src/lifecycle.ts','packages/shared/src/index.ts','Dockerfile','nginx.conf']\\) { if \\(!paths.includes\\(required\\)\\) throw new Error\\('missing template file ' + required\\); } console.log\\('template api ok'\\);\")",
+      "Bash(node -e \"const fs=require\\('fs'\\); const checks=[['verify-mfe/apps/host/src/App.vue','matchesActiveRule'],['verify-mfe/apps/host/src/App.vue','hostEventBus.emit'],['verify-mfe/apps/host/src/micro-apps.ts','microAppMetas.map'],['verify-mfe/packages/shared/src/index.ts','createBrowserEventBus'],['verify-mfe/packages/shared/src/index.ts','hostEventBus'],['verify-mfe/apps/subapp/src/lifecycle.ts','export function mount'],['verify-mfe/apps/subapp/src/lifecycle.ts','export function update'],['verify-mfe/apps/subapp-two/src/App.vue','Sub App Two is ready'],['verify-mfe/nginx.conf','listen 7102'],['verify-mfe/Dockerfile','apps/subapp-two/dist']]; for \\(const [file, needle] of checks\\) { const text=fs.readFileSync\\(file,'utf8'\\); if \\(!text.includes\\(needle\\)\\) throw new Error\\(file + ' missing ' + needle\\); } console.log\\('published cli mfe generated files ok'\\);\")"
+    ],
+    "additionalDirectories": [
+      "E:\\project\\quick-start\\tmp"
     ]
   }
 }

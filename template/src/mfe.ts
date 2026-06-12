@@ -495,11 +495,71 @@ Use this for small cross-app signals such as theme, user, locale, or feature-fla
 
 ## Adding a Sub App
 
-1. Copy an existing app under \`apps/\`.
-2. Give it a unique package name and Vite port.
-3. Add its metadata to \`mfeApps\` in the template source before generating a new project, or update \`packages/shared/src/index.ts\` in an existing project.
-4. Add a matching \`VITE_ENTRY_<NAME>\` environment variable when the deployed URL is not \`//<host>:<port>\`.
-5. Add a matching nginx server block or reverse-proxy rule.
+Use this checklist when adding a third sub app after project generation:
+
+1. Copy an existing app, for example \`apps/subapp\` to \`apps/reports\`.
+2. Update \`apps/reports/package.json\` with a unique package name such as \`${options.projectName}-reports\`.
+3. Pick an unused local dev port and update \`apps/reports/vite.config.ts\` plus the app's \`dev\` script.
+4. Add metadata in \`packages/shared/src/index.ts\`:
+
+   \`\`\`ts
+   {
+     name: "reports",
+     title: "Reports",
+     activeRule: "/reports",
+     port: 7103
+   }
+   \`\`\`
+
+5. Add a \`VITE_ENTRY_REPORTS\` variable to \`.env.example\` and to deployment-specific environment files when the deployed URL is not \`//<host>:7103\`.
+6. Add a matching nginx server block and Docker copy/expose entries for \`apps/reports/dist\`.
+7. Run \`pnpm install\`, \`pnpm lint\`, \`pnpm test\`, and \`pnpm build\` before opening a PR.
+
+## Host/Sub App Communication Example
+
+The host already broadcasts theme changes. In a sub app, subscribe during mount and clean up during unmount:
+
+\`\`\`ts
+import { onMounted, onUnmounted, ref } from "vue";
+import { hostEventBus } from "@tsuz/shared";
+
+const theme = ref("light");
+let unsubscribe: (() => void) | undefined;
+
+onMounted(() => {
+  unsubscribe = hostEventBus.on("theme:change", (payload) => {
+    theme.value = payload.theme;
+  });
+});
+
+onUnmounted(() => {
+  unsubscribe?.();
+});
+\`\`\`
+
+Keep event names small and explicit. If a sub app needs durable data, fetch it from an API or shared cache instead of depending on host memory.
+
+## Docker and nginx Deployment Notes
+
+- \`Dockerfile\` builds all workspaces, then copies \`apps/host/dist\` and each sub app \`dist\` folder into nginx.
+- \`nginx.conf\` serves the host on port ${hostPort} and each sub app on its own port (${mfeApps.map((app) => app.port).join(", ")}).
+- Sub app responses include \`Access-Control-Allow-Origin: *\` so qiankun can load them from the host origin during local or split-domain deployments.
+- For one-domain deployments, map paths such as \`/subapp/\` and \`/subapp-two/\` to the sub app assets and set \`VITE_ENTRY_SUBAPP=/subapp/\`, \`VITE_ENTRY_SUBAPP_TWO=/subapp-two/\`.
+- After changing ports or paths, update \`docker:run\`, \`Dockerfile\`, \`nginx.conf\`, \`.env.example\`, and \`packages/shared/src/index.ts\` together.
+
+## Remote Template Version Verification
+
+After publishing a template release, verify the remote version path instead of only using \`--local\`:
+
+\`\`\`bash
+tsu-cli init verify-mfe --template mfe --version <template-version> --repo <owner/repo>
+cd verify-mfe
+pnpm install
+pnpm test
+pnpm build
+\`\`\`
+
+Use this check to confirm the GitHub Release asset contains the same MFE fixes as the local package, including route matching, event-bus wiring, Docker files, and nginx ports.
 
 ## Removing a Sub App
 

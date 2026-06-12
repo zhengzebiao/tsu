@@ -494,6 +494,7 @@ package.json: "repository.url" is "", expected to match "https://github.com/zhen
 
 ```bash
 npm view @tsuz/cli version
+npm view @tsuz/template version
 npm view @tsuz/components version
 npm view @tsuz/sdk version
 npm view @tsuz/utils version
@@ -503,10 +504,73 @@ npm view @tsuz/utils version
 
 ```bash
 npm install @tsuz/cli
+npm install @tsuz/template
 npm install @tsuz/components
 npm install @tsuz/sdk
 npm install @tsuz/utils
 ```
+
+## 2026-06-11 发布记录：`@tsuz/template` 首次发布
+
+本次发布内容：
+
+- `@tsuz/cli@0.2.3`
+- `@tsuz/template@0.1.0`
+
+发布过程：
+
+1. `template-source-unification` 合并到 `master` 后，Changesets 生成 Version Packages 提交。
+2. Version Packages 提交合并到 `master` 后触发 npm 发布。
+3. `@tsuz/cli@0.2.3` 由 GitHub Actions / Changesets 成功发布。
+4. `@tsuz/template@0.1.0` 首次发布时报错：
+
+```text
+E404 Not Found - PUT https://registry.npmjs.org/@tsuz%2ftemplate - Not found
+The requested resource '@tsuz/template@0.1.0' could not be found or you do not have permission to access it.
+```
+
+判断：`@tsuz/template` 是首次发布包，npm scope/package 权限或 trusted publishing 配置未完全就绪，导致 CI 无法创建该 package。
+
+处理：
+
+1. 本地使用有权限的 npm 账号登录。
+2. 在 `template/` 目录执行手动发布：
+
+```bash
+npm publish --access public
+```
+
+3. 发布成功后手动补充 git tag：
+
+```bash
+git tag @tsuz/template@0.1.0 995636c
+git push origin @tsuz/template@0.1.0
+```
+
+4. 在 npm 上补齐 `@tsuz/template` 的 Trusted Publishing 配置，后续应由 GitHub Actions 自动发布。
+
+最终校验：
+
+```bash
+npm view @tsuz/cli version
+npm view @tsuz/template version
+npm view @tsuz/cli@0.2.3 dependencies --json
+git ls-remote --tags origin '@tsuz/cli@0.2.3' '@tsuz/template@0.1.0'
+```
+
+结果：
+
+- `@tsuz/cli` latest 为 `0.2.3`。
+- `@tsuz/template` latest 为 `0.1.0`。
+- `@tsuz/cli@0.2.3` 依赖 `@tsuz/template@0.1.0`。
+- `@tsuz/cli@0.2.3` 和 `@tsuz/template@0.1.0` git tag 均存在。
+- 使用发布版 CLI 生成 MFE 模板通过。
+- 生成的 MFE 项目 `pnpm install && pnpm test && pnpm build` 通过。
+
+后续验证：
+
+- `@tsuz/template` 的 Trusted Publishing 已补齐配置；下一次包含 `@tsuz/template` 的 changeset 发布时，应确认它能由 GitHub Actions 自动发布。
+- 如果 GitHub Actions 已成功发布部分包但中途失败，需检查是否存在“npm 已发布但 git tag 未创建”的半完成状态，并手动补齐缺失 tag。
 
 ## 当前结论
 
