@@ -1,5 +1,11 @@
 # @tsuz/template
 
+## 0.1.2
+
+### Patch Changes
+
+- 8661a04: Update generated Vue and React templates to depend on the current `@tsuz/components`, `@tsuz/sdk`, and `@tsuz/utils` package versions.
+
 ## 0.1.1
 
 ### Patch Changes

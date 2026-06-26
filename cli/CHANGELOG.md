@@ -1,5 +1,13 @@
 # @tsuz/cli
 
+## 0.2.5
+
+### Patch Changes
+
+- 42826af: Improve remote template downloads with direct versioned Release assets, GitHub token support, and local cache controls.
+- Updated dependencies [8661a04]
+  - @tsuz/template@0.1.2
+
 ## 0.2.4
 
 ### Patch Changes
