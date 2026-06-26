@@ -147,7 +147,9 @@ Tsu can lock project creation to a template release version:
 tsu-cli init admin-console --template vue3 --version 1.0.4
 ```
 
-The CLI resolves that to the GitHub release tag `template-v1.0.4` and downloads the matching template asset. Use `latest` to resolve the latest template release.
+The CLI resolves that to the GitHub release tag `template-v1.0.4` and downloads `tsu-templates-v1.0.4.tar.gz` directly from the GitHub Release asset URL. Explicit versions avoid the GitHub Release API lookup; use `latest` to resolve the latest template release through the GitHub API.
+
+Downloaded template bundles are cached locally and reused for later commands that request the same repository and version. Use `--no-cache` to bypass the cache for a single command, or `--refresh` to force a re-download and refresh the cached bundle.
 
 List available template release versions:
 
@@ -181,7 +183,7 @@ You can also set a default repository with an environment variable:
 TSU_TEMPLATE_REPOSITORY=company/frontend-templates tsu-cli init crm-web --template vue3
 ```
 
-For private GitHub repositories, provide a token through the normal GitHub environment used by your shell or CI. Do not write tokens into generated projects.
+For private GitHub repositories or higher API rate limits, set `GITHUB_TOKEN` or `GH_TOKEN` in your shell or CI environment. The CLI automatically sends it on GitHub API and Release asset requests. Do not write tokens into generated projects.
 
 ## Generated Project Workflow
 

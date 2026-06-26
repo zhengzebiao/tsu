@@ -204,11 +204,26 @@ platform/
 | --- | --- | --- |
 | `<projectName>` | `tsu-cli init demo-app` | 项目目录名，默认 `quick-start-app` |
 | `--template` / `-t` | `tsu-cli init platform --template monorepo` | 指定模板名，目前支持 `default`、`vue3`、`react`、`mfe`、`monorepo` |
-| `--version` / `-v` | `tsu-cli init platform --template monorepo --version 1.2.3` | 指定模板 Release 版本，不传时使用最新版本 |
+| `--version` / `-v` | `tsu-cli init platform --template monorepo --version 1.2.3` | 指定模板 Release 版本；明确指定版本时会直接下载对应的 GitHub Release asset |
 | `--repo` | `tsu-cli init platform --repo owner/repo` | 指定 GitHub 仓库，默认读取 `TSU_TEMPLATE_REPOSITORY`、`GITHUB_REPOSITORY`，否则使用 `zhengzebiao/tsu` |
 | `--local` | `tsu-cli init demo-app --local` | 强制使用本地模板，适合离线或开发调试 |
 | `--cwd` | `tsu-cli init demo-app --cwd ./apps` | 指定项目生成的父目录 |
 | `--force` / `-f` | `tsu-cli init demo-app --force` | 目标目录已存在时先删除再重新生成 |
+
+明确指定 `--version` 时，CLI 会直接下载对应的 GitHub Release asset；`latest` 仍然会先访问 GitHub API 查找最新 release。CLI 会自动读取 `GITHUB_TOKEN` 或 `GH_TOKEN` 作为认证头，并把已下载的模板包缓存到本地复用。
+
+如果想控制缓存行为，可以在 `init`、`template info`、`template versions` 里使用：
+
+- `--no-cache`：本次不读写本地缓存，直接走临时目录
+- `--refresh`：忽略已缓存内容，强制重新下载并刷新缓存
+
+示例：
+
+```bash
+tsu-cli init demo --template vue3 --version 1.2.3 --refresh
+tsu-cli template info vue3 --version 1.2.3 --no-cache
+tsu-cli template versions vue3 --refresh
+```
 
 ## 覆盖保护
 

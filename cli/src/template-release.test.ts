@@ -2,16 +2,30 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   compareTemplateVersions,
+  createGitHubHeaders,
   findRemoteTemplateDefinition,
   findTemplateAsset,
   findTemplateVersionsFromReleases,
+  getTemplateAssetName,
+  getTemplateCachePaths,
+  getTemplateReleaseAssetUrl,
   getReleaseTag,
+  isExplicitTemplateVersion,
   newestTemplateVersion,
   normalizeTemplateVersion,
   parseTemplateAssetVersion,
   remoteManifestIncludesTemplate,
   remoteManifestTemplateNames
 } from "./template-release.js";
+
+function restoreEnv(name: string, value: string | undefined) {
+  if (value === undefined) {
+    delete process.env[name];
+    return;
+  }
+
+  process.env[name] = value;
+}
 
 test("normalizeTemplateVersion strips v prefix and keeps latest", () => {
   assert.equal(normalizeTemplateVersion("v1.2.3"), "1.2.3");
@@ -28,6 +42,57 @@ test("getReleaseTag maps versions to release tags", () => {
 test("parseTemplateAssetVersion reads template archive versions", () => {
   assert.equal(parseTemplateAssetVersion("tsu-templates-v1.2.3.tar.gz"), "1.2.3");
   assert.equal(parseTemplateAssetVersion("other.tar.gz"), undefined);
+});
+
+test("template asset helpers build direct release URLs", () => {
+  assert.equal(isExplicitTemplateVersion("1.2.3"), true);
+  assert.equal(isExplicitTemplateVersion("v1.2.3"), true);
+  assert.equal(isExplicitTemplateVersion("latest"), false);
+  assert.equal(isExplicitTemplateVersion(undefined), false);
+  assert.equal(getTemplateAssetName("v1.2.3"), "tsu-templates-v1.2.3.tar.gz");
+  assert.equal(getTemplateReleaseAssetUrl("company/templates", "v1.2.3"), "https://github.com/company/templates/releases/download/template-v1.2.3/tsu-templates-v1.2.3.tar.gz");
+  assert.throws(() => getTemplateAssetName("latest"), /Cannot build a template asset name for latest/);
+});
+
+test("createGitHubHeaders includes token for GitHub hosts", () => {
+  const originalGithubToken = process.env.GITHUB_TOKEN;
+  const originalGhToken = process.env.GH_TOKEN;
+
+  try {
+    delete process.env.GITHUB_TOKEN;
+    delete process.env.GH_TOKEN;
+    assert.deepEqual(createGitHubHeaders("application/vnd.github+json"), {
+      Accept: "application/vnd.github+json",
+      "User-Agent": "tsu-cli"
+    });
+
+    process.env.GH_TOKEN = "gh-token";
+    assert.equal(createGitHubHeaders("application/vnd.github+json").Authorization, "Bearer gh-token");
+    assert.equal(createGitHubHeaders("application/octet-stream", "https://github.com/company/templates/releases/download/template-v1.2.3/tsu-templates-v1.2.3.tar.gz").Authorization, "Bearer gh-token");
+    assert.equal(createGitHubHeaders("application/octet-stream", "https://example.com/template.tar.gz").Authorization, undefined);
+
+    process.env.GITHUB_TOKEN = "github-token";
+    assert.equal(createGitHubHeaders("application/vnd.github+json").Authorization, "Bearer github-token");
+  } finally {
+    restoreEnv("GITHUB_TOKEN", originalGithubToken);
+    restoreEnv("GH_TOKEN", originalGhToken);
+  }
+});
+
+test("getTemplateCachePaths keeps repositories isolated", () => {
+  const originalCacheDir = process.env.TSU_TEMPLATE_CACHE_DIR;
+
+  try {
+    process.env.TSU_TEMPLATE_CACHE_DIR = "/cache";
+    assert.deepEqual(getTemplateCachePaths("company/templates", "tsu-templates-v1.2.3.tar.gz"), {
+      repositoryDir: "/cache/company/templates",
+      archivePath: "/cache/company/templates/tsu-templates-v1.2.3.tar.gz",
+      bundleDir: "/cache/company/templates/tsu-templates-v1.2.3",
+      bundleName: "tsu-templates-v1.2.3"
+    });
+  } finally {
+    restoreEnv("TSU_TEMPLATE_CACHE_DIR", originalCacheDir);
+  }
 });
 
 test("findTemplateAsset finds the template archive", () => {

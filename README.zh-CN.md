@@ -145,7 +145,9 @@ Tsu 支持在初始化时锁定模板版本：
 tsu-cli init admin-console --template vue3 --version 1.0.4
 ```
 
-CLI 会解析到 GitHub release tag `template-v1.0.4`，并下载对应的模板资源。使用 `latest` 可以拉取最新模板 release。
+CLI 会解析到 GitHub release tag `template-v1.0.4`，并直接下载 `tsu-templates-v1.0.4.tar.gz` 这个 GitHub Release asset。明确指定版本时会跳过 GitHub Release API 查询；使用 `latest` 时仍会通过 GitHub API 解析最新模板 release。
+
+已下载的模板包会缓存在本地；后续请求同一仓库和版本时会复用缓存。可以使用 `--no-cache` 跳过缓存，或者使用 `--refresh` 强制重新下载并刷新缓存。
 
 查看可用模板 release 版本：
 
@@ -179,7 +181,7 @@ tsu-cli init crm-web --template vue3 --repo company/frontend-templates
 TSU_TEMPLATE_REPOSITORY=company/frontend-templates tsu-cli init crm-web --template vue3
 ```
 
-如果使用私有 GitHub 仓库，请通过 shell 或 CI 中的标准 GitHub token 环境提供访问权限。不要把 token 写入生成项目。
+如果使用私有 GitHub 仓库，或者需要更高的 GitHub API 额度，请在 shell 或 CI 环境设置 `GITHUB_TOKEN` 或 `GH_TOKEN`。CLI 会自动把它用于 GitHub API 和 Release asset 请求。不要把 token 写入生成项目。
 
 ## 生成项目后的工作流
 

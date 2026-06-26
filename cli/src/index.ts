@@ -11,19 +11,17 @@ import { fileURLToPath } from "node:url";
 import { createTemplateFiles, renderTemplateFiles, templateDefinitions, templateNames, type TemplateFile, type TemplateName } from "./template.js";
 import {
   compareTemplateVersions,
-  downloadFile,
   downloadTemplateManifest,
-  extractTarball,
-  fetchGitHubRelease,
+  ensureTemplateBundle,
   findRemoteTemplateDefinition,
   findTemplateAsset,
   newestTemplateVersion,
   normalizeTemplateVersion,
   remoteManifestIncludesTemplate,
   remoteManifestTemplateNames,
+  resolveTemplateAssetSource,
   resolveTemplateVersions,
   type RemoteTemplateDefinition,
-  type RemoteTemplateManifest,
   type TemplateVersionInfo,
   type TemplateVersionsOptions
 } from "./template-release.js";
@@ -53,11 +51,13 @@ export interface InitProjectOptions {
   force?: boolean;
   source?: TemplateSource;
   repository?: string;
+  cache?: boolean;
+  refresh?: boolean;
 }
 
 export type TemplateSource = "remote" | "local";
 
-export interface ParsedInitOptions extends Required<Pick<InitProjectOptions, "cwd" | "projectName" | "templateName" | "version" | "force" | "source">> {
+export interface ParsedInitOptions extends Required<Pick<InitProjectOptions, "cwd" | "projectName" | "templateName" | "version" | "force" | "source" | "cache" | "refresh">> {
   repository?: string;
 }
 
@@ -65,6 +65,8 @@ export interface TemplateInfoOptions {
   repository: string;
   templateName: string;
   version?: string;
+  cache?: boolean;
+  refresh?: boolean;
 }
 
 export interface DoctorOptions {
@@ -135,8 +137,8 @@ export function createHelpMessage() {
     "  tsu-cli doctor [--cwd <path>] [--json]",
     "  tsu-cli upgrade-check [--cwd <path>] [--repo <owner/repo>] [--json]",
     "  tsu-cli templates",
-    "  tsu-cli template info <name> [--version <value>] [--repo <owner/repo>]",
-    "  tsu-cli template versions [name] [--repo <owner/repo>]",
+    "  tsu-cli template info <name> [--version <value>] [--repo <owner/repo>] [--no-cache] [--refresh]",
+    "  tsu-cli template versions [name] [--repo <owner/repo>] [--no-cache] [--refresh]",
     "  tsu-cli --help",
     "  tsu-cli --version",
     "",
@@ -154,6 +156,8 @@ export function createHelpMessage() {
     "      --repo <owner/repo> Template release repository",
     "      --cwd <path>       Directory to create the project in",
     "      --local            Use bundled templates instead of GitHub releases",
+    "      --no-cache         Do not read from or write to the local template cache",
+    "      --refresh          Re-download and refresh the local template cache",
     "  -f, --force           Overwrite the target directory",
     "",
     "Doctor options:",
@@ -210,7 +214,7 @@ export function createTemplateInfoMessage(templateName: string) {
   ].join("\n");
 }
 
-export function createRemoteTemplateInfoMessage(options: Required<TemplateInfoOptions>, definition: RemoteTemplateDefinition) {
+export function createRemoteTemplateInfoMessage(options: TemplateInfoOptions, definition: RemoteTemplateDefinition) {
   const lines = [
     `Template: ${definition.name}`,
     `Version: ${options.version}`,
@@ -301,6 +305,8 @@ export function parseInitArgs(args: string[], cwd = process.cwd()): ParsedInitOp
   let source: TemplateSource = "remote";
   let repository = process.env.TSU_TEMPLATE_REPOSITORY || process.env.GITHUB_REPOSITORY || "zhengzebiao/tsu";
   let force = false;
+  let cache = true;
+  let refresh = false;
   let hasProjectName = false;
 
   for (let index = 0; index < args.length; index += 1) {
@@ -313,6 +319,16 @@ export function parseInitArgs(args: string[], cwd = process.cwd()): ParsedInitOp
 
     if (arg === "--local") {
       source = "local";
+      continue;
+    }
+
+    if (arg === "--no-cache") {
+      cache = false;
+      continue;
+    }
+
+    if (arg === "--refresh") {
+      refresh = true;
       continue;
     }
 
@@ -359,6 +375,8 @@ export function parseInitArgs(args: string[], cwd = process.cwd()): ParsedInitOp
     version,
     force,
     source,
+    cache,
+    refresh,
     repository
   };
 }
@@ -437,6 +455,8 @@ export function parseTemplateInfoArgs(args: string[]): TemplateInfoOptions {
   const templateName = readCommandValue(args, 0, "template info");
   let repository = process.env.TSU_TEMPLATE_REPOSITORY || process.env.GITHUB_REPOSITORY || "zhengzebiao/tsu";
   let version: string | undefined;
+  let cache = true;
+  let refresh = false;
 
   for (let index = 1; index < args.length; index += 1) {
     const arg = args[index];
@@ -453,6 +473,16 @@ export function parseTemplateInfoArgs(args: string[]): TemplateInfoOptions {
       continue;
     }
 
+    if (arg === "--no-cache") {
+      cache = false;
+      continue;
+    }
+
+    if (arg === "--refresh") {
+      refresh = true;
+      continue;
+    }
+
     if (arg.startsWith("-")) {
       throw new Error(`Unknown option: ${arg}`);
     }
@@ -463,6 +493,8 @@ export function parseTemplateInfoArgs(args: string[]): TemplateInfoOptions {
   return {
     repository,
     templateName,
+    cache,
+    refresh,
     ...(version ? { version } : {})
   };
 }
@@ -470,6 +502,8 @@ export function parseTemplateInfoArgs(args: string[]): TemplateInfoOptions {
 export function parseTemplateVersionsArgs(args: string[]): TemplateVersionsOptions {
   let repository = process.env.TSU_TEMPLATE_REPOSITORY || process.env.GITHUB_REPOSITORY || "zhengzebiao/tsu";
   let templateName: string | undefined;
+  let cache = true;
+  let refresh = false;
 
   for (let index = 0; index < args.length; index += 1) {
     const arg = args[index];
@@ -477,6 +511,16 @@ export function parseTemplateVersionsArgs(args: string[]): TemplateVersionsOptio
     if (arg === "--repo") {
       repository = readOptionValue(args, index, arg);
       index += 1;
+      continue;
+    }
+
+    if (arg === "--no-cache") {
+      cache = false;
+      continue;
+    }
+
+    if (arg === "--refresh") {
+      refresh = true;
       continue;
     }
 
@@ -493,6 +537,8 @@ export function parseTemplateVersionsArgs(args: string[]): TemplateVersionsOptio
 
   return {
     repository,
+    cache,
+    refresh,
     ...(templateName ? { templateName } : {})
   };
 }
@@ -620,10 +666,13 @@ function getTemplateDefinition(templateName: string) {
   return definition;
 }
 
-export async function resolveRemoteTemplateInfo(options: Required<TemplateInfoOptions>) {
-  const release = await fetchGitHubRelease(options.repository, options.version);
-  const asset = findTemplateAsset(release);
-  const manifest = await downloadTemplateManifest(asset.name, asset.browser_download_url);
+export async function resolveRemoteTemplateInfo(options: TemplateInfoOptions) {
+  if (!options.version) {
+    throw new Error("Missing template version for remote template info.");
+  }
+
+  const asset = await resolveTemplateAssetSource(options.repository, options.version);
+  const manifest = await downloadTemplateManifest(asset.name, asset.browser_download_url, options.repository, options);
   const definition = findRemoteTemplateDefinition(manifest, options.templateName);
 
   if (!definition) {
@@ -851,29 +900,24 @@ async function downloadTemplateFiles(options: InitProjectOptions): Promise<Templ
     throw new Error("Missing GitHub repository. Set TSU_TEMPLATE_REPOSITORY or GITHUB_REPOSITORY, or pass --repo owner/name.");
   }
 
-  const release = await fetchGitHubRelease(options.repository, options.version ?? "latest");
-  const asset = findTemplateAsset(release);
+  const asset = await resolveTemplateAssetSource(options.repository, options.version ?? "latest");
+  const bundle = await ensureTemplateBundle(options.repository, asset.name, asset.browser_download_url, options);
+  const templateName = options.templateName ?? "default";
+
+  if (!remoteManifestIncludesTemplate(bundle.manifest, templateName)) {
+    throw new Error(`Template "${templateName}" is not available in ${asset.name}. Available templates: ${remoteManifestTemplateNames(bundle.manifest).join(", ")}.`);
+  }
+
   const tempDir = await mkdtemp(join(tmpdir(), "tsu-template-"));
 
   try {
-    const archivePath = join(tempDir, asset.name);
-    await downloadFile(asset.browser_download_url, archivePath);
-    await extractTarball(archivePath, tempDir);
-
-    const bundleDir = join(tempDir, asset.name.replace(/\.tar\.gz$/, ""));
-    const manifest = JSON.parse(await readFile(join(bundleDir, "manifest.json"), "utf8")) as RemoteTemplateManifest;
-    const templateName = options.templateName ?? "default";
-
-    if (!remoteManifestIncludesTemplate(manifest, templateName)) {
-      throw new Error(`Template "${templateName}" is not available in ${asset.name}. Available templates: ${remoteManifestTemplateNames(manifest).join(", ")}.`);
-    }
-
-    const templateDir = join(bundleDir, templateName);
+    const templateDir = join(bundle.bundleDir, templateName);
     const stagingDir = join(tempDir, "rendered");
     await cp(templateDir, stagingDir, { recursive: true });
 
     return renderTemplateFiles(await readTemplateDirectory(stagingDir), options.projectName);
   } finally {
+    await bundle.dispose?.();
     await rm(tempDir, { force: true, recursive: true });
   }
 }
