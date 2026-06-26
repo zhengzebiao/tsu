@@ -173,9 +173,9 @@ function createVue3TemplateFiles(packageName: string): TemplateFile[] {
           "docker:run": `docker run --rm -p 8080:80 ${packageName}`
         },
         dependencies: {
-          "@tsuz/components": "^0.1.1",
-          "@tsuz/sdk": "^0.1.1",
-          "@tsuz/utils": "^0.1.1",
+          "@tsuz/components": "^0.2.0",
+          "@tsuz/sdk": "^0.2.0",
+          "@tsuz/utils": "^0.2.0",
           pinia: "^3.0.1",
           "vue-router": "^4.5.1",
           vue: "^3.5.13"

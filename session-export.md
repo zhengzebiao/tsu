@@ -7870,3 +7870,89 @@ I’ve added the standalone Markdown guide. I’m also refreshing the session ex
 ## Assistant
 
 [tool_use: Bash]
+
+
+---
+
+## 会话记录追加：2026-06-26
+
+导出时间：2026-06-26
+
+### 用户请求
+
+1. 询问“接下来的进度是什么”。
+2. 要求查看 Markdown 文档并分析项目目前所处阶段。
+3. 要求继续处理。
+4. 要求导出会话记录，并提交到 `feature` 分支。
+
+### 阶段分析结论
+
+- 项目已经完成 CLI 与模板产品的最小闭环，不再是最早期 MVP 阶段。
+- 当前更准确地处于 Milestone 2 后半段：模板质量强化与 release 验证链路收尾。
+- 同时已经部分进入 Milestone 3：版本化模板能力、远程模板命令、私有模板仓库说明已经具备。
+- 推荐定位为：v0.2.x 维护 / 模板质量强化阶段，正在为 v0.5 的版本化模板分发能力做稳定化。
+
+### 阅读和核对过的关键资料
+
+- `README.zh-CN.md`：确认 CLI 命令、模板版本、私有仓库、模板元数据等文档已覆盖。
+- `PRODUCT_ANALYSIS.md`：对照阶段一到阶段五的产品路线。
+- `PRODUCT_PRD_ROADMAP.md`：对照 Milestone 1、2、3 和 v0.2/v0.5/v1.0 发布策略。
+- `npm-release-flow.zh-CN.md`：确认 npm 发布和 Changesets 工作流。
+- `npm-publish-summary-and-pitfalls.zh-CN.md`：确认 Trusted Publishing 已经过早期版本验证。
+- `release-verification-and-certificate-setup.md`：确认 template release asset 的发布和验证说明。
+- 各包 `CHANGELOG.md` 和 `package.json`：确认当前包版本与最近发布状态。
+
+### 已完成代码处理
+
+1. 修复生成模板依赖版本滞后问题：
+   - `template/src/index.ts`：Vue3 模板依赖 `@tsuz/components`、`@tsuz/sdk`、`@tsuz/utils` 从 `^0.1.1` 更新为 `^0.2.0`。
+   - `template/src/react.ts`：React 模板同样更新上述依赖到 `^0.2.0`。
+   - `template/src/index.test.ts`：同步更新测试断言。
+
+2. 补充 Changeset：
+   - 新增 `.changeset/fresh-template-dependencies.md`，给 `@tsuz/template` 添加 patch 变更说明。
+
+3. 补强 template release 工作流：
+   - `.github/workflows/template-release.yml` 在 `template:release:build` 后、`template:release:publish` 前增加：
+     `TEMPLATE_VERSION=${GITHUB_REF_NAME#template-v} pnpm validate:template-release`
+   - `script/template-release-preflight.mjs` 的提示也同步加入 `validate:template-release` 步骤。
+
+### 已运行验证
+
+成功运行：
+
+```bash
+pnpm --filter @tsuz/template build
+pnpm --filter @tsuz/template test
+```
+
+结果：
+
+- `@tsuz/template` build 通过。
+- `@tsuz/template` test 通过。
+- Node test 共 9 个用例全部通过。
+
+### 未完成/待补验证
+
+尝试运行完整 release archive 校验时，工具侧临时返回模型安全分类不可用，命令未执行：
+
+```bash
+pnpm --filter @tsuz/template build && pnpm --filter @tsuz/template test && pnpm template:release:build --version=1.0.7 && TEMPLATE_VERSION=1.0.7 pnpm validate:template-release
+```
+
+待后续重新执行：
+
+```bash
+pnpm template:release:build --version=1.0.7
+TEMPLATE_VERSION=1.0.7 pnpm validate:template-release
+```
+
+### 当前待提交文件
+
+- `.github/workflows/template-release.yml`
+- `script/template-release-preflight.mjs`
+- `template/src/index.ts`
+- `template/src/react.ts`
+- `template/src/index.test.ts`
+- `.changeset/fresh-template-dependencies.md`
+- `session-export.md`
