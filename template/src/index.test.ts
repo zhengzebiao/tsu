@@ -74,9 +74,9 @@ test("vue3 template creates vite-based app files", () => {
   assert.match(packageJson.content, /"dev": "vite"/);
   assert.match(packageJson.content, /"docker:build": "docker build -t my-app \./);
   assert.match(packageJson.content, /"docker:run": "docker run --rm -p 8080:80 my-app"/);
-  assert.match(packageJson.content, /"@tsuz\/components": "\^0\.1\.1"/);
-  assert.match(packageJson.content, /"@tsuz\/sdk": "\^0\.1\.1"/);
-  assert.match(packageJson.content, /"@tsuz\/utils": "\^0\.1\.1"/);
+  assert.match(packageJson.content, /"@tsuz\/components": "\^0\.2\.0"/);
+  assert.match(packageJson.content, /"@tsuz\/sdk": "\^0\.2\.0"/);
+  assert.match(packageJson.content, /"@tsuz\/utils": "\^0\.2\.0"/);
   assert.match(packageJson.content, /"vue": "\^3\.5\.13"/);
   assert.match(packageJson.content, /"pinia": "\^3\.0\.1"/);
   assert.match(packageJson.content, /"vue-router": "\^4\.5\.1"/);
@@ -139,9 +139,9 @@ test("react template creates vite-based app files", () => {
   assert.match(packageJson.content, /"dev": "vite"/);
   assert.match(packageJson.content, /"docker:build": "docker build -t react-app \./);
   assert.match(packageJson.content, /"docker:run": "docker run --rm -p 8080:80 react-app"/);
-  assert.match(packageJson.content, /"@tsuz\/components": "\^0\.1\.1"/);
-  assert.match(packageJson.content, /"@tsuz\/sdk": "\^0\.1\.1"/);
-  assert.match(packageJson.content, /"@tsuz\/utils": "\^0\.1\.1"/);
+  assert.match(packageJson.content, /"@tsuz\/components": "\^0\.2\.0"/);
+  assert.match(packageJson.content, /"@tsuz\/sdk": "\^0\.2\.0"/);
+  assert.match(packageJson.content, /"@tsuz\/utils": "\^0\.2\.0"/);
   assert.match(packageJson.content, /"react": "\^19\.1\.0"/);
   assert.match(packageJson.content, /"react-dom": "\^19\.1\.0"/);
   assert.match(packageJson.content, /"react-router-dom": "\^7\.6\.2"/);

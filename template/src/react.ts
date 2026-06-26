@@ -21,9 +21,9 @@ export function createReactTemplateFiles(packageName: string): TemplateFile[] {
           "docker:run": `docker run --rm -p 8080:80 ${packageName}`
         },
         dependencies: {
-          "@tsuz/components": "^0.1.1",
-          "@tsuz/sdk": "^0.1.1",
-          "@tsuz/utils": "^0.1.1",
+          "@tsuz/components": "^0.2.0",
+          "@tsuz/sdk": "^0.2.0",
+          "@tsuz/utils": "^0.2.0",
           "@vitejs/plugin-react": "^4.3.4",
           react: "^19.1.0",
           "react-dom": "^19.1.0",

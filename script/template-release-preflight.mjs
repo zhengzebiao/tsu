@@ -27,4 +27,5 @@ process.stdout.write(`Preflight ok for template-v${normalizedVersion}\n`);
 process.stdout.write(`Expected asset: tsu-templates-v${normalizedVersion}.tar.gz\n`);
 process.stdout.write(`Expected tag: template-v${normalizedVersion}\n`);
 process.stdout.write(`Next: pnpm template:release:build --version=${normalizedVersion}\n`);
+process.stdout.write(`Then: TEMPLATE_VERSION=${normalizedVersion} pnpm validate:template-release\n`);
 process.stdout.write(`Then: pnpm template:release:publish --version=${normalizedVersion}\n`);
