@@ -37,7 +37,7 @@ pnpm dev
 | Template | Recommended For | Built In |
 | --- | --- | --- |
 | `default` | Minimal Node.js starter | `package.json`, `src/index.js` |
-| `vue3` | Admin consoles, dashboards, web apps | Vite, Vue Router, Pinia, TypeScript, ESLint, Docker, CI |
+| `vue3` | Admin consoles, dashboards, web apps | Vite, Vue Router, Pinia dashboard store, Vitest, TypeScript, ESLint, Docker, CI |
 | `react` | React web apps and dashboards | Vite, React Router, TypeScript, ESLint, Docker, CI |
 | `mfe` | Micro frontend workspaces | Host app, Vue sub apps, qiankun, shared packages, Docker, CI |
 | `monorepo` | Multi-package team repositories | pnpm workspace, Turbo, Changesets, TypeScript packages |

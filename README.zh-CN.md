@@ -35,7 +35,7 @@ pnpm dev
 | 模板 | 适合场景 | 内置能力 |
 | --- | --- | --- |
 | `default` | 最小 Node.js 项目 | `package.json`、`src/index.js` |
-| `vue3` | 中后台、仪表盘、Web App | Vite、Vue Router、Pinia、TypeScript、ESLint、Docker、CI |
+| `vue3` | 中后台、仪表盘、Web App | Vite、Vue Router、Pinia dashboard store、Vitest、TypeScript、ESLint、Docker、CI |
 | `react` | React Web App、仪表盘 | Vite、React Router、TypeScript、ESLint、Docker、CI |
 | `mfe` | 微前端工作区 | Host 应用、Vue 子应用、qiankun、共享包、Docker、CI |
 | `monorepo` | 多包团队仓库 | pnpm workspace、Turbo、Changesets、TypeScript packages |

@@ -68,21 +68,26 @@ web-app/
     ├── env.d.ts
     ├── router/
     ├── stores/
+    │   ├── dashboard.ts
+    │   └── dashboard.test.ts
     ├── styles/
     └── views/
+        ├── HomeView.vue
+        └── HomeView.test.ts
 ```
 
-`vue3` 模板内置 GitHub CI 和 Docker 静态部署基础配置。生成后可以执行：
+`vue3` 模板内置 GitHub CI、Vitest 测试和 Docker 静态部署基础配置。生成后可以执行：
 
 ```bash
 pnpm install
 pnpm lint
+pnpm test
 pnpm build
 pnpm docker:build
 pnpm docker:run
 ```
 
-`nginx.conf` 已包含 Vue Router history 模式刷新回退配置。
+`nginx.conf` 已包含 Vue Router history 模式刷新回退配置。`HomeView` 使用 Pinia dashboard store 串起 Tsu components、SDK 和 utils；`dashboard.test.ts` / `HomeView.test.ts` 提供生成项目后的测试样例。
 
 `react` 模板会生成以下核心结构：
 
