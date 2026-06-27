@@ -62,16 +62,46 @@ export function createReactTemplateFiles(packageName: string): TemplateFile[] {
         projectStructure: [
           ["src/main.tsx", "React application bootstrap"],
           ["src/App.tsx", "Application routes and shell"],
-          ["src/views/", "Route-level views"],
+          ["src/hooks/useDashboardSummary.ts", "Dashboard data, loading, and error state hook"],
+          ["src/views/HomeView.tsx", "Dashboard starter view using Tsu packages"],
+          ["src/views/AboutView.tsx", "About route view"],
           ["src/styles/", "Base and application styles"],
           [".github/workflows/ci.yml", "Install, lint, and build workflow"],
           ["Dockerfile", "Production container build"]
         ],
-        deployment: ["Run pnpm build to create dist/.", "Use docker:build for an nginx-based production image."],
+        deployment: ["Run pnpm build to create dist/.", "Use docker:build for an nginx-based production image.", "nginx.conf includes a React Router history fallback through try_files."],
+        extraSections: [
+          {
+            title: "Sample Dashboard Flow",
+            body: [
+              "HomeView renders the starter dashboard and delegates data loading to the dashboard summary hook.",
+              "src/hooks/useDashboardSummary.ts owns the summary data, loading state, and error message.",
+              "The hook uses @tsuz/sdk with a mock adapter so the template works without a backend.",
+              "@tsuz/components/react renders loading, error, empty, and content states.",
+              "@tsuz/utils/js normalizes unknown errors into displayable messages."
+            ]
+          },
+          {
+            title: "Replacing the Mock API",
+            body: [
+              "Open src/hooks/useDashboardSummary.ts and replace the createClient mock adapter with your real API configuration.",
+              "Keep the hook boundary so views stay focused on rendering and user interactions.",
+              "Update the DashboardSummary interface when your API shape changes."
+            ]
+          },
+          {
+            title: "Adding Pages",
+            body: [
+              "Create a new view under src/views.",
+              "Register the route in src/App.tsx.",
+              "Add navigation in the app header when the route should be user-visible."
+            ]
+          }
+        ],
         faq: [
-          ["How does the sample business loop work?", "HomeView uses @tsuz/components/react for page states, @tsuz/sdk with a mock adapter for data loading, and @tsuz/utils/js for error messages."],
+          ["How does the sample business loop work?", "HomeView renders the page, the dashboard summary hook owns loading/error/content state, @tsuz/sdk simulates data loading, and Tsu components render loading/error/empty/content states."],
           ["How do I add pages?", "Add a view in src/views and register it in src/App.tsx."],
-          ["How do I replace the sample data?", "Replace the mock adapter in src/views/HomeView.tsx with your real API endpoint."],
+          ["How do I replace the sample data?", "Replace the mock adapter in src/hooks/useDashboardSummary.ts with your real API endpoint."],
           ["Can I remove Docker?", "Yes. Delete Dockerfile, nginx.conf, .dockerignore, and the docker scripts."]
         ]
       })
@@ -160,11 +190,15 @@ export function createReactTemplateFiles(packageName: string): TemplateFile[] {
     },
     {
       path: "src/styles/main.css",
-      content: `@import "./base.css";\n\nbody {\n  min-height: 100vh;\n}\n\n.app-shell {\n  min-height: 100vh;\n  padding: 2rem;\n  display: grid;\n  gap: 2rem;\n}\n\n.app-header {\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  gap: 1rem;\n}\n\n.app-intro {\n  margin: 0 0 0.5rem;\n  color: #475569;\n  font-size: 0.875rem;\n  letter-spacing: 0.08em;\n  text-transform: uppercase;\n}\n\n.app-nav {\n  display: flex;\n  gap: 1rem;\n}\n\n.app-nav a {\n  color: #0f172a;\n  text-decoration: none;\n}\n\n.app-nav a.active {\n  color: #2563eb;\n}\n\n.about-view {\n  display: grid;\n  gap: 0.75rem;\n  max-width: 32rem;\n}\n\n.tsu-page-container {\n  display: grid;\n  gap: 1.5rem;\n}\n\n.tsu-page-container__header {\n  display: flex;\n  align-items: flex-start;\n  justify-content: space-between;\n  gap: 1rem;\n}\n\n.tsu-page-container__title {\n  margin: 0;\n}\n\n.tsu-page-container__description,\n.tsu-state__description {\n  margin: 0.5rem 0 0;\n  color: #475569;\n}\n\n.tsu-page-container__actions,\n.tsu-state__actions {\n  display: flex;\n  gap: 0.75rem;\n}\n\n.tsu-state {\n  padding: 1rem;\n  border: 1px solid #e2e8f0;\n  border-radius: 0.5rem;\n  background: white;\n}\n\n.tsu-state__title {\n  color: #0f172a;\n}\n\n.tsu-state__button {\n  margin-top: 0.75rem;\n  padding: 0.5rem 0.875rem;\n  border: 0;\n  border-radius: 0.5rem;\n  color: white;\n  background: #2563eb;\n  cursor: pointer;\n}\n\n.summary-grid {\n  display: grid;\n  grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr));\n  gap: 1rem;\n}\n\n.summary-card {\n  display: grid;\n  gap: 0.5rem;\n  padding: 1rem;\n  border: 1px solid #e2e8f0;\n  border-radius: 0.5rem;\n  background: white;\n}\n\n.summary-card span {\n  color: #475569;\n  font-size: 0.875rem;\n}\n\n.summary-card strong {\n  color: #0f172a;\n  font-size: 1.5rem;\n}\n\n.home-view__button {\n  width: fit-content;\n  padding: 0.625rem 1rem;\n  border: 0;\n  border-radius: 0.5rem;\n  color: white;\n  background: #2563eb;\n  cursor: pointer;\n}\n\n.home-view__button--secondary {\n  background: #64748b;\n}\n`
+      content: `@import "./base.css";\n\nbody {\n  min-height: 100vh;\n}\n\n.app-shell {\n  min-height: 100vh;\n  padding: 2rem;\n  display: grid;\n  gap: 2rem;\n}\n\n.app-header {\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  gap: 1rem;\n}\n\n.app-intro {\n  margin: 0 0 0.5rem;\n  color: #475569;\n  font-size: 0.875rem;\n  letter-spacing: 0.08em;\n  text-transform: uppercase;\n}\n\n.app-nav {\n  display: flex;\n  gap: 1rem;\n}\n\n.app-nav a {\n  color: #0f172a;\n  text-decoration: none;\n}\n\n.app-nav a.active {\n  color: #2563eb;\n}\n\n.about-view {\n  display: grid;\n  gap: 0.75rem;\n  max-width: 32rem;\n}\n\n.tsu-page-container {\n  display: grid;\n  gap: 1.5rem;\n}\n\n.tsu-page-container__header {\n  display: flex;\n  align-items: flex-start;\n  justify-content: space-between;\n  gap: 1rem;\n}\n\n.tsu-page-container__title {\n  margin: 0;\n}\n\n.tsu-page-container__description,\n.tsu-state__description {\n  margin: 0.5rem 0 0;\n  color: #475569;\n}\n\n.tsu-page-container__actions,\n.tsu-state__actions {\n  display: flex;\n  gap: 0.75rem;\n}\n\n.tsu-state {\n  padding: 1rem;\n  border: 1px solid #e2e8f0;\n  border-radius: 0.5rem;\n  background: white;\n}\n\n.tsu-state__title {\n  color: #0f172a;\n}\n\n.tsu-state__button {\n  margin-top: 0.75rem;\n  padding: 0.5rem 0.875rem;\n  border: 0;\n  border-radius: 0.5rem;\n  color: white;\n  background: #2563eb;\n  cursor: pointer;\n}\n\n.summary-grid {\n  display: grid;\n  grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr));\n  gap: 1rem;\n}\n\n.summary-card {\n  display: grid;\n  gap: 0.5rem;\n  padding: 1rem;\n  border: 1px solid #e2e8f0;\n  border-radius: 0.5rem;\n  background: white;\n}\n\n.summary-card span {\n  color: #475569;\n  font-size: 0.875rem;\n}\n\n.summary-card strong {\n  color: #0f172a;\n  font-size: 1.5rem;\n}\n\n.home-view__button {\n  width: fit-content;\n  padding: 0.625rem 1rem;\n  border: 0;\n  border-radius: 0.5rem;\n  color: white;\n  background: #2563eb;\n  cursor: pointer;\n}\n\n.home-view__button--muted {\n  background: #475569;\n}\n\n.home-view__button--secondary {\n  background: #64748b;\n}\n`
+    },
+    {
+      path: "src/hooks/useDashboardSummary.ts",
+      content: `import { useCallback, useEffect, useMemo, useState } from "react";\nimport { createClient } from "@tsuz/sdk";\nimport { sleep, toErrorMessage } from "@tsuz/utils/js";\n\nexport interface DashboardSummary {\n  id: number;\n  label: string;\n  value: string;\n}\n\nexport type DashboardSummaryMode = "success" | "empty" | "error";\n\nexport function useDashboardSummary() {\n  const [summaries, setSummaries] = useState<DashboardSummary[]>([]);\n  const [isLoading, setIsLoading] = useState(true);\n  const [errorMessage, setErrorMessage] = useState("");\n  const api = useMemo(\n    () =>\n      createClient({\n        baseUrl: "https://example.tsu.local",\n        async adapter({ path }) {\n          await sleep(250);\n\n          if (path === "/dashboard/summary?fail=true") {\n            throw new Error("Mock request failed. Replace the adapter with your API when ready.");\n          }\n\n          if (path === "/dashboard/summary?empty=true") {\n            return [];\n          }\n\n          return [\n            { id: 1, label: "Open tasks", value: "12" },\n            { id: 2, label: "Deployments", value: "3" },\n            { id: 3, label: "Template", value: "React" }\n          ];\n        }\n      }),\n    []\n  );\n\n  const loadSummary = useCallback(\n    async (mode: DashboardSummaryMode = "success") => {\n      setIsLoading(true);\n      setErrorMessage("");\n\n      const pathByMode: Record<DashboardSummaryMode, string> = {\n        success: "/dashboard/summary",\n        empty: "/dashboard/summary?empty=true",\n        error: "/dashboard/summary?fail=true"\n      };\n\n      try {\n        setSummaries(await api.get<DashboardSummary[]>(pathByMode[mode]));\n      } catch (error: unknown) {\n        setSummaries([]);\n        setErrorMessage(toErrorMessage(error));\n      } finally {\n        setIsLoading(false);\n      }\n    },\n    [api]\n  );\n\n  useEffect(() => {\n    void loadSummary();\n  }, [loadSummary]);\n\n  return {\n    summaries,\n    isLoading,\n    errorMessage,\n    hasSummaries: summaries.length > 0,\n    loadSummary\n  };\n}\n`
     },
     {
       path: "src/views/HomeView.tsx",
-      content: `import { useCallback, useEffect, useMemo, useState } from "react";\nimport { EmptyState, ErrorState, LoadingState, PageContainer } from "@tsuz/components/react";\nimport { createClient } from "@tsuz/sdk";\nimport { sleep, toErrorMessage } from "@tsuz/utils/js";\n\ninterface HomeViewProps {\n  projectName: string;\n}\n\ninterface DashboardSummary {\n  id: number;\n  label: string;\n  value: string;\n}\n\nexport function HomeView({ projectName }: HomeViewProps) {\n  const [summaries, setSummaries] = useState<DashboardSummary[]>([]);\n  const [isLoading, setIsLoading] = useState(true);\n  const [errorMessage, setErrorMessage] = useState("");\n  const api = useMemo(\n    () =>\n      createClient({\n        baseUrl: "https://example.tsu.local",\n        async adapter({ path }) {\n          await sleep(250);\n\n          if (path === "/dashboard/summary?fail=true") {\n            throw new Error("Mock request failed. Replace the adapter with your API when ready.");\n          }\n\n          return [\n            { id: 1, label: "Open tasks", value: "12" },\n            { id: 2, label: "Deployments", value: "3" },\n            { id: 3, label: "Template", value: "React" }\n          ];\n        }\n      }),\n    []\n  );\n\n  const loadSummary = useCallback(\n    async (shouldFail = false) => {\n      setIsLoading(true);\n      setErrorMessage("");\n\n      try {\n        setSummaries(await api.get<DashboardSummary[]>(shouldFail ? "/dashboard/summary?fail=true" : "/dashboard/summary"));\n      } catch (error: unknown) {\n        setSummaries([]);\n        setErrorMessage(toErrorMessage(error));\n      } finally {\n        setIsLoading(false);\n      }\n    },\n    [api]\n  );\n\n  useEffect(() => {\n    void loadSummary();\n  }, [loadSummary]);\n\n  return (\n    <PageContainer\n      title="Dashboard starter"\n      description={projectName + " uses Tsu components, utils, and SDK in one replaceable example."}\n      actions={\n        <>\n          <button className="home-view__button" type="button" onClick={() => loadSummary(false)}>\n            Reload\n          </button>\n          <button className="home-view__button home-view__button--secondary" type="button" onClick={() => loadSummary(true)}>\n            Show error\n          </button>\n        </>\n      }\n    >\n      {isLoading ? <LoadingState label="Loading dashboard summary..." /> : null}\n      {!isLoading && errorMessage ? <ErrorState message={errorMessage} actions={["Retry"]} onAction={() => loadSummary(false)} /> : null}\n      {!isLoading && !errorMessage && summaries.length === 0 ? (\n        <EmptyState title="No summary data" description="Connect your API client to show real metrics." />\n      ) : null}\n      {!isLoading && !errorMessage && summaries.length ? (\n        <div className="summary-grid">\n          {summaries.map((item) => (\n            <article className="summary-card" key={item.id}>\n              <span>{item.label}</span>\n              <strong>{item.value}</strong>\n            </article>\n          ))}\n        </div>\n      ) : null}\n    </PageContainer>\n  );\n}\n`
+      content: `import { EmptyState, ErrorState, LoadingState, PageContainer } from "@tsuz/components/react";\nimport { useDashboardSummary } from "@/hooks/useDashboardSummary";\n\ninterface HomeViewProps {\n  projectName: string;\n}\n\nexport function HomeView({ projectName }: HomeViewProps) {\n  const { summaries, isLoading, errorMessage, hasSummaries, loadSummary } = useDashboardSummary();\n\n  return (\n    <PageContainer\n      title="Dashboard starter"\n      description={projectName + " uses Tsu components, utils, SDK, and a hook in one replaceable example."}\n      actions={\n        <>\n          <button className="home-view__button" type="button" onClick={() => void loadSummary("success")}>\n            Reload\n          </button>\n          <button className="home-view__button home-view__button--muted" type="button" onClick={() => void loadSummary("empty")}>\n            Show empty\n          </button>\n          <button className="home-view__button home-view__button--secondary" type="button" onClick={() => void loadSummary("error")}>\n            Show error\n          </button>\n        </>\n      }\n    >\n      {isLoading ? <LoadingState label="Loading dashboard summary..." /> : null}\n      {!isLoading && errorMessage ? <ErrorState message={errorMessage} actions={["Retry"]} onAction={() => void loadSummary("success")} /> : null}\n      {!isLoading && !errorMessage && !hasSummaries ? (\n        <EmptyState title="No summary data" description="Connect your API client to show real metrics." />\n      ) : null}\n      {!isLoading && !errorMessage && hasSummaries ? (\n        <div className="summary-grid">\n          {summaries.map((item) => (\n            <article className="summary-card" key={item.id}>\n              <span>{item.label}</span>\n              <strong>{item.value}</strong>\n            </article>\n          ))}\n        </div>\n      ) : null}\n    </PageContainer>\n  );\n}\n`
     },
     {
       path: "src/views/AboutView.tsx",
@@ -186,6 +220,7 @@ interface TemplateReadmeOptions {
   projectStructure: [string, string][];
   deployment: string[];
   faq: [string, string][];
+  extraSections?: Array<{ title: string; body: string[] }>;
 }
 
 function createTemplateReadme(options: TemplateReadmeOptions) {
@@ -214,6 +249,8 @@ ${markdownTable(["Path", "Purpose"], options.projectStructure.map(([path, purpos
 ## Deployment
 
 ${markdownList(options.deployment)}
+
+${options.extraSections?.map((section) => `## ${section.title}\n\n${markdownList(section.body)}`).join("\n\n") ?? ""}
 
 ## FAQ
 
