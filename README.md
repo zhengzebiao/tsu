@@ -56,12 +56,16 @@ tsu-cli --version
 tsu-cli doctor [--cwd <path>] [--json]
 tsu-cli upgrade-check [--cwd <path>] [--repo <owner/repo>] [--json]
 tsu-cli templates
+tsu-cli list
 tsu-cli template list
+tsu-cli template info --help
 tsu-cli template info <template-name>
 tsu-cli template info <template-name> --version <version>
 tsu-cli template versions [template-name]
 tsu-cli init <project-name> --template <template-name>
 ```
+
+`tsu-cli templates` is the recommended template-listing command. `tsu-cli list` and `tsu-cli template list` are compatibility aliases.
 
 ### `init`
 

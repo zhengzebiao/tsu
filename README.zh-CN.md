@@ -54,12 +54,16 @@ tsu-cli --version
 tsu-cli doctor [--cwd <path>] [--json]
 tsu-cli upgrade-check [--cwd <path>] [--repo <owner/repo>] [--json]
 tsu-cli templates
+tsu-cli list
 tsu-cli template list
+tsu-cli template info --help
 tsu-cli template info <template-name>
 tsu-cli template info <template-name> --version <version>
 tsu-cli template versions [template-name]
 tsu-cli init <project-name> --template <template-name>
 ```
+
+`tsu-cli templates` 是推荐的模板列表命令。`tsu-cli list` 和 `tsu-cli template list` 是兼容别名。
 
 ### `init`
 

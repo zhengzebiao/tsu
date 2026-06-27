@@ -198,6 +198,27 @@ platform/
 └── package.json
 ```
 
+## CLI 命令别名
+
+模板列表推荐使用：
+
+```bash
+tsu-cli templates
+```
+
+兼容别名：
+
+```bash
+tsu-cli list
+tsu-cli template list
+```
+
+查看 `template info` 子命令帮助：
+
+```bash
+tsu-cli template info --help
+```
+
 ## 参数说明
 
 | 参数 | 示例 | 说明 |

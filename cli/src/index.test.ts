@@ -6,7 +6,7 @@ import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import test from "node:test";
 import { promisify } from "node:util";
-import { compareTemplateVersions, createCliMessage, createDoctorMessage, createHelpMessage, createRemoteTemplateInfoMessage, createTemplateInfoMessage, createTemplateListMessage, createTemplateMetadata, createTemplateVersionsMessage, createUpgradeCheckMessage, createVersionMessage, doctorProject, findRemoteTemplateDefinition, findTemplateAsset, findTemplateVersionsFromReleases, getReleaseTag, initProject, newestTemplateVersion, normalizeEntrypointPath, normalizeTemplateVersion, parseDoctorArgs, parseInitArgs, parseTemplateAssetVersion, parseTemplateInfoArgs, parseTemplateVersionsArgs, parseUpgradeCheckArgs, remoteManifestIncludesTemplate, remoteManifestTemplateNames, runCli, upgradeCheckProject } from "./index.js";
+import { compareTemplateVersions, createCliMessage, createDoctorMessage, createHelpMessage, createRemoteTemplateInfoMessage, createTemplateInfoHelpMessage, createTemplateInfoMessage, createTemplateListMessage, createTemplateMetadata, createTemplateVersionsMessage, createUpgradeCheckMessage, createVersionMessage, doctorProject, findRemoteTemplateDefinition, findTemplateAsset, findTemplateVersionsFromReleases, getReleaseTag, initProject, newestTemplateVersion, normalizeEntrypointPath, normalizeTemplateVersion, parseDoctorArgs, parseInitArgs, parseTemplateAssetVersion, parseTemplateInfoArgs, parseTemplateVersionsArgs, parseUpgradeCheckArgs, remoteManifestIncludesTemplate, remoteManifestTemplateNames, runCli, runInteractiveInit, upgradeCheckProject } from "./index.js";
 
 const execFileAsync = promisify(execFile);
 const cliPackageJson = createRequire(import.meta.url)("../package.json") as { version: string };
@@ -23,6 +23,9 @@ function restoreEnv(name: string, value: string | undefined) {
 test("createCliMessage reports CLI usage", () => {
   assert.equal(createCliMessage(), createHelpMessage());
   assert.match(createCliMessage(), /tsu-cli init \[project-name\]/);
+  assert.match(createCliMessage(), /tsu-cli list/);
+  assert.match(createCliMessage(), /tsu-cli template list/);
+  assert.match(createCliMessage(), /aliases: list, template list/);
 });
 
 test("createVersionMessage reports package version", () => {
@@ -82,6 +85,16 @@ test("createUpgradeCheckMessage reports upgrade suggestions", () => {
   assert.match(message, /Latest version: 1\.2\.0/);
   assert.match(message, /Available versions: 1\.0\.0, 1\.2\.0/);
   assert.match(message, /template info vue3 --version 1\.2\.0/);
+});
+
+test("createTemplateInfoHelpMessage reports template info usage", () => {
+  const message = createTemplateInfoHelpMessage();
+
+  assert.match(message, /tsu-cli template info <name> \[options\]/);
+  assert.match(message, /--version <value>/);
+  assert.match(message, /--repo <owner\/repo>/);
+  assert.match(message, /--no-cache/);
+  assert.match(message, /--refresh/);
 });
 
 test("createTemplateInfoMessage reports template details", () => {
@@ -297,11 +310,14 @@ test("parseInitArgs rejects unknown options", () => {
   assert.throws(() => parseInitArgs(["demo", "--unknown"]), /Unknown option: --unknown/);
 });
 
-test("runCli reports help version and templates", async () => {
+test("runCli reports help version templates and aliases", async () => {
   assert.equal(await runCli(["--help"]), createHelpMessage());
   assert.equal(await runCli(["--version"]), createVersionMessage());
   assert.equal(await runCli(["templates"]), createTemplateListMessage());
+  assert.equal(await runCli(["list"]), createTemplateListMessage());
   assert.equal(await runCli(["template", "list"]), createTemplateListMessage());
+  assert.equal(await runCli(["template", "info", "--help"]), createTemplateInfoHelpMessage());
+  assert.equal(await runCli(["template", "info", "-h"]), createTemplateInfoHelpMessage());
   assert.equal(await runCli(["template", "info", "vue3"]), createTemplateInfoMessage("vue3"));
   await assert.rejects(() => runCli(["template", "info"]), /Missing value for template info/);
 });
@@ -759,6 +775,31 @@ test("runCli initializes projects", async () => {
     assert.match(message, /^Created demo from default@latest\nLocation: /);
     assert.match(message, /Next steps:\n  cd demo\n  pnpm dev/);
     assert.equal(await readFile(join(cwd, "demo", "src/index.js"), "utf8"), "console.log(\"demo is ready\");\n");
+  } finally {
+    await rm(cwd, { force: true, recursive: true });
+  }
+});
+
+test("runInteractiveInit uses default answers", async () => {
+  const cwd = await mkdtemp(join(tmpdir(), "quick-start-"));
+  const prompts = {
+    answers: ["", ""],
+    closed: false,
+    async question() {
+      return this.answers.shift() ?? "";
+    },
+    close() {
+      this.closed = true;
+    }
+  };
+
+  try {
+    const message = await runInteractiveInit(cwd, prompts, "local");
+
+    assert.equal(prompts.closed, true);
+    assert.match(message, /^Created quick-start-app from default@latest\nLocation: /);
+    assert.match(message, /Next steps:\n  cd quick-start-app\n  pnpm dev/);
+    assert.equal(await readFile(join(cwd, "quick-start-app", "src/index.js"), "utf8"), "console.log(\"quick-start-app is ready\");\n");
   } finally {
     await rm(cwd, { force: true, recursive: true });
   }

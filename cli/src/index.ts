@@ -69,6 +69,11 @@ export interface TemplateInfoOptions {
   refresh?: boolean;
 }
 
+export interface InteractiveInitPrompts {
+  question(prompt: string): Promise<string>;
+  close(): void;
+}
+
 export interface DoctorOptions {
   cwd: string;
   json?: boolean;
@@ -137,6 +142,8 @@ export function createHelpMessage() {
     "  tsu-cli doctor [--cwd <path>] [--json]",
     "  tsu-cli upgrade-check [--cwd <path>] [--repo <owner/repo>] [--json]",
     "  tsu-cli templates",
+    "  tsu-cli list",
+    "  tsu-cli template list",
     "  tsu-cli template info <name> [--version <value>] [--repo <owner/repo>] [--no-cache] [--refresh]",
     "  tsu-cli template versions [name] [--repo <owner/repo>] [--no-cache] [--refresh]",
     "  tsu-cli --help",
@@ -146,7 +153,7 @@ export function createHelpMessage() {
     "  init [project-name]    Create a project from a template",
     "  doctor                 Check a generated project",
     "  upgrade-check          Check for newer template releases",
-    "  templates              List available templates",
+    "  templates              List available templates (aliases: list, template list)",
     "  template info <name>   Show template details",
     "  template versions      List template release versions",
     "",
@@ -185,6 +192,26 @@ export function createHelpMessage() {
 
 export function createVersionMessage() {
   return cliVersion;
+}
+
+export function createTemplateInfoHelpMessage() {
+  return [
+    "Show details for a local or versioned template.",
+    "",
+    "Usage:",
+    "  tsu-cli template info <name> [options]",
+    "",
+    "Options:",
+    "  -v, --version <value>   Template release version, for example 1.0.3 or latest",
+    "      --repo <owner/repo> Template release repository",
+    "      --no-cache          Do not read from or write to the local template cache",
+    "      --refresh           Re-download and refresh the local template cache",
+    "",
+    "Examples:",
+    "  tsu-cli template info vue3",
+    "  tsu-cli template info vue3 --version 1.2.3",
+    "  tsu-cli template info vue3 --version 1.2.3 --repo company/templates"
+  ].join("\n");
 }
 
 export function createTemplateListMessage() {
@@ -607,6 +634,10 @@ export async function runCli(args: string[], cwd = process.cwd()) {
   }
 
   if (command === "template" && commandArgs[0] === "info") {
+    if (commandArgs.includes("--help") || commandArgs.includes("-h")) {
+      return createTemplateInfoHelpMessage();
+    }
+
     const options = parseTemplateInfoArgs(commandArgs.slice(1));
 
     if (!options.version) {
@@ -639,15 +670,15 @@ export async function runCli(args: string[], cwd = process.cwd()) {
   throw new Error(`Unknown command: ${command}. Run tsu-cli --help for usage.`);
 }
 
-export async function runInteractiveInit(cwd = process.cwd()) {
-  const rl = createInterface({ input, output });
+export async function runInteractiveInit(cwd = process.cwd(), prompts?: InteractiveInitPrompts, source: TemplateSource = "remote") {
+  const rl = prompts ?? createInterface({ input, output });
 
   try {
     const projectNameAnswer = await rl.question("Project name (quick-start-app): ");
     const templateNameAnswer = await rl.question(`Template (${templateNames.join("/")}) [default]: `);
     const projectName = projectNameAnswer.trim() || "quick-start-app";
     const templateName = (templateNameAnswer.trim() || "default") as TemplateName;
-    const options = parseInitArgs([projectName, "--template", templateName], cwd);
+    const options = parseInitArgs([projectName, "--template", templateName, ...(source === "local" ? ["--local"] : [])], cwd);
     const result = await initProject(options);
 
     return createSuccessMessage(options, result.targetDir);
