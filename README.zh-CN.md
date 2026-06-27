@@ -210,6 +210,12 @@ Tsu 由多个包组成，但产品入口和短期核心价值集中在 CLI 与�
 
 短期内，主要用户价值是 `@tsuz/cli` 加项目模板。components、utils、sdk 后续应逐步成为生成项目里的默认能力层。
 
+## 模板源状态
+
+模板源统一已在 `master` 完成。`@tsuz/template` 是内置模板定义和渲染逻辑的唯一源头；`@tsuz/cli` 在 `--local` 本地生成项目时依赖它，GitHub Release 模板资产也由同一个 template 包构建。
+
+旧的 CLI 内部重复模板源码和 MFE 同步脚本流程不再是当前架构。
+
 ## Roadmap
 
 当前重点：

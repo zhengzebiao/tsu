@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { join } from "node:path";
 import test from "node:test";
 import {
   compareTemplateVersions,
@@ -85,9 +86,9 @@ test("getTemplateCachePaths keeps repositories isolated", () => {
   try {
     process.env.TSU_TEMPLATE_CACHE_DIR = "/cache";
     assert.deepEqual(getTemplateCachePaths("company/templates", "tsu-templates-v1.2.3.tar.gz"), {
-      repositoryDir: "/cache/company/templates",
-      archivePath: "/cache/company/templates/tsu-templates-v1.2.3.tar.gz",
-      bundleDir: "/cache/company/templates/tsu-templates-v1.2.3",
+      repositoryDir: join("/cache", "company", "templates"),
+      archivePath: join("/cache", "company", "templates", "tsu-templates-v1.2.3.tar.gz"),
+      bundleDir: join("/cache", "company", "templates", "tsu-templates-v1.2.3"),
       bundleName: "tsu-templates-v1.2.3"
     });
   } finally {

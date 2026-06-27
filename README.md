@@ -212,6 +212,12 @@ Tsu is organized as a small product suite:
 
 Short term, the main user value is `@tsuz/cli` plus the project templates. Components, utils, and SDK packages are intended to become default capability layers inside generated projects.
 
+## Template Source Status
+
+Template source unification is complete on `master`. `@tsuz/template` is the single source for built-in template definitions and rendering logic. `@tsuz/cli` depends on it for `--local` project generation, and GitHub Release template assets are built from the same template package.
+
+The old CLI-local duplicate template sources and MFE sync-only flow are no longer the intended architecture.
+
 ## Roadmap
 
 Current focus:
