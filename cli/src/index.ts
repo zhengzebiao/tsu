@@ -135,7 +135,7 @@ export function createCliMessage() {
 
 export function createHelpMessage() {
   return [
-    "Tsu CLI - create versioned frontend project templates.",
+    "Tsu CLI - create versioned project templates.",
     "",
     "Usage:",
     "  tsu-cli init [project-name] [options]",
@@ -158,7 +158,7 @@ export function createHelpMessage() {
     "  template versions      List template release versions",
     "",
     "Init options:",
-    "  -t, --template <name>  Template name: default, vue3, react, mfe, monorepo",
+    "  -t, --template <name>  Template name: default, vue3, react, mfe, monorepo, python-main, python-app",
     "  -v, --version <value>  Template version, for example 1.0.3 or latest",
     "      --repo <owner/repo> Template release repository",
     "      --cwd <path>       Directory to create the project in",
@@ -859,7 +859,9 @@ const templateExpectedFiles: Record<string, string[]> = {
   monorepo: ["package.json", "README.md", "pnpm-workspace.yaml", "turbo.json"],
   vue3: ["package.json", "README.md", "src/main.ts", "src/App.vue", "vite.config.ts"],
   mfe: ["package.json", "README.md", "apps/host/package.json", "apps/subapp/package.json", "packages/shared/src/index.ts"],
-  react: ["package.json", "README.md", "src/main.tsx", "src/App.tsx", "vite.config.ts"]
+  react: ["package.json", "README.md", "src/main.tsx", "src/App.tsx", "vite.config.ts"],
+  "python-main": ["pyproject.toml", "README.md", "app/main.py", "app/api/auth.py", "app/core/config.py"],
+  "python-app": ["pyproject.toml", "README.md", "app/main.py", "app/api/example.py", "app/deps/auth.py"]
 };
 
 function pass(label: string, details?: string): DoctorCheck {

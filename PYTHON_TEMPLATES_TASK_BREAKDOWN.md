@@ -4,6 +4,38 @@
 > 来源方案：[PYTHON_TEMPLATES_ARCHITECTURE.md](PYTHON_TEMPLATES_ARCHITECTURE.md)  
 > 目标：将 `python-main` 与 `python-app` 两个 FastAPI 后端模板的建设工作拆分为可执行、可验收的阶段任务。
 
+## 0. 当前执行状态
+
+> 状态更新时间：2026-06-30  
+> 当前实现分支：`implement-python-templates`
+
+| 阶段 | 状态 | 说明 |
+| --- | --- | --- |
+| 阶段 0：模板范围确认与目录准备 | 已完成 | 已注册 `python-main` / `python-app`，并建立生成文件结构 |
+| 阶段 1：公共 FastAPI 工程骨架 | 已完成 | 已生成 FastAPI 入口、配置、PostgreSQL、SQLAlchemy、Alembic、Redis、健康检查和 pytest 基础结构 |
+| 阶段 2：Swagger / OpenAPI 支持 | 已完成 | 已支持 `OPENAPI_ENABLED` / `DOCS_ENABLED` / `REDOC_ENABLED`，test 默认开启，product 默认关闭 |
+| 阶段 3：日志记录基础设施 | 已完成 | 已生成 JSON 日志基础设施和 `X-Request-ID` middleware |
+| 阶段 4：`python-main` 认证中心核心能力 | 部分完成 | 已生成登录、刷新、注销、当前用户、RS256 token service、refresh token service、blacklist service 的模板骨架；真实账号校验、完整 rotation 语义和数据库集成仍需深化 |
+| 阶段 5：Redis Token 状态管理 | 部分完成 | 已生成 refresh token hash、session revoke、jti blacklist 服务骨架；并发刷新、宽限期和泄露判定仍需深化 |
+| 阶段 6：`python-app` 业务服务鉴权能力 | 部分完成 | 已生成 Bearer Token 解析、公钥校验、issuer/audience/exp 校验和 Redis 黑名单读取骨架；roles/scope 策略仍需深化 |
+| 阶段 7：Alembic、Seed 与数据库策略 | 部分完成 | 已生成 Alembic 环境和 seed 入口；具体 migration、默认数据和幂等 seed 逻辑仍需深化 |
+| 阶段 8：Docker 与 Nginx | 已完成基础版 | 已生成 Dockerfile、开发 compose、Nginx 反向代理、安全响应头和 Request ID 透传；Dockerfile 使用生产 Gunicorn + Uvicorn Worker，compose 使用开发 Uvicorn `--reload` |
+| 阶段 9：GitHub Actions / Secrets / Environments | 部分完成 | 已生成基础 CI；docker push、deploy test/product、GitHub Environments 保护规则仍需深化 |
+| 阶段 10：测试覆盖与验收 | 部分完成 | 已补模板生成测试、CLI 初始化测试和生成文件 Python 语法 smoke check；业务级 pytest 和端到端认证测试仍需深化 |
+| 阶段 11：README 与模板使用文档 | 部分完成 | 已生成 README 基础说明、开发/生产 app server 说明和安全说明；完整接口、部署、Secrets 和 FAQ 仍需深化 |
+
+本轮已验证：
+
+```bash
+pnpm --filter @tsuz/template lint
+pnpm --filter @tsuz/template build
+pnpm --filter @tsuz/template test
+pnpm --filter @tsuz/cli lint
+pnpm --filter @tsuz/cli build
+pnpm --filter @tsuz/cli test
+python -m compileall -q tmp/python-template-smoke/auth-service/app tmp/python-template-smoke/backend-api/app
+```
+
 ## 1. 总体目标
 
 新增两个联动后端模板：
@@ -73,6 +105,11 @@
    - `APP_ENV`
    - `DEBUG`
    - `LOG_LEVEL`
+   - `LOG_FORMAT`
+   - `REQUEST_ID_HEADER`
+   - `WEB_CONCURRENCY`
+   - `GUNICORN_TIMEOUT`
+   - `GUNICORN_GRACEFUL_TIMEOUT`
    - `SERVICE_NAME`
    - `API_PREFIX`
 4. 增加 PostgreSQL 数据库配置。
@@ -425,30 +462,33 @@ GET /api/profile
 ### 任务
 
 1. 为两个模板增加 `Dockerfile`。
-2. 为两个模板增加 `docker-compose.yml`。
-3. compose 中包含：
+2. Dockerfile 默认使用生产启动方式：Gunicorn + Uvicorn Worker。
+3. 为两个模板增加 `docker-compose.yml`。
+4. 默认 compose 使用开发启动方式：Uvicorn `--reload`。
+5. compose 中包含：
    - FastAPI 服务
    - PostgreSQL
    - Redis
    - Nginx
-4. 镜像 tag 不默认只用 `latest`。
-5. README 中说明推荐 tag：
+6. 镜像 tag 不默认只用 `latest`。
+7. README 中说明推荐 tag：
    - `service-name:test-<git-sha>`
    - `service-name:product-<version>`
    - `service-name:product-<git-sha>`
-6. Nginx 增加：
+8. Nginx 增加：
    - 反向代理 FastAPI
    - 健康检查入口
    - 请求体大小限制
    - 安全响应头
    - `X-Request-ID` 透传
-7. product 可选 HSTS。
-8. Nginx access log 不记录 Authorization header 或 Cookie 全文。
-9. Docker 容器日志输出到 stdout / stderr。
+9. product 可选 HSTS。
+10. Nginx access log 不记录 Authorization header 或 Cookie 全文。
+11. Docker 容器日志输出到 stdout / stderr。
 
 ### 交付物
 
-- 两个模板都可以通过 Docker Compose 启动。
+- 两个模板都可以通过 Docker Compose 以开发模式启动。
+- 生产镜像默认使用 Gunicorn + Uvicorn Worker 启动 FastAPI。
 - Nginx 可代理服务。
 - Nginx 可透传 Request ID。
 - README 说明应用镜像回滚方式。
@@ -572,16 +612,17 @@ GET /api/profile
 
 1. 项目定位。
 2. 环境变量。
-3. 本地启动。
-4. 登录 / 刷新 / 注销 / 当前用户接口。
-5. JWT 私钥、公钥配置方式。
-6. Redis key 说明。
-7. Refresh Token Rotation 说明。
-8. Alembic 说明。
-9. seed 说明。
-10. 日志与 Request ID 说明。
-11. Docker 说明。
-12. GitHub Secrets 说明。
+3. 本地启动：Uvicorn `--reload`。
+4. 生产启动：Gunicorn + Uvicorn Worker。
+5. 登录 / 刷新 / 注销 / 当前用户接口。
+6. JWT 私钥、公钥配置方式。
+7. Redis key 说明。
+8. Refresh Token Rotation 说明。
+9. Alembic 说明。
+10. seed 说明。
+11. 日志与 Request ID 说明。
+12. Docker 说明。
+13. GitHub Secrets 说明。
 
 #### `python-app` README
 
@@ -594,8 +635,10 @@ GET /api/profile
 5. Redis 黑名单说明。
 6. 权限校验说明。
 7. 日志与 Request ID 说明。
-8. Docker 说明。
-9. GitHub Secrets 说明。
+8. 本地启动：Uvicorn `--reload`。
+9. 生产启动：Gunicorn + Uvicorn Worker。
+10. Docker 说明。
+11. GitHub Secrets 说明。
 
 #### 安全原则
 
@@ -607,7 +650,8 @@ README 中必须明确：
 4. Refresh Token 不明文存 Redis。
 5. product 默认关闭公开 Swagger。
 6. product 数据库迁移优先向前兼容。
-7. 日志中不能记录 token、密码、密钥和 secrets。
+7. 开发环境使用 Uvicorn，生产环境使用 Gunicorn + Uvicorn Worker。
+8. 日志中不能记录 token、密码、密钥和 secrets。
 
 ### 交付物
 
@@ -656,17 +700,18 @@ README 中必须明确：
 
 1. 两个模板目录可生成。
 2. 两个模板 FastAPI 可启动。
-3. 两个模板支持基础日志和 `X-Request-ID`。
-4. `python-main` 支持：
+3. 开发环境使用 Uvicorn `--reload`，生产镜像使用 Gunicorn + Uvicorn Worker。
+4. 两个模板支持基础日志和 `X-Request-ID`。
+5. `python-main` 支持：
    - `/auth/login`
    - `/auth/me`
    - RS256 JWT 签发
-5. `python-app` 支持：
+6. `python-app` 支持：
    - Bearer Token 验证
    - `/api/profile`
-6. Redis 支持 jti 黑名单读取。
-7. test 环境 Swagger 开启。
-8. pytest 覆盖登录、鉴权、黑名单和日志脱敏核心流程。
+7. Redis 支持 jti 黑名单读取。
+8. test 环境 Swagger 开启。
+9. pytest 覆盖登录、鉴权、黑名单和日志脱敏核心流程。
 
 后续再补：
 
