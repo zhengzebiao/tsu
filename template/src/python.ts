@@ -416,12 +416,20 @@ dependencies = [
   "email-validator>=2.2.0"
 ]
 
-[project.optional-dependencies]
+[dependency-groups]
 dev = [
   "pytest>=8.3.4",
   "httpx>=0.28.1",
   "ruff>=0.8.4"
 ]
+
+[tool.pdm.scripts]
+dev = "uvicorn app.main:app --reload --host 0.0.0.0 --port 8000"
+lint = "ruff check ."
+test = "pytest"
+migrate = "alembic upgrade head"
+alembic-current = "alembic current"
+seed = "python -m app.seed"
 
 [tool.pytest.ini_options]
 pythonpath = ["."]
@@ -465,10 +473,14 @@ __pycache__
 WORKDIR /app
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
-    PYTHONUNBUFFERED=1
+    PYTHONUNBUFFERED=1 \
+    PDM_VENV_IN_PROJECT=1 \
+    PATH="/app/.venv/bin:$PATH"
+
+RUN pip install --no-cache-dir pdm
 
 COPY pyproject.toml ./
-RUN pip install --no-cache-dir ".[dev]"
+RUN pdm install --prod --no-self
 
 COPY . .
 
@@ -566,10 +578,10 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-          cache: pip
-      - run: pip install -e ".[dev]"
-      - run: ruff check .
-      - run: pytest
+      - run: pipx install pdm
+      - run: pdm install
+      - run: pdm run lint
+      - run: pdm run test
 `
     },
     {
@@ -1039,6 +1051,7 @@ ${options.readmeSections.map((section) => `- ${section}`).join("\n")}
 ## Tech Stack
 
 - FastAPI
+- PDM
 - PostgreSQL
 - SQLAlchemy 2.x
 - Alembic
@@ -1054,13 +1067,11 @@ ${options.readmeSections.map((section) => `- ${section}`).join("\n")}
 Use Uvicorn directly during local development so reloads and tracebacks stay simple:
 
 \`\`\`bash
-python -m venv .venv
-source .venv/bin/activate
-pip install -e ".[dev]"
-uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+pdm install
+pdm run dev
 \`\`\`
 
-The default \`docker-compose.yml\` is also development-oriented and runs Uvicorn with \`--reload\` plus a source-code volume mount.
+PDM manages the virtual environment, dependency groups, and project scripts. The default \`docker-compose.yml\` is also development-oriented and runs Uvicorn with \`--reload\` plus a source-code volume mount.
 
 ## Production App Server
 
@@ -1083,6 +1094,15 @@ Recommended production path:
 4. Start the container with the Dockerfile CMD or an equivalent Gunicorn command.
 5. Put nginx, a cloud load balancer, or an ingress gateway in front of the app.
 
+## Dependency Management
+
+This template uses PDM with standard \`pyproject.toml\` metadata.
+
+- \`[project]\` declares runtime dependencies.
+- \`[dependency-groups].dev\` declares test and lint dependencies.
+- \`[tool.pdm.scripts]\` provides stable commands for development, linting, tests, migrations, and seed.
+- Run \`pdm lock\` after dependency changes when you want to commit a reproducible lock file.
+
 ## Environment Files
 
 - \`.env.test.example\` enables Swagger, ReDoc, and OpenAPI JSON.
@@ -1092,11 +1112,11 @@ Recommended production path:
 ## Scripts
 
 \`\`\`bash
-pytest
-ruff check .
-alembic current
-alembic upgrade head
-python -m app.seed
+pdm run test
+pdm run lint
+pdm run migrate
+pdm run seed
+pdm run alembic-current
 \`\`\`
 
 ## Project Structure

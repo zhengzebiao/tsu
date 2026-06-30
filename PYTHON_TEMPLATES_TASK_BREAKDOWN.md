@@ -12,7 +12,7 @@
 | 阶段 | 状态 | 说明 |
 | --- | --- | --- |
 | 阶段 0：模板范围确认与目录准备 | 已完成 | 已注册 `python-main` / `python-app`，并建立生成文件结构 |
-| 阶段 1：公共 FastAPI 工程骨架 | 已完成 | 已生成 FastAPI 入口、配置、PostgreSQL、SQLAlchemy、Alembic、Redis、健康检查和 pytest 基础结构 |
+| 阶段 1：公共 FastAPI 工程骨架 | 已完成 | 已生成 FastAPI 入口、PDM 依赖与脚本管理、配置、PostgreSQL、SQLAlchemy、Alembic、Redis、健康检查和 pytest 基础结构 |
 | 阶段 2：Swagger / OpenAPI 支持 | 已完成 | 已支持 `OPENAPI_ENABLED` / `DOCS_ENABLED` / `REDOC_ENABLED`，test 默认开启，product 默认关闭 |
 | 阶段 3：日志记录基础设施 | 已完成 | 已生成 JSON 日志基础设施和 `X-Request-ID` middleware |
 | 阶段 4：`python-main` 认证中心核心能力 | 部分完成 | 已生成登录、刷新、注销、当前用户、RS256 token service、refresh token service、blacklist service 的模板骨架；真实账号校验、完整 rotation 语义和数据库集成仍需深化 |
@@ -20,9 +20,9 @@
 | 阶段 6：`python-app` 业务服务鉴权能力 | 部分完成 | 已生成 Bearer Token 解析、公钥校验、issuer/audience/exp 校验和 Redis 黑名单读取骨架；roles/scope 策略仍需深化 |
 | 阶段 7：Alembic、Seed 与数据库策略 | 部分完成 | 已生成 Alembic 环境和 seed 入口；具体 migration、默认数据和幂等 seed 逻辑仍需深化 |
 | 阶段 8：Docker 与 Nginx | 已完成基础版 | 已生成 Dockerfile、开发 compose、Nginx 反向代理、安全响应头和 Request ID 透传；Dockerfile 使用生产 Gunicorn + Uvicorn Worker，compose 使用开发 Uvicorn `--reload` |
-| 阶段 9：GitHub Actions / Secrets / Environments | 部分完成 | 已生成基础 CI；docker push、deploy test/product、GitHub Environments 保护规则仍需深化 |
+| 阶段 9：GitHub Actions / Secrets / Environments | 部分完成 | 已生成基于 PDM 的基础 CI；docker push、deploy test/product、GitHub Environments 保护规则仍需深化 |
 | 阶段 10：测试覆盖与验收 | 部分完成 | 已补模板生成测试、CLI 初始化测试和生成文件 Python 语法 smoke check；业务级 pytest 和端到端认证测试仍需深化 |
-| 阶段 11：README 与模板使用文档 | 部分完成 | 已生成 README 基础说明、开发/生产 app server 说明和安全说明；完整接口、部署、Secrets 和 FAQ 仍需深化 |
+| 阶段 11：README 与模板使用文档 | 部分完成 | 已生成 README 基础说明、PDM 依赖管理说明、开发/生产 app server 说明和安全说明；完整接口、部署、Secrets 和 FAQ 仍需深化 |
 
 本轮已验证：
 
@@ -120,14 +120,15 @@ python -m compileall -q tmp/python-template-smoke/auth-service/app tmp/python-te
    - `GET /health`
 9. 增加 CORS 配置。
 10. 增加 pytest 基础测试结构。
-11. 增加 `.env.test.example` 和 `.env.product.example`。
+11. 使用 PDM 管理依赖、虚拟环境和项目脚本。
+12. 增加 `.env.test.example` 和 `.env.product.example`。
 
 ### 交付物
 
 - 两个模板都可以启动 FastAPI 应用。
 - 健康检查接口可访问。
 - 数据库和 Redis 配置路径清晰。
-- pytest 可以执行基础测试。
+- 可以通过 `pdm run test` 执行基础测试。
 
 ---
 
@@ -505,7 +506,11 @@ GET /api/profile
 ### 任务
 
 1. 增加 GitHub Actions workflow。
-2. workflow 支持：
+2. workflow 使用 PDM 安装依赖和执行脚本：
+   - `pdm install`
+   - `pdm run lint`
+   - `pdm run test`
+3. workflow 支持：
    - 安装依赖
    - lint
    - test
@@ -514,29 +519,29 @@ GET /api/profile
    - docker push
    - deploy test
    - deploy product
-3. 使用 GitHub Environments：
+4. 使用 GitHub Environments：
    - `test`
    - `product`
-4. test secrets：
+5. test secrets：
    - `TEST_DATABASE_URL`
    - `TEST_REDIS_URL`
    - `TEST_JWT_PRIVATE_KEY`
    - `TEST_JWT_PUBLIC_KEY`
    - `TEST_CORS_ALLOW_ORIGINS`
    - `TEST_DOCKER_REGISTRY_TOKEN`
-5. product secrets：
+6. product secrets：
    - `PRODUCT_DATABASE_URL`
    - `PRODUCT_REDIS_URL`
    - `PRODUCT_JWT_PRIVATE_KEY`
    - `PRODUCT_JWT_PUBLIC_KEY`
    - `PRODUCT_CORS_ALLOW_ORIGINS`
    - `PRODUCT_DOCKER_REGISTRY_TOKEN`
-6. product 环境增加保护建议：
+7. product 环境增加保护建议：
    - 人工审批
    - 只允许 master / release tag 部署
    - 限制 deploy 权限
    - product secrets 只允许 product job 读取
-7. CI/CD 日志中不打印 `.env` 完整内容或 secrets 值。
+8. CI/CD 日志中不打印 `.env` 完整内容或 secrets 值。
 
 ### 交付物
 
@@ -700,18 +705,19 @@ README 中必须明确：
 
 1. 两个模板目录可生成。
 2. 两个模板 FastAPI 可启动。
-3. 开发环境使用 Uvicorn `--reload`，生产镜像使用 Gunicorn + Uvicorn Worker。
-4. 两个模板支持基础日志和 `X-Request-ID`。
-5. `python-main` 支持：
+3. 使用 PDM 管理依赖、虚拟环境和项目脚本。
+4. 开发环境使用 Uvicorn `--reload`，生产镜像使用 Gunicorn + Uvicorn Worker。
+5. 两个模板支持基础日志和 `X-Request-ID`。
+6. `python-main` 支持：
    - `/auth/login`
    - `/auth/me`
    - RS256 JWT 签发
-6. `python-app` 支持：
+7. `python-app` 支持：
    - Bearer Token 验证
    - `/api/profile`
-7. Redis 支持 jti 黑名单读取。
-8. test 环境 Swagger 开启。
-9. pytest 覆盖登录、鉴权、黑名单和日志脱敏核心流程。
+8. Redis 支持 jti 黑名单读取。
+9. test 环境 Swagger 开启。
+10. pytest 覆盖登录、鉴权、黑名单和日志脱敏核心流程。
 
 后续再补：
 

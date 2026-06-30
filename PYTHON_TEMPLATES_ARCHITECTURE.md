@@ -44,6 +44,7 @@ python-app
 两个模板统一采用：
 
 - FastAPI
+- PDM
 - Uvicorn
 - Gunicorn
 - Uvicorn Worker
@@ -63,6 +64,71 @@ python-app
 ```text
 test
 product
+```
+
+### 2.1 依赖与脚本管理
+
+两个模板默认使用 **PDM** 管理 Python 依赖、虚拟环境和项目脚本。
+
+推荐生成：
+
+```text
+pyproject.toml
+```
+
+第一版可以不强制生成 `pdm.lock`，但 README 需要说明：依赖变更后建议执行 `pdm lock` 并提交锁文件，以提升 CI、Docker 构建和多人协作的一致性。
+
+`pyproject.toml` 建议使用标准 PEP 621 的 `[project]` 写法：
+
+```toml
+[project]
+name = "auth-service"
+version = "0.0.0"
+requires-python = ">=3.11"
+dependencies = [
+  "fastapi>=0.115.0",
+  "uvicorn[standard]>=0.34.0",
+  "gunicorn>=23.0.0",
+  "uvicorn-worker>=0.3.0",
+  "pydantic-settings>=2.7.0",
+  "sqlalchemy>=2.0.36",
+  "alembic>=1.14.0",
+  "psycopg[binary]>=3.2.3",
+  "redis>=5.2.1",
+  "pyjwt[crypto]>=2.10.1",
+  "passlib[bcrypt]>=1.7.4",
+  "email-validator>=2.2.0"
+]
+
+[dependency-groups]
+dev = [
+  "pytest>=8.3.4",
+  "httpx>=0.28.1",
+  "ruff>=0.8.4"
+]
+```
+
+统一脚本入口：
+
+```toml
+[tool.pdm.scripts]
+dev = "uvicorn app.main:app --reload --host 0.0.0.0 --port 8000"
+lint = "ruff check ."
+test = "pytest"
+migrate = "alembic upgrade head"
+alembic-current = "alembic current"
+seed = "python -m app.seed"
+```
+
+推荐常用命令：
+
+```bash
+pdm install
+pdm run dev
+pdm run lint
+pdm run test
+pdm run migrate
+pdm run seed
 ```
 
 ## 3. 认证与 Token 方案
@@ -1216,7 +1282,23 @@ add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" alway
 
 ## 14. GitHub 配置方案
 
-用到的配置都配置在 GitHub。
+用到的配置都配置在 GitHub。CI 中 Python 依赖安装和脚本执行统一使用 PDM。
+
+基础 CI 示例：
+
+```yaml
+- uses: actions/setup-python@v5
+  with:
+    python-version: "3.12"
+- run: pipx install pdm
+- run: pdm install
+- run: pdm run lint
+- run: pdm run test
+```
+
+如果模板后续生成并提交 `pdm.lock`，CI 可以增加锁文件校验，例如使用 PDM 的 frozen / lock check 流程，避免 CI 自动解析出不同依赖版本。
+
+
 
 建议使用 GitHub Environments：
 

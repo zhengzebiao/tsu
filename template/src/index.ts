@@ -83,8 +83,8 @@ export const templateDefinitions: TemplateDefinition[] = [
     tags: ["python", "fastapi", "auth", "postgresql", "redis"],
     recommendedFor: ["auth service", "jwt issuer", "backend api"],
     node: "not required",
-    packageManagers: ["pip"],
-    nextSteps: ["pip install -e .[dev]", "uvicorn app.main:app --reload"]
+    packageManagers: ["pdm"],
+    nextSteps: ["pdm install", "pdm run dev"]
   },
   {
     name: "python-app",
@@ -92,8 +92,8 @@ export const templateDefinitions: TemplateDefinition[] = [
     tags: ["python", "fastapi", "api", "postgresql", "redis"],
     recommendedFor: ["resource service", "business api", "jwt verifier"],
     node: "not required",
-    packageManagers: ["pip"],
-    nextSteps: ["pip install -e .[dev]", "uvicorn app.main:app --reload"]
+    packageManagers: ["pdm"],
+    nextSteps: ["pdm install", "pdm run dev"]
   }
 ];
 export const templateNames = templateDefinitions.map((template) => template.name);
