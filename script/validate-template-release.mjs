@@ -22,8 +22,11 @@ try {
 
   const templateNames = manifest.templates.map((template) => template.name);
 
-  if (!templateNames.includes("default") || !templateNames.includes("monorepo") || !templateNames.includes("vue3") || !templateNames.includes("mfe") || !templateNames.includes("react")) {
-    throw new Error("Release manifest does not include expected templates.");
+  const expectedTemplates = ["default", "monorepo", "vue3", "mfe", "react", "python-main", "python-app"];
+  const missingTemplates = expectedTemplates.filter((templateName) => !templateNames.includes(templateName));
+
+  if (missingTemplates.length > 0) {
+    throw new Error(`Release manifest does not include expected templates: ${missingTemplates.join(", ")}.`);
   }
 
   if (!manifest.templates.find((template) => template.name === "vue3")?.description) {
@@ -35,6 +38,12 @@ try {
   await access(join(bundleDir, "vue3", "package.json"));
   await access(join(bundleDir, "mfe", "package.json"));
   await access(join(bundleDir, "react", "package.json"));
+  await access(join(bundleDir, "python-main", "pyproject.toml"));
+  await access(join(bundleDir, "python-main", "app", "main.py"));
+  await access(join(bundleDir, "python-main", ".github", "workflows", "ci.yml"));
+  await access(join(bundleDir, "python-app", "pyproject.toml"));
+  await access(join(bundleDir, "python-app", "app", "main.py"));
+  await access(join(bundleDir, "python-app", ".github", "workflows", "ci.yml"));
   process.stdout.write(`Validated release archive ${archivePath}\n`);
 } finally {
   await rm(tempDir, { force: true, recursive: true });

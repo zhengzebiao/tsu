@@ -530,20 +530,32 @@ CMD ["sh", "-c", "gunicorn app.main:app -k uvicorn_worker.UvicornWorker --bind 0
     },
     {
       path: "nginx/default.conf",
-      content: `server {
+      content: `map $http_x_request_id $proxy_request_id {
+  default $http_x_request_id;
+  "" $request_id;
+}
+
+log_format safe_json escape=json
+  '{"time":"$time_iso8601","remote_addr":"$remote_addr","request_id":"$proxy_request_id","method":"$request_method","uri":"$uri","status":$status,"bytes_sent":$body_bytes_sent,"request_time":$request_time,"upstream_response_time":"$upstream_response_time"}';
+
+server {
   listen 80;
   server_name _;
 
   client_max_body_size 10m;
+  access_log /var/log/nginx/access.log safe_json;
+  error_log /var/log/nginx/error.log warn;
 
   add_header X-Content-Type-Options "nosniff" always;
   add_header X-Frame-Options "DENY" always;
   add_header Referrer-Policy "strict-origin-when-cross-origin" always;
   add_header Permissions-Policy "geolocation=(), camera=(), microphone=()" always;
+  # Enable only when TLS is terminated at this nginx layer and HSTS policy is approved.
+  # add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;
 
   location /health {
     proxy_pass http://api:8000/health;
-    proxy_set_header X-Request-ID $request_id;
+    proxy_set_header X-Request-ID $proxy_request_id;
     proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
     proxy_set_header X-Forwarded-Proto $scheme;
   }
@@ -551,7 +563,7 @@ CMD ["sh", "-c", "gunicorn app.main:app -k uvicorn_worker.UvicornWorker --bind 0
   location / {
     proxy_pass http://api:8000;
     proxy_set_header Host $host;
-    proxy_set_header X-Request-ID $request_id;
+    proxy_set_header X-Request-ID $proxy_request_id;
     proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
     proxy_set_header X-Forwarded-Proto $scheme;
   }
@@ -560,29 +572,7 @@ CMD ["sh", "-c", "gunicorn app.main:app -k uvicorn_worker.UvicornWorker --bind 0
     },
     {
       path: ".github/workflows/ci.yml",
-      content: `name: CI
-
-on:
-  pull_request:
-    branches:
-      - master
-  push:
-    branches:
-      - master
-
-jobs:
-  test:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-      - run: pipx install pdm
-      - run: pdm install
-      - run: pdm run lint
-      - run: pdm run test
-`
+      content: createGithubActionsWorkflow(options, includePrivateKey)
     },
     {
       path: ".env.test.example",
@@ -986,6 +976,151 @@ class BlacklistService:
   };
 }
 
+function createGithubActionsWorkflow(options: SharedPythonOptions, includePrivateKey: boolean): string {
+  const testPrivateKeySecret = includePrivateKey ? "      JWT_PRIVATE_KEY: ${{ secrets.TEST_JWT_PRIVATE_KEY }}\n" : "";
+  const productPrivateKeySecret = includePrivateKey ? "      JWT_PRIVATE_KEY: ${{ secrets.PRODUCT_JWT_PRIVATE_KEY }}\n" : "";
+
+  return `name: CI
+
+on:
+  pull_request:
+    branches:
+      - master
+  push:
+    branches:
+      - master
+    tags:
+      - "v*"
+      - "release-*"
+  workflow_dispatch:
+    inputs:
+      deploy_environment:
+        description: "Optional environment to deploy"
+        type: choice
+        default: none
+        options:
+          - none
+          - test
+          - product
+
+env:
+  IMAGE_NAME: ${options.serviceName}
+  REGISTRY: ghcr.io/\${{ github.repository_owner }}
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: test_${options.envDatabaseName}
+          POSTGRES_USER: test_user
+          POSTGRES_PASSWORD: test_password
+        ports:
+          - "5432:5432"
+        options: >-
+          --health-cmd "pg_isready -U test_user -d test_${options.envDatabaseName}"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+      redis:
+        image: redis:7-alpine
+        ports:
+          - "6379:6379"
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      APP_ENV: test
+      DATABASE_URL: postgresql+psycopg://test_user:test_password@localhost:5432/test_${options.envDatabaseName}
+      REDIS_URL: redis://localhost:6379/0
+${testPrivateKeySecret}      JWT_PUBLIC_KEY: \${{ secrets.TEST_JWT_PUBLIC_KEY }}
+      CORS_ALLOW_ORIGINS: \${{ secrets.TEST_CORS_ALLOW_ORIGINS }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pipx install pdm
+      - run: pdm install
+      - run: pdm run lint
+      - run: pdm run test
+      - name: Check Alembic migration state
+        run: pdm run alembic-current
+
+  docker-build:
+    runs-on: ubuntu-latest
+    needs: test
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build Docker image
+        run: docker build --tag "$IMAGE_NAME:test-\${{ github.sha }}" .
+
+  deploy-test:
+    runs-on: ubuntu-latest
+    needs: docker-build
+    if: github.ref == 'refs/heads/master' || (github.event_name == 'workflow_dispatch' && inputs.deploy_environment == 'test')
+    environment: test
+    env:
+      DATABASE_URL: \${{ secrets.TEST_DATABASE_URL }}
+      REDIS_URL: \${{ secrets.TEST_REDIS_URL }}
+${testPrivateKeySecret}      JWT_PUBLIC_KEY: \${{ secrets.TEST_JWT_PUBLIC_KEY }}
+      CORS_ALLOW_ORIGINS: \${{ secrets.TEST_CORS_ALLOW_ORIGINS }}
+      REGISTRY_TOKEN: \${{ secrets.TEST_DOCKER_REGISTRY_TOKEN }}
+      IMAGE_TAG: test-\${{ github.sha }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build deployment image
+        run: docker build --tag "$REGISTRY/$IMAGE_NAME:$IMAGE_TAG" .
+      - name: Login to registry
+        if: env.REGISTRY_TOKEN != ''
+        run: echo "$REGISTRY_TOKEN" | docker login "$REGISTRY" --username "\${{ github.actor }}" --password-stdin
+      - name: Push test image
+        if: env.REGISTRY_TOKEN != ''
+        run: docker push "$REGISTRY/$IMAGE_NAME:$IMAGE_TAG"
+      - name: Deploy test environment
+        run: |
+          echo "Deploy test environment with image $REGISTRY/$IMAGE_NAME:$IMAGE_TAG"
+          echo "Replace this placeholder with your test deployment command. Do not print secrets or .env contents."
+
+  deploy-product:
+    runs-on: ubuntu-latest
+    needs: docker-build
+    if: >-
+      (startsWith(github.ref, 'refs/tags/v') || startsWith(github.ref, 'refs/tags/release-')) ||
+      (github.event_name == 'workflow_dispatch' && inputs.deploy_environment == 'product' && github.ref == 'refs/heads/master')
+    environment: product
+    env:
+      DATABASE_URL: \${{ secrets.PRODUCT_DATABASE_URL }}
+      REDIS_URL: \${{ secrets.PRODUCT_REDIS_URL }}
+${productPrivateKeySecret}      JWT_PUBLIC_KEY: \${{ secrets.PRODUCT_JWT_PUBLIC_KEY }}
+      CORS_ALLOW_ORIGINS: \${{ secrets.PRODUCT_CORS_ALLOW_ORIGINS }}
+      REGISTRY_TOKEN: \${{ secrets.PRODUCT_DOCKER_REGISTRY_TOKEN }}
+      IMAGE_TAG: product-\${{ github.ref_name }}-\${{ github.sha }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build deployment image
+        run: docker build --tag "$REGISTRY/$IMAGE_NAME:$IMAGE_TAG" .
+      - name: Login to registry
+        if: env.REGISTRY_TOKEN != ''
+        run: echo "$REGISTRY_TOKEN" | docker login "$REGISTRY" --username "\${{ github.actor }}" --password-stdin
+      - name: Push product image
+        if: env.REGISTRY_TOKEN != ''
+        run: docker push "$REGISTRY/$IMAGE_NAME:$IMAGE_TAG"
+      - name: Deploy product environment
+        run: |
+          echo "Deploy product environment with image $REGISTRY/$IMAGE_NAME:$IMAGE_TAG"
+          echo "Use GitHub Environment reviewers and branch/tag rules before enabling the real deploy command."
+`;
+}
+
 function createEnvExample(env: "test" | "product", options: SharedPythonOptions, includePrivateKey: boolean) {
   const isProduct = env === "product";
   const prefix = isProduct ? "product" : "test";
@@ -1108,6 +1243,37 @@ This template uses PDM with standard \`pyproject.toml\` metadata.
 - \`.env.test.example\` enables Swagger, ReDoc, and OpenAPI JSON.
 - \`.env.product.example\` disables public docs by default.
 - Use different PostgreSQL databases, Redis instances, JWT keys, issuers, audiences, and GitHub Secrets for test and product.
+
+## GitHub Actions, Secrets, and Environments
+
+The generated \`.github/workflows/ci.yml\` keeps CI/CD environment-aware:
+
+- \`test\` runs PDM install, lint, pytest, Alembic state checks, and a Docker build.
+- \`deploy-test\` uses the GitHub Environment named \`test\` and a \`test-<git-sha>\` image tag.
+- \`deploy-product\` uses the GitHub Environment named \`product\` and only runs from release tags or a manual master deployment.
+- Deployment steps are placeholders by default; replace them with your platform command without printing \`.env\` files or secret values.
+
+Configure GitHub Environments before enabling real deploy commands:
+
+| Environment | Recommended protection |
+| --- | --- |
+| \`test\` | limited deploy credentials and test-only data stores |
+| \`product\` | required reviewers, master/release-tag restrictions, and least-privilege deploy credentials |
+
+Recommended secrets:
+
+| Scope | Secrets |
+| --- | --- |
+| test | ${options.templateName === "python-main" ? "\`TEST_JWT_PRIVATE_KEY\`, " : ""}\`TEST_DATABASE_URL\`, \`TEST_REDIS_URL\`, \`TEST_JWT_PUBLIC_KEY\`, \`TEST_CORS_ALLOW_ORIGINS\`, \`TEST_DOCKER_REGISTRY_TOKEN\` |
+| product | ${options.templateName === "python-main" ? "\`PRODUCT_JWT_PRIVATE_KEY\`, " : ""}\`PRODUCT_DATABASE_URL\`, \`PRODUCT_REDIS_URL\`, \`PRODUCT_JWT_PUBLIC_KEY\`, \`PRODUCT_CORS_ALLOW_ORIGINS\`, \`PRODUCT_DOCKER_REGISTRY_TOKEN\` |
+
+Use immutable image tags rather than relying on \`latest\`:
+
+- \`${options.serviceName}:test-<git-sha>\`
+- \`${options.serviceName}:product-<version>\`
+- \`${options.serviceName}:product-<git-sha>\`
+
+For production rollback, redeploy a previously verified image tag first. Prefer forward-compatible migrations and repair migrations over relying on database downgrades.
 
 ## Scripts
 
