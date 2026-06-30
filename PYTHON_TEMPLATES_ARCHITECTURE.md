@@ -820,9 +820,265 @@ DOCS_ENABLED=false
 REDOC_ENABLED=false
 ```
 
-## 12. Docker / Nginx / 回滚方案
+## 12. 日志记录方案
 
-### 12.1 Docker 镜像版本化
+两个模板都需要内置统一日志能力。日志用于排查问题、审计认证行为和定位线上异常，但不能泄露敏感信息。
+
+### 12.1 日志级别
+
+通过环境变量控制日志级别：
+
+```env
+LOG_LEVEL=debug
+```
+
+推荐默认值：
+
+| 环境 | LOG_LEVEL | 说明 |
+| --- | --- | --- |
+| `test` | `debug` | 方便联调、测试和定位问题 |
+| `product` | `info` | 避免输出过多调试信息 |
+
+要求：
+
+- `debug` 日志只能在 test / 本地开发环境默认开启
+- product 不应默认输出 SQL 参数、请求体明文、token 或密钥内容
+- 错误日志必须保留足够上下文，方便定位问题
+
+### 12.2 日志格式
+
+模板应支持普通文本日志和 JSON 结构化日志，product 推荐 JSON 日志，方便容器平台、日志系统和告警系统采集。
+
+推荐配置项：
+
+```env
+LOG_FORMAT=json
+REQUEST_ID_HEADER=X-Request-ID
+```
+
+JSON 日志字段建议包含：
+
+```json
+{
+  "timestamp": "2026-06-29T10:00:00Z",
+  "level": "info",
+  "service": "auth-service",
+  "env": "product",
+  "request_id": "req_abc123",
+  "message": "request completed",
+  "method": "GET",
+  "path": "/api/profile",
+  "status_code": 200,
+  "duration_ms": 12
+}
+```
+
+基础字段：
+
+| 字段 | 说明 |
+| --- | --- |
+| `timestamp` | 日志时间，建议 UTC ISO 8601 |
+| `level` | 日志级别 |
+| `service` | 服务名，例如 `auth-service` / `backend-api` |
+| `env` | `test` / `product` |
+| `request_id` | 请求链路 ID |
+| `message` | 日志说明 |
+
+HTTP 请求日志额外字段：
+
+| 字段 | 说明 |
+| --- | --- |
+| `method` | HTTP 方法 |
+| `path` | 请求路径 |
+| `status_code` | 响应状态码 |
+| `duration_ms` | 请求耗时 |
+| `client_ip` | 客户端 IP，按部署情况从代理头读取 |
+| `user_agent` | User-Agent，可选 |
+
+### 12.3 Request ID / Trace ID
+
+每个请求都应该有 `request_id`。
+
+规则：
+
+1. 如果请求头存在 `X-Request-ID`，沿用该值
+2. 如果不存在，由应用生成一个新的 UUID
+3. 响应头返回同一个 `X-Request-ID`
+4. 应用日志、错误日志和访问日志都带上 `request_id`
+5. Nginx 反向代理时需要透传 `X-Request-ID`
+
+Nginx 建议配置：
+
+```nginx
+proxy_set_header X-Request-ID $request_id;
+proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+proxy_set_header X-Forwarded-Proto $scheme;
+```
+
+### 12.4 python-main 认证安全日志
+
+`python-main` 是认证中心，需要记录关键认证事件。
+
+建议记录：
+
+| 事件 | 级别 | 说明 |
+| --- | --- | --- |
+| 登录成功 | `info` | 记录 user_id、sid、request_id |
+| 登录失败 | `warn` | 记录 username hash 或脱敏 username、失败原因 |
+| refresh 成功 | `info` | 记录 user_id、sid、旧 token hash、新 token hash |
+| refresh token 过期 | `warn` | 记录 sid、原因 |
+| refresh token 重复使用 | `warn` / `error` | 宽限期内为 warn，超过宽限期为 error |
+| session 吊销 | `warn` | 记录 user_id、sid、吊销原因 |
+| logout 成功 | `info` | 记录 user_id、sid、jti |
+| jti 写入黑名单 | `info` | 记录 jti、TTL |
+| token 校验失败 | `warn` | 记录失败原因，不记录 token 全文 |
+
+示例：
+
+```json
+{
+  "timestamp": "2026-06-29T10:00:00Z",
+  "level": "info",
+  "service": "auth-service",
+  "env": "product",
+  "request_id": "req_abc123",
+  "event": "auth.login.success",
+  "user_id": "user_123",
+  "sid": "sess_abc"
+}
+```
+
+### 12.5 python-app 鉴权日志
+
+`python-app` 不签发 token，但需要记录业务接口鉴权结果。
+
+建议记录：
+
+| 事件 | 级别 | 说明 |
+| --- | --- | --- |
+| token 缺失 | `warn` | Authorization header 不存在或格式错误 |
+| token 签名无效 | `warn` | RS256 校验失败 |
+| issuer 不匹配 | `warn` | `iss` 不符合配置 |
+| audience 不匹配 | `warn` | `aud` 不符合配置 |
+| token 过期 | `info` | 正常过期可用 info |
+| jti 命中黑名单 | `warn` | token 已注销或被吊销 |
+| 权限不足 | `warn` | roles / scope 不满足接口要求 |
+| 鉴权成功 | `debug` | product 不建议默认输出每次成功鉴权详情 |
+
+业务接口访问日志需要带：
+
+- `request_id`
+- `user_id`
+- `sid`
+- `jti`
+- `path`
+- `method`
+- `status_code`
+- `duration_ms`
+
+其中 `jti` 可以记录，access token 全文不能记录。
+
+### 12.6 敏感信息脱敏规则
+
+日志中禁止记录以下内容：
+
+- 明文密码
+- access token 全文
+- refresh token 全文
+- `Authorization` header 全文
+- JWT private key
+- JWT public key 原文
+- 数据库密码
+- Redis 密码
+- Cookie 全文
+- GitHub Secrets 值
+
+允许记录：
+
+- `user_id`
+- `sid`
+- `jti`
+- refresh token 的 hash 前缀或完整 hash
+- 脱敏 username，例如 `ad***@example.com`
+- 错误类型和失败原因
+
+推荐做法：
+
+```text
+Authorization: Bearer eyJ...  -> 不记录
+refresh_token                 -> 不记录明文，只记录 sha256(refresh_token)
+password                      -> 永不记录
+```
+
+### 12.7 数据库、Alembic 和 Seed 日志
+
+数据库相关操作需要记录执行结果，但不能泄露连接串密码。
+
+建议记录：
+
+- 应用启动时数据库连接检查结果
+- Alembic 当前版本
+- migration upgrade 成功 / 失败
+- seed 开始 / 完成 / 跳过原因
+- seed 创建了哪些默认对象的 ID
+
+要求：
+
+- 不记录完整 `DATABASE_URL`
+- product seed 必须记录触发人或触发来源
+- migration 失败必须输出 revision id 和错误原因
+
+### 12.8 Nginx 和容器日志
+
+Nginx 需要保留：
+
+- access log
+- error log
+
+access log 建议包含：
+
+- request id
+- remote addr
+- method
+- path
+- status
+- request time
+- upstream response time
+
+但不应记录：
+
+- Authorization header
+- Cookie 全文
+- token 参数
+
+Docker 容器日志建议输出到 stdout / stderr，由运行平台统一采集，不默认写入容器内长期文件。
+
+### 12.9 GitHub Actions 日志
+
+CI/CD 日志需要避免泄露 secrets。
+
+要求：
+
+- 不打印 `.env` 完整内容
+- 不打印 JWT private key / public key
+- 不打印数据库连接串明文
+- 使用 GitHub Secrets 注入敏感配置
+- 部署失败时只输出必要错误信息
+
+### 12.10 日志测试要求
+
+模板测试建议覆盖：
+
+1. 登录失败会产生 `auth.login.failed` 日志
+2. logout 会产生 `auth.logout.success` 和黑名单写入日志
+3. refresh token 重复使用会产生安全日志
+4. 黑名单 token 被 `python-app` 拒绝时会产生日志
+5. 日志中不包含 access token / refresh token / password / private key
+6. 每个请求响应都包含 `X-Request-ID`
+
+## 13. Docker / Nginx / 回滚方案
+
+### 13.1 Docker 镜像版本化
 
 不要只用：
 
@@ -847,7 +1103,7 @@ auth-service:product-a1b2c3d
 backend-api:product-v1.2.0
 ```
 
-### 12.2 回滚方式
+### 13.2 回滚方式
 
 应用回滚：
 
@@ -864,7 +1120,7 @@ docker compose up -d auth-service
 - Alembic downgrade 不作为 product 默认回滚手段
 - product 数据库变更要使用向前兼容策略
 
-### 12.3 Nginx 职责
+### 13.3 Nginx 职责
 
 Nginx 用于：
 
@@ -889,7 +1145,7 @@ product 如果由 Nginx 负责 HTTPS，可以增加：
 add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;
 ```
 
-## 13. GitHub 配置方案
+## 14. GitHub 配置方案
 
 用到的配置都配置在 GitHub。
 
@@ -902,7 +1158,7 @@ product
 
 分别配置不同 secrets。
 
-### 13.1 test secrets
+### 14.1 test secrets
 
 ```text
 TEST_DATABASE_URL
@@ -913,7 +1169,7 @@ TEST_CORS_ALLOW_ORIGINS
 TEST_DOCKER_REGISTRY_TOKEN
 ```
 
-### 13.2 product secrets
+### 14.2 product secrets
 
 ```text
 PRODUCT_DATABASE_URL
@@ -924,7 +1180,7 @@ PRODUCT_CORS_ALLOW_ORIGINS
 PRODUCT_DOCKER_REGISTRY_TOKEN
 ```
 
-### 13.3 product 保护规则
+### 14.3 product 保护规则
 
 product 环境建议启用：
 
@@ -933,11 +1189,11 @@ product 环境建议启用：
 - 限制谁可以触发 product deploy
 - product secrets 只允许 product job 读取
 
-## 14. Seed 数据方案
+## 15. Seed 数据方案
 
 两个模板都可以内置 seed。
 
-### 14.1 python-main seed
+### 15.1 python-main seed
 
 适合初始化：
 
@@ -959,7 +1215,7 @@ python -m app.seed
 - 不覆盖 product 已修改数据
 - product 默认不自动 seed
 
-### 14.2 python-app seed
+### 15.2 python-app seed
 
 适合初始化：
 
@@ -970,9 +1226,9 @@ python -m app.seed
 test 环境可以自动 seed。  
 product 环境建议手动执行，并需要明确确认。
 
-## 15. 模板生成内容建议
+## 16. 模板生成内容建议
 
-### 15.1 python-main 目录结构
+### 16.1 python-main 目录结构
 
 ```text
 python-main/
@@ -1010,7 +1266,7 @@ python-main/
   README.md
 ```
 
-### 15.2 python-app 目录结构
+### 16.2 python-app 目录结构
 
 ```text
 python-app/
@@ -1039,9 +1295,9 @@ python-app/
   README.md
 ```
 
-## 16. 优化点汇总
+## 17. 优化点汇总
 
-### 16.1 明确 Access Token 不存 Redis
+### 17.1 明确 Access Token 不存 Redis
 
 优化前容易误解为所有 token 都存 Redis。  
 优化后明确为：
@@ -1057,7 +1313,7 @@ Refresh Token / Session / Blacklist 存 Redis
 - Redis 只承载可撤销状态
 - 性能和存储成本更合理
 
-### 16.2 黑名单统一使用 jti
+### 17.2 黑名单统一使用 jti
 
 优化点：
 
@@ -1074,7 +1330,7 @@ blacklist:jti:<jti>
 - 更利于排查和审计
 - TTL 更容易控制
 
-### 16.3 明确黑名单是共享状态
+### 17.3 明确黑名单是共享状态
 
 优化后：
 
@@ -1088,7 +1344,7 @@ blacklist:jti:<jti>
 - 认证主服务和业务服务状态一致
 - 支持未来强制下线、风险冻结等场景
 
-### 16.4 RS256 职责边界更清晰
+### 17.4 RS256 职责边界更清晰
 
 优化后：
 
@@ -1102,7 +1358,7 @@ blacklist:jti:<jti>
 - 更适合多服务扩展
 - 后续可平滑升级到 JWKS
 
-### 16.5 公钥私钥通过环境变量管理
+### 17.5 公钥私钥通过环境变量管理
 
 优化点：
 
@@ -1116,7 +1372,7 @@ blacklist:jti:<jti>
 - test/product 可完全隔离
 - 方便后续密钥轮换
 
-### 16.6 Refresh Token 策略更完整
+### 17.6 Refresh Token 策略更完整
 
 优化后采用：
 
@@ -1131,7 +1387,7 @@ blacklist:jti:<jti>
 - 支持 refresh token 泄露检测
 - 减少误踢用户
 
-### 16.7 明确 audience 只有一个服务
+### 17.7 明确 audience 只有一个服务
 
 优化前可能设计成多 audience。  
 现在简化为：
@@ -1158,7 +1414,7 @@ JWT_AUDIENCE=backend-api
 - 用户更容易理解
 - 仍然保留环境隔离能力
 
-### 16.8 test / product 完全隔离
+### 17.8 test / product 完全隔离
 
 优化后明确：
 
@@ -1177,7 +1433,7 @@ JWT_AUDIENCE=backend-api
 - test 数据库不会误操作 product
 - product 部署权限可控
 
-### 16.9 Alembic downgrade 定位更安全
+### 17.9 Alembic downgrade 定位更安全
 
 优化后明确：
 
@@ -1192,7 +1448,7 @@ product 默认推荐向前兼容迁移
 - 降低生产数据丢失风险
 - 和 Docker 镜像回滚策略区分清楚
 
-### 16.10 Docker 回滚方案更明确
+### 17.10 Docker 回滚方案更明确
 
 优化后要求：
 
@@ -1208,7 +1464,7 @@ product 默认推荐向前兼容迁移
 - 可快速回滚
 - 符合 CI/CD 发布规范
 
-## 17. 最终推荐方案总结
+## 18. 最终推荐方案总结
 
 这两个模板最终可以定义为：
 
