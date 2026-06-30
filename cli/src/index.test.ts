@@ -922,7 +922,11 @@ test("runCli initializes python-main projects", async () => {
     assert.match(await readFile(join(cwd, "auth-service", "Dockerfile"), "utf8"), /uvicorn_worker\.UvicornWorker/);
     assert.match(await readFile(join(cwd, "auth-service", "docker-compose.yml"), "utf8"), /uvicorn app\.main:app --reload/);
     assert.match(await readFile(join(cwd, "auth-service", "app", "api", "auth.py"), "utf8"), /def login/);
+    assert.match(await readFile(join(cwd, "auth-service", "app", "api", "auth.py"), "utf8"), /HTTP_401_UNAUTHORIZED/);
+    assert.match(await readFile(join(cwd, "auth-service", "app", "services", "auth_service.py"), "utf8"), /password123/);
     assert.match(await readFile(join(cwd, "auth-service", "app", "services", "token_service.py"), "utf8"), /jwt.encode/);
+    assert.match(await readFile(join(cwd, "auth-service", "tests", "test_auth_api.py"), "utf8"), /test_login_failure_returns_401/);
+    assert.match(await readFile(join(cwd, "auth-service", "tests", "test_token_service.py"), "utf8"), /required_payload_claims/);
     assert.match(await readFile(join(cwd, "auth-service", ".env.test.example"), "utf8"), /JWT_PRIVATE_KEY/);
     assert.match(await readFile(join(cwd, "auth-service", ".env.product.example"), "utf8"), /DOCS_ENABLED=false/);
     assert.match(await readFile(join(cwd, "auth-service", "nginx", "default.conf"), "utf8"), /X-Request-ID/);
@@ -963,7 +967,10 @@ test("runCli initializes python-app projects", async () => {
     assert.match(await readFile(join(cwd, "backend-api", "Dockerfile"), "utf8"), /gunicorn app\.main:app/);
     assert.match(await readFile(join(cwd, "backend-api", "docker-compose.yml"), "utf8"), /uvicorn app\.main:app --reload/);
     assert.match(await readFile(join(cwd, "backend-api", "app", "api", "example.py"), "utf8"), /\/api/);
+    assert.match(await readFile(join(cwd, "backend-api", "app", "api", "example.py"), "utf8"), /require_scope/);
     assert.match(await readFile(join(cwd, "backend-api", "app", "deps", "auth.py"), "utf8"), /jwt.decode/);
+    assert.match(await readFile(join(cwd, "backend-api", "app", "deps", "auth.py"), "utf8"), /HTTP_403_FORBIDDEN/);
+    assert.match(await readFile(join(cwd, "backend-api", "tests", "test_profile_api.py"), "utf8"), /test_profile_rejects_insufficient_scope/);
     assert.doesNotMatch(await readFile(join(cwd, "backend-api", ".env.test.example"), "utf8"), /JWT_PRIVATE_KEY/);
     assert.match(await readFile(join(cwd, "backend-api", ".env.test.example"), "utf8"), /JWT_PUBLIC_KEY/);
     assert.match(await readFile(join(cwd, "backend-api", "tests", "test_health.py"), "utf8"), /X-Request-ID/);

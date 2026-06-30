@@ -6,9 +6,9 @@
 
 ## 0. 当前执行状态
 
-> 状态更新时间：2026-06-30  
+> 状态更新时间：2026-07-01  
 > 当前实现分支：`implement-python-templates`
-> 当前推进阶段：阶段 10：测试覆盖与验收（阶段 9 已补齐基础 CI/CD、docker build/push、test/product environments 与 deploy 占位模板）
+> 当前推进阶段：阶段 10：测试覆盖与验收（已补基础 auth/profile pytest、生成项目 pytest 验证；端到端联调、日志脱敏和完整 rotation/reuse 场景后续继续）
 
 | 阶段 | 状态 | 说明 |
 | --- | --- | --- |
@@ -22,7 +22,7 @@
 | 阶段 7：Alembic、Seed 与数据库策略 | 部分完成 | 已生成 Alembic 环境和 seed 入口；具体 migration、默认数据和幂等 seed 逻辑仍需深化 |
 | 阶段 8：Docker 与 Nginx | 已完成基础版 | 已生成 Dockerfile、开发 compose、Nginx 反向代理、安全响应头和 Request ID 透传；Dockerfile 使用生产 Gunicorn + Uvicorn Worker，compose 使用开发 Uvicorn `--reload` |
 | 阶段 9：GitHub Actions / Secrets / Environments | 已完成基础 deploy 模板 | 已生成 PDM CI、Alembic 状态检查、Docker build、test/product environment、docker push 与 deploy 占位 job；README 已说明 secrets 分离和 product 保护规则，真实平台 deploy 命令留给使用方替换 |
-| 阶段 10：测试覆盖与验收 | 部分完成 | 已补模板生成测试、CLI 初始化测试、生成文件 Python 语法 smoke check和 release bundle 校验；业务级 pytest 和端到端认证测试仍需深化 |
+| 阶段 10：测试覆盖与验收 | 部分完成 | 已补模板生成测试、CLI 初始化测试、release bundle 校验、生成文件 Python 语法 smoke check、`python-main` auth/token pytest、`python-app` profile/auth pytest，并已验证生成项目 pytest；跨服务端到端认证、日志脱敏和完整 refresh reuse/session revoke 场景仍需深化 |
 | 阶段 11：README 与模板使用文档 | 部分完成 | 已生成 README 基础说明、PDM 依赖管理说明、开发/生产 app server 说明、安全说明、基础部署、Secrets 和 Environments 说明；完整接口说明和 FAQ 仍需深化 |
 
 本轮已验证：
@@ -36,7 +36,9 @@ pnpm --filter @tsuz/cli build
 pnpm --filter @tsuz/cli test
 pnpm template:release:build --version=0.0.0
 TEMPLATE_VERSION=0.0.0 pnpm validate:template-release
-python3 -m compileall -q <generated-auth-service>/app <generated-backend-api>/app
+python3 -m compileall -q <generated-auth-service>/app <generated-auth-service>/tests <generated-backend-api>/app <generated-backend-api>/tests
+PYTHONPATH=<generated-auth-service> uv run --project <generated-auth-service> --group dev pytest <generated-auth-service>/tests
+PYTHONPATH=<generated-backend-api> uv run --project <generated-backend-api> --group dev pytest <generated-backend-api>/tests
 ```
 
 ## 1. 总体目标

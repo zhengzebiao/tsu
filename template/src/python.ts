@@ -18,14 +18,25 @@ export function createPythonMainTemplateFiles(projectName: string): TemplateFile
     }),
     {
       path: "app/api/auth.py",
-      content: `from fastapi import APIRouter, Depends, status
+      content: `import jwt
+from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
 from app.schemas.auth import LoginRequest, LogoutResponse, RefreshTokenRequest, TokenResponse, UserResponse
 from app.services.auth_service import AuthService
 
 router = APIRouter(prefix="/auth", tags=["auth"])
-security = HTTPBearer(auto_error=True)
+security = HTTPBearer(auto_error=False)
+
+
+def _unauthorized(detail: str) -> HTTPException:
+    return HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=detail)
+
+
+def _require_access_token(credentials: HTTPAuthorizationCredentials | None) -> str:
+    if credentials is None:
+        raise _unauthorized("invalid access token")
+    return credentials.credentials
 
 
 @router.post(
@@ -36,7 +47,10 @@ security = HTTPBearer(auto_error=True)
     responses={401: {"description": "Invalid credentials"}},
 )
 def login(payload: LoginRequest) -> TokenResponse:
-    return AuthService().login(payload)
+    try:
+        return AuthService().login(payload)
+    except ValueError as exc:
+        raise _unauthorized("invalid credentials") from exc
 
 
 @router.post(
@@ -46,7 +60,10 @@ def login(payload: LoginRequest) -> TokenResponse:
     responses={401: {"description": "Invalid refresh token"}},
 )
 def refresh(payload: RefreshTokenRequest) -> TokenResponse:
-    return AuthService().refresh(payload.refresh_token)
+    try:
+        return AuthService().refresh(payload.refresh_token)
+    except ValueError as exc:
+        raise _unauthorized("invalid refresh token") from exc
 
 
 @router.post(
@@ -55,8 +72,11 @@ def refresh(payload: RefreshTokenRequest) -> TokenResponse:
     summary="Logout current session and blacklist current access token jti",
     responses={401: {"description": "Invalid access token"}},
 )
-def logout(credentials: HTTPAuthorizationCredentials = Depends(security)) -> LogoutResponse:
-    return AuthService().logout(credentials.credentials)
+def logout(credentials: HTTPAuthorizationCredentials | None = Depends(security)) -> LogoutResponse:
+    try:
+        return AuthService().logout(_require_access_token(credentials))
+    except (jwt.PyJWTError, ValueError) as exc:
+        raise _unauthorized("invalid access token") from exc
 
 
 @router.get(
@@ -65,8 +85,11 @@ def logout(credentials: HTTPAuthorizationCredentials = Depends(security)) -> Log
     summary="Return current authenticated user",
     responses={401: {"description": "Invalid access token"}},
 )
-def me(credentials: HTTPAuthorizationCredentials = Depends(security)) -> UserResponse:
-    return AuthService().current_user(credentials.credentials)
+def me(credentials: HTTPAuthorizationCredentials | None = Depends(security)) -> UserResponse:
+    try:
+        return AuthService().current_user(_require_access_token(credentials))
+    except (jwt.PyJWTError, ValueError) as exc:
+        raise _unauthorized("invalid access token") from exc
 `
     },
     {
@@ -167,6 +190,8 @@ class AuthService:
 
     def login(self, payload: LoginRequest) -> TokenResponse:
         # Replace this demo credential check with a database lookup.
+        if str(payload.username).lower() != "admin@example.com" or payload.password != "password123":
+            raise ValueError("invalid credentials")
         user_id = "user_123"
         sid = "sess_demo"
         access_token = self.tokens.create_access_token(user_id=user_id, sid=sid, roles=["admin"], scope="user:read")
@@ -275,7 +300,10 @@ class RefreshTokenService:
         get_redis().set(f"{settings.session_prefix}{sid}", "revoked")
 `
     },
-    createBlacklistServiceFile()
+    createBlacklistServiceFile(),
+    createPythonMainConftestFile(),
+    createPythonMainAuthApiTestFile(),
+    createPythonMainTokenServiceTestFile()
   ];
 }
 
@@ -296,7 +324,7 @@ export function createPythonAppTemplateFiles(projectName: string): TemplateFile[
       path: "app/api/example.py",
       content: `from fastapi import APIRouter, Depends
 
-from app.deps.auth import CurrentUser, get_current_user
+from app.deps.auth import CurrentUser, require_scope
 from app.schemas.profile import ProfileResponse
 
 router = APIRouter(prefix="/api", tags=["profile"])
@@ -308,7 +336,7 @@ router = APIRouter(prefix="/api", tags=["profile"])
     summary="Return the profile for the current access token",
     responses={401: {"description": "Invalid token"}, 403: {"description": "Insufficient scope or role"}},
 )
-def profile(current_user: CurrentUser = Depends(get_current_user)) -> ProfileResponse:
+def profile(current_user: CurrentUser = Depends(require_scope("user:read"))) -> ProfileResponse:
     return ProfileResponse(user_id=current_user.user_id, message="authorized")
 `
     },
@@ -318,7 +346,8 @@ def profile(current_user: CurrentUser = Depends(get_current_user)) -> ProfileRes
     },
     {
       path: "app/deps/auth.py",
-      content: `from dataclasses import dataclass
+      content: `from collections.abc import Callable
+from dataclasses import dataclass
 
 import jwt
 from fastapi import Depends, HTTPException, status
@@ -328,7 +357,7 @@ from app.core.config import settings
 from app.core.security import parse_pem_key
 from app.services.blacklist_service import BlacklistService
 
-security = HTTPBearer(auto_error=True)
+security = HTTPBearer(auto_error=False)
 
 
 @dataclass(frozen=True)
@@ -339,8 +368,14 @@ class CurrentUser:
     roles: list[str]
     scope: str
 
+    @property
+    def scopes(self) -> set[str]:
+        return {scope for scope in self.scope.split() if scope}
 
-def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security)) -> CurrentUser:
+
+def get_current_user(credentials: HTTPAuthorizationCredentials | None = Depends(security)) -> CurrentUser:
+    if credentials is None:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="invalid token")
     try:
         payload = jwt.decode(
             credentials.credentials,
@@ -357,8 +392,17 @@ def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(securit
             roles=payload.get("roles", []),
             scope=payload.get("scope", ""),
         )
-    except Exception as exc:  # Replace with narrower jwt and Redis exceptions as the app grows.
+    except (jwt.PyJWTError, KeyError, ValueError) as exc:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="invalid token") from exc
+
+
+def require_scope(required_scope: str) -> Callable[[CurrentUser], CurrentUser]:
+    def dependency(current_user: CurrentUser = Depends(get_current_user)) -> CurrentUser:
+        if required_scope not in current_user.scopes:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="insufficient scope")
+        return current_user
+
+    return dependency
 `
     },
     {
@@ -371,7 +415,9 @@ class ProfileResponse(BaseModel):
     message: str
 `
     },
-    createBlacklistServiceFile()
+    createBlacklistServiceFile(),
+    createPythonAppConftestFile(),
+    createPythonAppProfileApiTestFile()
   ];
 }
 
@@ -953,6 +999,434 @@ def test_health_returns_service_status() -> None:
 `
     }
   ];
+}
+
+const PYTHON_TEST_PRIVATE_KEY = `-----BEGIN PRIVATE KEY-----
+MIIEvgIBADANBgkqhkiG9w0BAQEFAASCBKgwggSkAgEAAoIBAQC+Z6emQGbqLphz
+OdHE4MhNdafo4XUxkRYob7UbDFW8/nT+pbLjjh5gxIefoRDxeqYhWgz1hBf3Vv27
+AV2Ug6E8Vgts+iLkBUfd5J6LTVSxbu1xMHo66pqborFcyJcXDfJh2Kaz/HsXLwFG
+m42wx4pNUvMSP72KIjexlpvbfG3GwVO610Nhz1RSyHcrOyzeDMOOU6FYKGynUk9B
+g5tPItGLbOs2A6bCd03bLQddv60Quv1Cbqx9e1RabPa003Bks1uBT/OjD1LFD1CZ
+4WIHyiPJbNc+PwG8raaVk6lie1AX+z5BGaz9O4LWgLR32GKLu2ezPw7nm5c6tIge
+qFHgSoJHAgMBAAECggEBAJf6tte9+iecj7URhr2mSluBuUfqhhfNXilimOWBIAKd
+/Raxfiuiad8Fn9erwZFuO6LNdSCXkmWr+xVEjsSXmKBHchFHS4hEKswTyvUYAa0r
+BL3fWwEh98yYvQd5WRhe2oR9YPqzYjDsJRGN4jgj3eHAfyKm3AyhKWFH/RnhpOIK
+VwhJqaGItTidthUJbFIYIuuZ5Vjohj6gGd4WooyQsQaiELCa1nzZzuMSmLJfUgp+
+7QkOWW4BUZvESO/vEJcrcXpczkOsQqq2u78oOtsMxvXExFDlu8kDWvXquvkEajVj
+a8SlHS/B13EsS5XqsWnwBawL0mp161IMAwro8cV7z6ECgYEA7RmmSDfD+2+6RBh5
+L+KIQ+jymUDTGHJF0DGCRVOePmQDgzzj4n4+B47RpYu9LOxnBDehOgbW4ji+6oo/
+leQf5I95Hj6PloDb2Pm7h2/RGhB7El5sv6hRjSRDjxdHAs9aFsFuFIG1oD20sxbG
+EcQdpaa8qW2/K4D3oyD+tk8mHtcCgYEAzZUf6/QMnaw3PY6aV3ss2vc72APs02gG
+otNW0BoCkCIEsKNVQquR2VLS/2kxsISiKJmuJhqHBrFGRpjp0MqyjoTkUBy9DZyF
+xOO6AQr9J1PKbWOriPPxRwgyBqG100CvDAtLzhhFgtHwM4Ai1d5hToP4Pe7DPkRh
++hVkhfpwehECgYABZmxf8sxaeL9t1YMpsDnDxOVh2Esm0s3su84cILFHhwmqRbrG
+xJ4TJ1m/k4KreD3nfXibQh0UuucNtYFInk8950b80bvBVMN3lYnw880VTVGcuygD
+Pbg1kChB+Q43SwgqKDxBLL7o0lR11kWXJ0RRjRmCGp7NX/aWZQR8CR2dgwKBgFjS
+NC+CiqzYyikbYo2nVzLnnIBw+bJBAJT60Egq5K6XNAWJG/4pGGOXyDe3oFNOiq0V
+8MrfrTT0BJPd3y9pVAoFWotOT1QBKz5s0WE/+S4zooLujB8onjb9UHfTCDbUfIys
+mLzbebTStX/avbI/WTVOCUPg05QkgVxGP98u28exAoGBAIu0+fCIYoy07yEmomhk
++HqsmDOq9mnC9H5y8xZ1z55SMqWoqc91e8HSsKmdQL0htcOHErjAGvlCRGP9vP1B
+cifihzNMBiRtXx/XfG4UN5mmF5rJgdNvQPXuFhETyZ2E95f2ks3OZnYR0Ft1ejbZ
+TZYO7jMxHqi6RD0PlREnq6CJ
+-----END PRIVATE KEY-----`;
+
+const PYTHON_TEST_PUBLIC_KEY = `-----BEGIN PUBLIC KEY-----
+MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAvmenpkBm6i6YcznRxODI
+TXWn6OF1MZEWKG+1GwxVvP50/qWy444eYMSHn6EQ8XqmIVoM9YQX91b9uwFdlIOh
+PFYLbPoi5AVH3eSei01UsW7tcTB6Ouqam6KxXMiXFw3yYdims/x7Fy8BRpuNsMeK
+TVLzEj+9iiI3sZab23xtxsFTutdDYc9UUsh3Kzss3gzDjlOhWChsp1JPQYObTyLR
+i2zrNgOmwndN2y0HXb+tELr9Qm6sfXtUWmz2tNNwZLNbgU/zow9SxQ9QmeFiB8oj
+yWzXPj8BvK2mlZOpYntQF/s+QRms/TuC1oC0d9hii7tnsz8O55uXOrSIHqhR4EqC
+RwIDAQAB
+-----END PUBLIC KEY-----`;
+
+function createPythonMainConftestFile(): TemplateFile {
+  return {
+    path: "tests/conftest.py",
+    content: `from collections.abc import Iterator
+
+import pytest
+from fastapi.testclient import TestClient
+
+from app.core.config import settings
+from app.main import app
+
+TEST_PRIVATE_KEY = """${PYTHON_TEST_PRIVATE_KEY}"""
+TEST_PUBLIC_KEY = """${PYTHON_TEST_PUBLIC_KEY}"""
+
+
+@pytest.fixture(autouse=True)
+def configure_test_settings(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
+    monkeypatch.setattr(settings, "jwt_private_key", TEST_PRIVATE_KEY)
+    monkeypatch.setattr(settings, "jwt_public_key", TEST_PUBLIC_KEY)
+    monkeypatch.setattr(settings, "jwt_issuer", "auth-service-test")
+    monkeypatch.setattr(settings, "jwt_audience", "backend-api-test")
+    yield
+
+
+@pytest.fixture
+def client() -> Iterator[TestClient]:
+    with TestClient(app) as test_client:
+        yield test_client
+
+
+@pytest.fixture
+def test_keys() -> dict[str, str]:
+    return {"private_key": TEST_PRIVATE_KEY, "public_key": TEST_PUBLIC_KEY}
+`
+  };
+}
+
+function createPythonMainAuthApiTestFile(): TemplateFile {
+  return {
+    path: "tests/test_auth_api.py",
+    content: `from types import SimpleNamespace
+
+import pytest
+
+import app.api.auth as auth_api
+from app.schemas.auth import LogoutResponse, TokenResponse, UserResponse
+from app.schemas.auth import LoginRequest
+from app.services.auth_service import AuthService
+
+
+def test_login_success_returns_tokens(client, monkeypatch: pytest.MonkeyPatch) -> None:
+    class FakeAuthService:
+        def login(self, payload: LoginRequest) -> TokenResponse:
+            assert str(payload.username).lower() == "admin@example.com"
+            return TokenResponse(access_token="access", refresh_token="refresh", expires_in=3600)
+
+    monkeypatch.setattr(auth_api, "AuthService", FakeAuthService)
+
+    response = client.post("/auth/login", json={"username": "admin@example.com", "password": "password123"})
+
+    assert response.status_code == 200
+    assert response.json()["access_token"] == "access"
+    assert response.json()["refresh_token"] == "refresh"
+    assert response.headers["X-Request-ID"]
+
+
+def test_login_failure_returns_401(client) -> None:
+    response = client.post("/auth/login", json={"username": "admin@example.com", "password": "wrong"})
+
+    assert response.status_code == 401
+    assert response.json()["detail"] == "invalid credentials"
+    assert response.headers["X-Request-ID"]
+
+
+def test_refresh_success_returns_new_tokens(client, monkeypatch: pytest.MonkeyPatch) -> None:
+    class FakeAuthService:
+        def refresh(self, refresh_token: str) -> TokenResponse:
+            assert refresh_token == "refresh"
+            return TokenResponse(access_token="new-access", refresh_token="new-refresh", expires_in=3600)
+
+    monkeypatch.setattr(auth_api, "AuthService", FakeAuthService)
+
+    response = client.post("/auth/refresh", json={"refresh_token": "refresh"})
+
+    assert response.status_code == 200
+    assert response.json()["access_token"] == "new-access"
+    assert response.json()["refresh_token"] == "new-refresh"
+
+
+def test_refresh_failure_returns_401(client, monkeypatch: pytest.MonkeyPatch) -> None:
+    class FakeAuthService:
+        def refresh(self, refresh_token: str) -> TokenResponse:
+            raise ValueError("invalid refresh token")
+
+    monkeypatch.setattr(auth_api, "AuthService", FakeAuthService)
+
+    response = client.post("/auth/refresh", json={"refresh_token": "bad"})
+
+    assert response.status_code == 401
+    assert response.json()["detail"] == "invalid refresh token"
+
+
+def test_logout_success_returns_message(client, monkeypatch: pytest.MonkeyPatch) -> None:
+    class FakeAuthService:
+        def logout(self, access_token: str) -> LogoutResponse:
+            assert access_token == "access"
+            return LogoutResponse(message="logged out")
+
+    monkeypatch.setattr(auth_api, "AuthService", FakeAuthService)
+
+    response = client.post("/auth/logout", headers={"Authorization": "Bearer access"})
+
+    assert response.status_code == 200
+    assert response.json() == {"message": "logged out"}
+
+
+def test_logout_missing_token_returns_401(client) -> None:
+    response = client.post("/auth/logout")
+
+    assert response.status_code == 401
+    assert response.json()["detail"] == "invalid access token"
+
+
+def test_logout_blacklists_jti_and_revokes_session() -> None:
+    calls: dict[str, object] = {}
+    service = AuthService()
+    service.tokens = SimpleNamespace(
+        verify_access_token=lambda token: {"jti": "jti-123", "exp": 4_102_444_800, "sid": "sid-123"}
+    )
+    service.blacklist = SimpleNamespace(add_jti=lambda jti, exp: calls.update({"jti": jti, "exp": exp}))
+    service.refresh_tokens = SimpleNamespace(revoke_session=lambda sid: calls.update({"sid": sid}))
+
+    response = service.logout("access")
+
+    assert response.message == "logged out"
+    assert calls == {"jti": "jti-123", "exp": 4_102_444_800, "sid": "sid-123"}
+
+
+def test_me_success_returns_current_user(client, monkeypatch: pytest.MonkeyPatch) -> None:
+    class FakeAuthService:
+        def current_user(self, access_token: str) -> UserResponse:
+            assert access_token == "access"
+            return UserResponse(id="user_123", username="admin@example.com", roles=["admin"])
+
+    monkeypatch.setattr(auth_api, "AuthService", FakeAuthService)
+
+    response = client.get("/auth/me", headers={"Authorization": "Bearer access"})
+
+    assert response.status_code == 200
+    assert response.json()["id"] == "user_123"
+    assert response.json()["roles"] == ["admin"]
+
+
+def test_me_blacklisted_token_returns_401(client, monkeypatch: pytest.MonkeyPatch) -> None:
+    class FakeAuthService:
+        def current_user(self, access_token: str) -> UserResponse:
+            raise ValueError("token is blacklisted")
+
+    monkeypatch.setattr(auth_api, "AuthService", FakeAuthService)
+
+    response = client.get("/auth/me", headers={"Authorization": "Bearer access"})
+
+    assert response.status_code == 401
+    assert response.json()["detail"] == "invalid access token"
+`
+  };
+}
+
+function createPythonMainTokenServiceTestFile(): TemplateFile {
+  return {
+    path: "tests/test_token_service.py",
+    content: `import pytest
+import jwt
+
+from app.core.config import settings
+from app.services.token_service import TokenService
+
+
+def test_create_access_token_includes_required_payload_claims(test_keys: dict[str, str]) -> None:
+    token = TokenService().create_access_token(
+        user_id="user_123",
+        sid="sid_123",
+        roles=["admin"],
+        scope="user:read",
+    )
+
+    payload = jwt.decode(
+        token,
+        test_keys["public_key"],
+        algorithms=[settings.jwt_algorithm],
+        issuer=settings.jwt_issuer,
+        audience=settings.jwt_audience,
+    )
+
+    assert payload["sub"] == "user_123"
+    assert payload["sid"] == "sid_123"
+    assert payload["roles"] == ["admin"]
+    assert payload["scope"] == "user:read"
+    assert {"iat", "exp", "jti", "iss", "aud"}.issubset(payload)
+
+
+def test_verify_access_token_accepts_valid_token() -> None:
+    service = TokenService()
+    token = service.create_access_token(user_id="user_123", sid="sid_123", roles=["admin"], scope="user:read")
+
+    payload = service.verify_access_token(token)
+
+    assert payload["sub"] == "user_123"
+    assert payload["sid"] == "sid_123"
+
+
+def test_verify_access_token_rejects_invalid_token() -> None:
+    with pytest.raises(jwt.PyJWTError):
+        TokenService().verify_access_token("not-a-jwt")
+`
+  };
+}
+
+function createPythonAppConftestFile(): TemplateFile {
+  return {
+    path: "tests/conftest.py",
+    content: `from collections.abc import Callable, Iterator
+from datetime import datetime, timedelta, timezone
+from uuid import uuid4
+
+import jwt
+import pytest
+from fastapi.testclient import TestClient
+
+import app.deps.auth as auth_deps
+from app.core.config import settings
+from app.main import app
+
+TEST_PRIVATE_KEY = """${PYTHON_TEST_PRIVATE_KEY}"""
+TEST_PUBLIC_KEY = """${PYTHON_TEST_PUBLIC_KEY}"""
+
+
+class AllowBlacklistService:
+    def ensure_not_blacklisted(self, jti: str) -> None:
+        return None
+
+
+@pytest.fixture(autouse=True)
+def configure_test_settings(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
+    monkeypatch.setattr(settings, "jwt_private_key", TEST_PRIVATE_KEY)
+    monkeypatch.setattr(settings, "jwt_public_key", TEST_PUBLIC_KEY)
+    monkeypatch.setattr(settings, "jwt_issuer", "auth-service-test")
+    monkeypatch.setattr(settings, "jwt_audience", "backend-api-test")
+    monkeypatch.setattr(auth_deps, "BlacklistService", AllowBlacklistService)
+    yield
+
+
+@pytest.fixture
+def client() -> Iterator[TestClient]:
+    with TestClient(app) as test_client:
+        yield test_client
+
+
+def _make_access_token(
+    *,
+    user_id: str = "user_123",
+    sid: str = "sid_123",
+    jti: str | None = None,
+    roles: list[str] | None = None,
+    scope: str = "user:read",
+    issuer: str | None = None,
+    audience: str | None = None,
+    expires_delta: timedelta = timedelta(minutes=5),
+    private_key: str = TEST_PRIVATE_KEY,
+) -> str:
+    now = datetime.now(timezone.utc)
+    payload = {
+        "sub": user_id,
+        "iss": issuer or settings.jwt_issuer,
+        "aud": audience or settings.jwt_audience,
+        "iat": int(now.timestamp()),
+        "exp": int((now + expires_delta).timestamp()),
+        "jti": jti or str(uuid4()),
+        "sid": sid,
+        "roles": roles or ["admin"],
+        "scope": scope,
+    }
+    return jwt.encode(payload, private_key, algorithm=settings.jwt_algorithm)
+
+
+@pytest.fixture
+def access_token_factory() -> Callable[..., str]:
+    return _make_access_token
+`
+  };
+}
+
+function createPythonAppProfileApiTestFile(): TemplateFile {
+  return {
+    path: "tests/test_profile_api.py",
+    content: `from datetime import timedelta
+
+import pytest
+
+import app.deps.auth as auth_deps
+
+
+def assert_request_id(response) -> None:
+    assert response.headers["X-Request-ID"]
+
+
+def test_profile_requires_token(client) -> None:
+    response = client.get("/api/profile")
+
+    assert response.status_code == 401
+    assert response.json()["detail"] == "invalid token"
+    assert_request_id(response)
+
+
+def test_profile_accepts_valid_token(client, access_token_factory) -> None:
+    token = access_token_factory(scope="user:read")
+
+    response = client.get("/api/profile", headers={"Authorization": f"Bearer {token}"})
+
+    assert response.status_code == 200
+    assert response.json() == {"user_id": "user_123", "message": "authorized"}
+    assert_request_id(response)
+
+
+def test_profile_rejects_invalid_signature(client, access_token_factory) -> None:
+    token = access_token_factory()
+    invalid_token = token[:-1] + ("a" if token[-1] != "a" else "b")
+
+    response = client.get("/api/profile", headers={"Authorization": f"Bearer {invalid_token}"})
+
+    assert response.status_code == 401
+    assert response.json()["detail"] == "invalid token"
+    assert_request_id(response)
+
+
+def test_profile_rejects_wrong_issuer(client, access_token_factory) -> None:
+    token = access_token_factory(issuer="other-issuer")
+
+    response = client.get("/api/profile", headers={"Authorization": f"Bearer {token}"})
+
+    assert response.status_code == 401
+    assert response.json()["detail"] == "invalid token"
+
+
+def test_profile_rejects_wrong_audience(client, access_token_factory) -> None:
+    token = access_token_factory(audience="other-audience")
+
+    response = client.get("/api/profile", headers={"Authorization": f"Bearer {token}"})
+
+    assert response.status_code == 401
+    assert response.json()["detail"] == "invalid token"
+
+
+def test_profile_rejects_expired_token(client, access_token_factory) -> None:
+    token = access_token_factory(expires_delta=timedelta(minutes=-5))
+
+    response = client.get("/api/profile", headers={"Authorization": f"Bearer {token}"})
+
+    assert response.status_code == 401
+    assert response.json()["detail"] == "invalid token"
+
+
+def test_profile_rejects_blacklisted_token(client, access_token_factory, monkeypatch: pytest.MonkeyPatch) -> None:
+    class RejectingBlacklistService:
+        def ensure_not_blacklisted(self, jti: str) -> None:
+            raise ValueError("token is blacklisted")
+
+    monkeypatch.setattr(auth_deps, "BlacklistService", RejectingBlacklistService)
+    token = access_token_factory(jti="blacklisted")
+
+    response = client.get("/api/profile", headers={"Authorization": f"Bearer {token}"})
+
+    assert response.status_code == 401
+    assert response.json()["detail"] == "invalid token"
+    assert_request_id(response)
+
+
+def test_profile_rejects_insufficient_scope(client, access_token_factory) -> None:
+    token = access_token_factory(scope="profile:read")
+
+    response = client.get("/api/profile", headers={"Authorization": f"Bearer {token}"})
+
+    assert response.status_code == 403
+    assert response.json()["detail"] == "insufficient scope"
+    assert_request_id(response)
+`
+  };
 }
 
 function createBlacklistServiceFile(): TemplateFile {

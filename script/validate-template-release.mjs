@@ -41,9 +41,12 @@ try {
   await access(join(bundleDir, "python-main", "pyproject.toml"));
   await access(join(bundleDir, "python-main", "app", "main.py"));
   await access(join(bundleDir, "python-main", ".github", "workflows", "ci.yml"));
+  await access(join(bundleDir, "python-main", "tests", "test_auth_api.py"));
+  await access(join(bundleDir, "python-main", "tests", "test_token_service.py"));
   await access(join(bundleDir, "python-app", "pyproject.toml"));
   await access(join(bundleDir, "python-app", "app", "main.py"));
   await access(join(bundleDir, "python-app", ".github", "workflows", "ci.yml"));
+  await access(join(bundleDir, "python-app", "tests", "test_profile_api.py"));
   process.stdout.write(`Validated release archive ${archivePath}\n`);
 } finally {
   await rm(tempDir, { force: true, recursive: true });

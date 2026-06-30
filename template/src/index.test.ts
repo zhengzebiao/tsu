@@ -257,6 +257,9 @@ test("python-main template creates auth service files", () => {
   assert.ok(paths.includes("docker-compose.yml"));
   assert.ok(paths.includes(".github/workflows/ci.yml"));
   assert.ok(paths.includes("tests/test_health.py"));
+  assert.ok(paths.includes("tests/conftest.py"));
+  assert.ok(paths.includes("tests/test_auth_api.py"));
+  assert.ok(paths.includes("tests/test_token_service.py"));
   assert.match(files.find((file) => file.path === "Dockerfile")?.content ?? "", /pdm install --prod --no-self/);
   assert.match(files.find((file) => file.path === "Dockerfile")?.content ?? "", /gunicorn app\.main:app/);
   assert.match(files.find((file) => file.path === "Dockerfile")?.content ?? "", /uvicorn_worker\.UvicornWorker/);
@@ -287,7 +290,13 @@ test("python-main template creates auth service files", () => {
   assert.match(envTest.content, /OPENAPI_ENABLED=true/);
   assert.match(envProduct.content, /OPENAPI_ENABLED=false/);
   assert.match(files.find((file) => file.path === "app/api/auth.py")?.content ?? "", /POST \/auth\/login|"\/login"/);
+  assert.match(files.find((file) => file.path === "app/api/auth.py")?.content ?? "", /HTTP_401_UNAUTHORIZED/);
+  assert.match(files.find((file) => file.path === "app/services/auth_service.py")?.content ?? "", /password123/);
   assert.match(files.find((file) => file.path === "app/services/token_service.py")?.content ?? "", /jwt.encode/);
+  assert.match(files.find((file) => file.path === "tests/test_auth_api.py")?.content ?? "", /test_login_failure_returns_401/);
+  assert.match(files.find((file) => file.path === "tests/test_auth_api.py")?.content ?? "", /test_logout_blacklists_jti_and_revokes_session/);
+  assert.match(files.find((file) => file.path === "tests/test_token_service.py")?.content ?? "", /test_create_access_token_includes_required_payload_claims/);
+  assert.match(files.find((file) => file.path === "tests/test_token_service.py")?.content ?? "", /\"iat\", \"exp\", \"jti\", \"iss\", \"aud\"/);
 });
 
 test("python-app template creates resource service files", () => {
@@ -317,6 +326,8 @@ test("python-app template creates resource service files", () => {
   assert.ok(paths.includes("app/core/logging.py"));
   assert.ok(paths.includes("alembic/env.py"));
   assert.ok(paths.includes("nginx/default.conf"));
+  assert.ok(paths.includes("tests/conftest.py"));
+  assert.ok(paths.includes("tests/test_profile_api.py"));
   assert.match(files.find((file) => file.path === "Dockerfile")?.content ?? "", /pip install --no-cache-dir pdm/);
   assert.match(files.find((file) => file.path === "Dockerfile")?.content ?? "", /gunicorn app\.main:app/);
   assert.match(files.find((file) => file.path === "docker-compose.yml")?.content ?? "", /uvicorn app\.main:app --reload/);
@@ -341,7 +352,12 @@ test("python-app template creates resource service files", () => {
   assert.doesNotMatch(envTest.content, /JWT_PRIVATE_KEY/);
   assert.match(envTest.content, /JWT_PUBLIC_KEY/);
   assert.match(files.find((file) => file.path === "app/deps/auth.py")?.content ?? "", /jwt.decode/);
+  assert.match(files.find((file) => file.path === "app/deps/auth.py")?.content ?? "", /require_scope/);
+  assert.match(files.find((file) => file.path === "app/deps/auth.py")?.content ?? "", /HTTP_403_FORBIDDEN/);
   assert.doesNotMatch(files.find((file) => file.path === "app/deps/auth.py")?.content ?? "", /jwt.encode/);
+  assert.match(files.find((file) => file.path === "tests/test_profile_api.py")?.content ?? "", /test_profile_requires_token/);
+  assert.match(files.find((file) => file.path === "tests/test_profile_api.py")?.content ?? "", /test_profile_rejects_invalid_signature/);
+  assert.match(files.find((file) => file.path === "tests/test_profile_api.py")?.content ?? "", /test_profile_rejects_insufficient_scope/);
 });
 
 test("mfe template creates qiankun workspace files", () => {
