@@ -8,6 +8,7 @@
 
 > 状态更新时间：2026-06-30  
 > 当前实现分支：`implement-python-templates`
+> 当前推进阶段：阶段 9：GitHub Actions / Secrets / Environments（PDM 已接入基础 CI，后续继续补 deploy 相关内容）
 
 | 阶段 | 状态 | 说明 |
 | --- | --- | --- |
