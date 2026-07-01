@@ -8,7 +8,7 @@
 
 > 状态更新时间：2026-07-01  
 > 当前实现分支：`implement-python-templates`
-> 当前推进阶段：阶段 10：测试覆盖与验收（已补基础 auth/profile pytest、生成项目 pytest 验证；端到端联调、日志脱敏和完整 rotation/reuse 场景后续继续）
+> 当前推进阶段：阶段 11：README 与模板使用文档（已补 `python-main` / `python-app` 完整使用说明、接口/鉴权/Redis/迁移/FAQ 文档和 release README 校验）
 
 | 阶段 | 状态 | 说明 |
 | --- | --- | --- |
@@ -23,7 +23,7 @@
 | 阶段 8：Docker 与 Nginx | 已完成基础版 | 已生成 Dockerfile、开发 compose、Nginx 反向代理、安全响应头和 Request ID 透传；Dockerfile 使用生产 Gunicorn + Uvicorn Worker，compose 使用开发 Uvicorn `--reload` |
 | 阶段 9：GitHub Actions / Secrets / Environments | 已完成基础 deploy 模板 | 已生成 PDM CI、Alembic 状态检查、Docker build、test/product environment、docker push 与 deploy 占位 job；README 已说明 secrets 分离和 product 保护规则，真实平台 deploy 命令留给使用方替换 |
 | 阶段 10：测试覆盖与验收 | 部分完成 | 已补模板生成测试、CLI 初始化测试、release bundle 校验、生成文件 Python 语法 smoke check、`python-main` auth/token pytest、`python-app` profile/auth pytest，并已验证生成项目 pytest；跨服务端到端认证、日志脱敏和完整 refresh reuse/session revoke 场景仍需深化 |
-| 阶段 11：README 与模板使用文档 | 部分完成 | 已生成 README 基础说明、PDM 依赖管理说明、开发/生产 app server 说明、安全说明、基础部署、Secrets 和 Environments 说明；完整接口说明和 FAQ 仍需深化 |
+| 阶段 11：README 与模板使用文档 | 已完成基础完整使用文档 | 已生成 README 基础说明、PDM 依赖管理说明、开发/生产 app server 说明、安全说明、基础部署、Secrets 和 Environments 说明，并补齐 `python-main` 认证接口/JWT/Redis/migration/seed/FAQ 与 `python-app` 受保护接口/public key/issuer/audience/scope/FAQ 文档 |
 
 本轮已验证：
 

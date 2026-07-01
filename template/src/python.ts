@@ -1646,6 +1646,127 @@ REDOC_ENABLED=${docsEnabled}
 `;
 }
 
+function createPythonTemplateUsageDocs(options: SharedPythonOptions): string {
+  const newline = String.fromCharCode(10);
+
+  if (options.templateName === 'python-main') {
+    return [
+      '## Auth API',
+      '',
+      '- `POST /auth/login` issues access and refresh tokens for the auth service.',
+      '- `POST /auth/refresh` rotates a refresh token and returns a new token pair.',
+      '- `POST /auth/logout` blacklists the current access token `jti` and revokes the session.',
+      '- `GET /auth/me` returns the current authenticated user.',
+      '',
+      '## JWT Configuration',
+      '',
+      '- `python-main` owns `JWT_PRIVATE_KEY`; `python-app` should only receive `JWT_PUBLIC_KEY`.',
+      '- `parse_pem_key(...)` accepts raw PEM blocks or escaped newline secrets from CI and environment files.',
+      '- Keep `JWT_ISSUER` and `JWT_AUDIENCE` aligned with the resource service.',
+      '',
+      '## Environment Variables',
+      '',
+      '| Variable | Purpose |',
+      '| --- | --- |',
+      '| `JWT_PRIVATE_KEY` | RS256 signing key for access tokens |',
+      '| `JWT_PUBLIC_KEY` | Matching verification key for local checks and docs |',
+      '| `JWT_ISSUER` | Token issuer value expected by verifiers |',
+      '| `JWT_AUDIENCE` | Token audience value expected by verifiers |',
+      '| `ACCESS_TOKEN_EXPIRE_MINUTES` | Access token lifetime |',
+      '| `REFRESH_TOKEN_EXPIRE_DAYS` | Refresh token lifetime |',
+      '| `REFRESH_TOKEN_REUSE_GRACE_SECONDS` | Replay grace tuning value for refresh rotation |',
+      '| `TOKEN_BLACKLIST_PREFIX` | Redis prefix for revoked access-token `jti` values |',
+      '| `REFRESH_TOKEN_PREFIX` | Redis prefix for refresh-token hashes |',
+      '| `SESSION_PREFIX` | Redis prefix for session status markers |',
+      '',
+      '## Redis Token State',
+      '',
+      '- Access tokens are not stored in Redis.',
+      '- Refresh tokens are stored as SHA-256 hashes, not plaintext values.',
+      '- Logout writes the current access-token `jti` into the blacklist and marks the session revoked.',
+      '',
+      '## Database Migrations and Seed',
+      '',
+      '- Use `pdm run migrate` to apply Alembic migrations.',
+      '- Use `pdm run alembic-current` to inspect the active revision.',
+      '- Use `pdm run seed` to populate baseline auth data for local development.',
+      '- Prefer forward-compatible product migrations over rollback-driven deployment plans.',
+      '',
+      '## Logging and Request ID',
+      '',
+      '- Every request gets an `X-Request-ID` so auth and refresh failures can be traced across services.',
+      '- Keep request logs, token logs, and secrets redacted.',
+      '',
+      '## Docker and nginx',
+      '',
+      '- `docker-compose.yml` is the local development path and uses Uvicorn with `--reload`.',
+      '- The Dockerfile runs Gunicorn with Uvicorn workers for the production container.',
+      '- nginx proxies the app and forwards `X-Request-ID`.',
+      '',
+      '## FAQ',
+      '',
+      '- **Why does login fail?** The demo credentials must match the scaffolded example user.',
+      '- **Why does refresh fail?** The refresh token may be expired, rotated, or revoked.',
+      '- **Why is `/auth/me` rejected?** The access token may be blacklisted or signed for the wrong issuer/audience.'
+    ].join(newline);
+  }
+
+  return [
+    '## Protected API Usage',
+    '',
+    '- `GET /api/profile` is the sample protected endpoint.',
+    '- Call it with `Authorization: Bearer <access-token>`.',
+    '- Missing token, invalid signature, wrong issuer or audience, expired token, or a blacklist hit all return 401.',
+    '- Missing scope returns 403.',
+    '',
+    '## Auth Integration with python-main',
+    '',
+    '- Configure `JWT_PUBLIC_KEY` from the matching `python-main` private key.',
+    '- Keep `JWT_ISSUER` and `JWT_AUDIENCE` identical across both services.',
+    '- Do not add `JWT_PRIVATE_KEY` to this service.',
+    '',
+    '## Environment Variables',
+    '',
+    '| Variable | Purpose |',
+    '| --- | --- |',
+    '| `JWT_PUBLIC_KEY` | RS256 verification key from `python-main` |',
+    '| `JWT_ISSUER` | Expected issuer value |',
+    '| `JWT_AUDIENCE` | Expected audience value |',
+    '| `REDIS_URL` | Redis blacklist lookup |',
+    '| `CORS_ALLOW_ORIGINS` | Allowed browser origins |',
+    '| `DATABASE_URL` | PostgreSQL connection string |',
+    '| `LOG_LEVEL` | Log verbosity |',
+    '| `LOG_FORMAT` | JSON or plain-text logging |',
+    '',
+    '## Redis Blacklist',
+    '',
+    '- The resource service still checks Redis so revoked `jti` values are rejected everywhere.',
+    '- If a token is blacklisted, the request is treated as an invalid token.',
+    '',
+    '## Scopes and Permissions',
+    '',
+    '- The scaffold uses `require_scope("user:read")` on `/api/profile`.',
+    '- Add new authorization rules by wrapping endpoints with `require_scope(...)` or a similar dependency.',
+    '',
+    '## Logging and Request ID',
+    '',
+    '- Every request gets an `X-Request-ID` for troubleshooting across services.',
+    '- Keep token values and secrets out of logs.',
+    '',
+    '## Docker and nginx',
+    '',
+    '- `docker-compose.yml` is the local development path and uses Uvicorn with `--reload`.',
+    '- The Dockerfile runs Gunicorn with Uvicorn workers for the production container.',
+    '- nginx proxies the API and forwards `X-Request-ID`.',
+    '',
+    '## FAQ',
+    '',
+    '- **Why does `/api/profile` return 401?** Check signature, issuer, audience, expiry, and blacklist state.',
+    '- **Why does `/api/profile` return 403?** The token is valid but missing the required scope.',
+    '- **Why is the token valid in `python-main` but rejected here?** The public key, issuer, or audience likely differs.'
+  ].join(newline);
+}
+
 function createReadme(options: SharedPythonOptions) {
   return `# ${options.projectName}
 
@@ -1717,6 +1838,8 @@ This template uses PDM with standard \`pyproject.toml\` metadata.
 - \`.env.test.example\` enables Swagger, ReDoc, and OpenAPI JSON.
 - \`.env.product.example\` disables public docs by default.
 - Use different PostgreSQL databases, Redis instances, JWT keys, issuers, audiences, and GitHub Secrets for test and product.
+
+${createPythonTemplateUsageDocs(options)}
 
 ## GitHub Actions, Secrets, and Environments
 

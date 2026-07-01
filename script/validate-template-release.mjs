@@ -43,13 +43,40 @@ try {
   await access(join(bundleDir, "python-main", ".github", "workflows", "ci.yml"));
   await access(join(bundleDir, "python-main", "tests", "test_auth_api.py"));
   await access(join(bundleDir, "python-main", "tests", "test_token_service.py"));
+  await assertReadmeContains(join(bundleDir, "python-main", "README.md"), [
+    "## Auth API",
+    "POST /auth/login",
+    "## JWT Configuration",
+    "JWT_PRIVATE_KEY",
+    "## Redis Token State",
+    "## Database Migrations and Seed",
+    "## FAQ"
+  ]);
   await access(join(bundleDir, "python-app", "pyproject.toml"));
   await access(join(bundleDir, "python-app", "app", "main.py"));
   await access(join(bundleDir, "python-app", ".github", "workflows", "ci.yml"));
   await access(join(bundleDir, "python-app", "tests", "test_profile_api.py"));
+  await assertReadmeContains(join(bundleDir, "python-app", "README.md"), [
+    "## Protected API Usage",
+    "Authorization: Bearer <access-token>",
+    "## Auth Integration with python-main",
+    "JWT_PUBLIC_KEY",
+    "## Redis Blacklist",
+    "## Scopes and Permissions",
+    "## FAQ"
+  ]);
   process.stdout.write(`Validated release archive ${archivePath}\n`);
 } finally {
   await rm(tempDir, { force: true, recursive: true });
+}
+
+async function assertReadmeContains(filePath, requiredMarkers) {
+  const content = await readFile(filePath, "utf8");
+  const missingMarkers = requiredMarkers.filter((marker) => !content.includes(marker));
+
+  if (missingMarkers.length > 0) {
+    throw new Error(`README ${filePath} is missing required markers: ${missingMarkers.join(", ")}.`);
+  }
 }
 
 async function ensureArchive() {
