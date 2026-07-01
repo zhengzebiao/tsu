@@ -8,22 +8,22 @@
 
 > 状态更新时间：2026-07-01  
 > 当前实现分支：`implement-python-templates`
-> 当前推进阶段：阶段 11：README 与模板使用文档（已补 `python-main` / `python-app` 完整使用说明、接口/鉴权/Redis/迁移/FAQ 文档和 release README 校验）
+> 当前推进阶段：阶段 4/5/6/10：认证状态闭环补全（已补 refresh token rotation/reuse grace/session revoke、`python-app` revoked session 校验和对应模板/CLI/release/pytest 验证）
 
 | 阶段 | 状态 | 说明 |
 | --- | --- | --- |
-| 阶段 0：模板范围确认与目录准备 | 已完成 | 已注册 `python-main` / `python-app`，并建立生成文件结构 |
-| 阶段 1：公共 FastAPI 工程骨架 | 已完成 | 已生成 FastAPI 入口、PDM 依赖与脚本管理、配置、PostgreSQL、SQLAlchemy、Alembic、Redis、健康检查和 pytest 基础结构 |
-| 阶段 2：Swagger / OpenAPI 支持 | 已完成 | 已支持 `OPENAPI_ENABLED` / `DOCS_ENABLED` / `REDOC_ENABLED`，test 默认开启，product 默认关闭 |
-| 阶段 3：日志记录基础设施 | 已完成 | 已生成 JSON 日志基础设施和 `X-Request-ID` middleware |
-| 阶段 4：`python-main` 认证中心核心能力 | 部分完成 | 已生成登录、刷新、注销、当前用户、RS256 token service、refresh token service、blacklist service 的模板骨架；真实账号校验、完整 rotation 语义和数据库集成仍需深化 |
-| 阶段 5：Redis Token 状态管理 | 部分完成 | 已生成 refresh token hash、session revoke、jti blacklist 服务骨架；并发刷新、宽限期和泄露判定仍需深化 |
-| 阶段 6：`python-app` 业务服务鉴权能力 | 部分完成 | 已生成 Bearer Token 解析、公钥校验、issuer/audience/exp 校验和 Redis 黑名单读取骨架；roles/scope 策略仍需深化 |
-| 阶段 7：Alembic、Seed 与数据库策略 | 部分完成 | 已生成 Alembic 环境和 seed 入口；具体 migration、默认数据和幂等 seed 逻辑仍需深化 |
-| 阶段 8：Docker 与 Nginx | 已完成基础版 | 已生成 Dockerfile、开发 compose、Nginx 反向代理、安全响应头和 Request ID 透传；Dockerfile 使用生产 Gunicorn + Uvicorn Worker，compose 使用开发 Uvicorn `--reload` |
-| 阶段 9：GitHub Actions / Secrets / Environments | 已完成基础 deploy 模板 | 已生成 PDM CI、Alembic 状态检查、Docker build、test/product environment、docker push 与 deploy 占位 job；README 已说明 secrets 分离和 product 保护规则，真实平台 deploy 命令留给使用方替换 |
-| 阶段 10：测试覆盖与验收 | 部分完成 | 已补模板生成测试、CLI 初始化测试、release bundle 校验、生成文件 Python 语法 smoke check、`python-main` auth/token pytest、`python-app` profile/auth pytest，并已验证生成项目 pytest；跨服务端到端认证、日志脱敏和完整 refresh reuse/session revoke 场景仍需深化 |
-| 阶段 11：README 与模板使用文档 | 已完成基础完整使用文档 | 已生成 README 基础说明、PDM 依赖管理说明、开发/生产 app server 说明、安全说明、基础部署、Secrets 和 Environments 说明，并补齐 `python-main` 认证接口/JWT/Redis/migration/seed/FAQ 与 `python-app` 受保护接口/public key/issuer/audience/scope/FAQ 文档 |
+| 阶段 0：模板范围确认与目录准备 | ✅ 已完成 | 已注册 `python-main` / `python-app`，并建立生成文件结构 |
+| 阶段 1：公共 FastAPI 工程骨架 | ✅ 已完成 | 已生成 FastAPI 入口、PDM 依赖与脚本管理、配置、PostgreSQL、SQLAlchemy、Alembic、Redis、健康检查和 pytest 基础结构 |
+| 阶段 2：Swagger / OpenAPI 支持 | ✅ 已完成 | 已支持 `OPENAPI_ENABLED` / `DOCS_ENABLED` / `REDOC_ENABLED`，test 默认开启，product 默认关闭 |
+| 阶段 3：日志记录基础设施 | ✅ 已完成 | 已生成 JSON 日志基础设施和 `X-Request-ID` middleware |
+| 阶段 4：`python-main` 认证中心核心能力 | 🚧 部分完成 | 已生成登录、刷新、注销、当前用户、RS256 token service、refresh rotation/session revoke/blacklist service 的基础闭环；真实账号校验和数据库用户/权限集成仍需深化 |
+| 阶段 5：Redis Token 状态管理 | 🚧 部分完成 | 已补 refresh token hash 的 `created_at`/`rotated_at`/`replaced_by` 元数据、rotation、reuse grace 判定、超出宽限期复用吊销 session、jti blacklist 和 session revoke 检查；并发刷新幂等响应和更高级泄露恢复策略仍需深化 |
+| 阶段 6：`python-app` 业务服务鉴权能力 | 🚧 部分完成 | 已生成 Bearer Token 解析、公钥校验、issuer/audience/exp 校验、Redis 黑名单读取、revoked session 检查和基础鉴权失败日志；roles/scope 策略仍需深化 |
+| 阶段 7：Alembic、Seed 与数据库策略 | 🚧 部分完成 | 已生成 Alembic 环境和 seed 入口；具体 migration、默认数据和幂等 seed 逻辑仍需深化 |
+| 阶段 8：Docker 与 Nginx | ✅ 已完成基础版 | 已生成 Dockerfile、开发 compose、Nginx 反向代理、安全响应头和 Request ID 透传；Dockerfile 使用生产 Gunicorn + Uvicorn Worker，compose 使用开发 Uvicorn `--reload` |
+| 阶段 9：GitHub Actions / Secrets / Environments | ✅ 已完成基础 deploy 模板 | 已生成 PDM CI、Alembic 状态检查、Docker build、test/product environment、docker push 与 deploy 占位 job；README 已说明 secrets 分离和 product 保护规则，真实平台 deploy 命令留给使用方替换 |
+| 阶段 10：测试覆盖与验收 | 🚧 部分完成 | 已补模板生成测试、CLI 初始化测试、release bundle 校验、生成文件 Python 语法 smoke check、`python-main` auth/token/refresh rotation pytest、`python-app` profile/auth/session revoke pytest，并已验证生成项目 pytest；跨服务端到端认证和日志脱敏细粒度断言仍需深化 |
+| 阶段 11：README 与模板使用文档 | ✅ 已完成基础完整使用文档 | 已生成 README 基础说明、PDM 依赖管理说明、开发/生产 app server 说明、安全说明、基础部署、Secrets 和 Environments 说明，并补齐 `python-main` 认证接口/JWT/Redis/migration/seed/FAQ 与 `python-app` 受保护接口/public key/issuer/audience/scope/FAQ 文档 |
 
 本轮已验证：
 

@@ -176,10 +176,14 @@ class UserResponse(BaseModel):
     },
     {
       path: "app/services/auth_service.py",
-      content: `from app.schemas.auth import LoginRequest, LogoutResponse, TokenResponse, UserResponse
+      content: `import logging
+
+from app.schemas.auth import LoginRequest, LogoutResponse, TokenResponse, UserResponse
 from app.services.blacklist_service import BlacklistService
 from app.services.refresh_token_service import RefreshTokenService
 from app.services.token_service import TokenService
+
+logger = logging.getLogger("app.auth")
 
 
 class AuthService:
@@ -191,28 +195,32 @@ class AuthService:
     def login(self, payload: LoginRequest) -> TokenResponse:
         # Replace this demo credential check with a database lookup.
         if str(payload.username).lower() != "admin@example.com" or payload.password != "password123":
+            logger.warning("login failed username=%s", str(payload.username).lower())
             raise ValueError("invalid credentials")
         user_id = "user_123"
         sid = "sess_demo"
         access_token = self.tokens.create_access_token(user_id=user_id, sid=sid, roles=["admin"], scope="user:read")
         refresh_token = self.refresh_tokens.create_refresh_token(user_id=user_id, sid=sid)
+        logger.info("login succeeded user_id=%s sid=%s", user_id, sid)
         return TokenResponse(access_token=access_token, refresh_token=refresh_token, expires_in=self.tokens.expires_in_seconds)
 
     def refresh(self, refresh_token: str) -> TokenResponse:
-        session = self.refresh_tokens.verify_and_rotate(refresh_token)
-        access_token = self.tokens.create_access_token(user_id=session["user_id"], sid=session["sid"], roles=["admin"], scope="user:read")
-        new_refresh_token = self.refresh_tokens.create_refresh_token(user_id=session["user_id"], sid=session["sid"])
-        return TokenResponse(access_token=access_token, refresh_token=new_refresh_token, expires_in=self.tokens.expires_in_seconds)
+        rotation = self.refresh_tokens.rotate_refresh_token(refresh_token)
+        access_token = self.tokens.create_access_token(user_id=rotation["user_id"], sid=rotation["sid"], roles=["admin"], scope="user:read")
+        logger.info("refresh succeeded user_id=%s sid=%s", rotation["user_id"], rotation["sid"])
+        return TokenResponse(access_token=access_token, refresh_token=rotation["refresh_token"], expires_in=self.tokens.expires_in_seconds)
 
     def logout(self, access_token: str) -> LogoutResponse:
         payload = self.tokens.verify_access_token(access_token)
         self.blacklist.add_jti(payload["jti"], payload["exp"])
         self.refresh_tokens.revoke_session(payload["sid"])
+        logger.info("logout succeeded sid=%s jti=%s", payload["sid"], payload["jti"])
         return LogoutResponse(message="logged out")
 
     def current_user(self, access_token: str) -> UserResponse:
         payload = self.tokens.verify_access_token(access_token)
         self.blacklist.ensure_not_blacklisted(payload["jti"])
+        self.refresh_tokens.ensure_session_active(payload["sid"])
         return UserResponse(id=payload["sub"], username="admin@example.com", roles=payload.get("roles", []))
 `
     },
@@ -260,26 +268,35 @@ class TokenService:
     },
     {
       path: "app/services/refresh_token_service.py",
-      content: `from datetime import datetime, timedelta, timezone
+      content: `import logging
+from datetime import datetime, timedelta, timezone
 from secrets import token_urlsafe
 from typing import Any
 
 from app.core.config import settings
 from app.core.security import sha256_text
 from app.core.redis import get_redis
+from app.services.session_service import SessionService
+
+logger = logging.getLogger("app.auth.refresh")
 
 
 class RefreshTokenService:
+    def __init__(self) -> None:
+        self.sessions = SessionService()
+
     def create_refresh_token(self, user_id: str, sid: str) -> str:
         refresh_token = token_urlsafe(48)
-        expires_at = datetime.now(timezone.utc) + timedelta(days=settings.refresh_token_expire_days)
-        key = f"{settings.refresh_token_prefix}{sha256_text(refresh_token)}"
+        now = datetime.now(timezone.utc)
+        expires_at = now + timedelta(days=settings.refresh_token_expire_days)
+        key = self._refresh_key(refresh_token)
         get_redis().hset(
             key,
             mapping={
                 "user_id": user_id,
                 "sid": sid,
                 "status": "active",
+                "created_at": now.isoformat(),
                 "expires_at": expires_at.isoformat(),
                 "rotated_at": "",
                 "replaced_by": "",
@@ -288,22 +305,85 @@ class RefreshTokenService:
         get_redis().expire(key, settings.refresh_token_expire_days * 24 * 60 * 60)
         return refresh_token
 
-    def verify_and_rotate(self, refresh_token: str) -> dict[str, Any]:
-        key = f"{settings.refresh_token_prefix}{sha256_text(refresh_token)}"
+    def rotate_refresh_token(self, refresh_token: str) -> dict[str, Any]:
+        key = self._refresh_key(refresh_token)
         data = get_redis().hgetall(key)
-        if not data or data.get("status") != "active":
+        if not data:
+            logger.warning("refresh rejected reason=missing_token_hash")
             raise ValueError("invalid refresh token")
-        get_redis().hset(key, mapping={"status": "rotated", "rotated_at": datetime.now(timezone.utc).isoformat()})
-        return data
+
+        sid = data.get("sid", "")
+        if sid:
+            self.ensure_session_active(sid)
+        if self._is_expired(data.get("expires_at", "")):
+            get_redis().hset(key, mapping={"status": "revoked"})
+            logger.warning("refresh rejected reason=expired sid=%s", sid)
+            raise ValueError("invalid refresh token")
+
+        status = data.get("status")
+        if status == "active":
+            user_id = data["user_id"]
+            sid = data["sid"]
+            new_refresh_token = self.create_refresh_token(user_id=user_id, sid=sid)
+            new_refresh_hash = sha256_text(new_refresh_token)
+            get_redis().hset(
+                key,
+                mapping={
+                    "status": "rotated",
+                    "rotated_at": datetime.now(timezone.utc).isoformat(),
+                    "replaced_by": new_refresh_hash,
+                },
+            )
+            logger.info("refresh rotated sid=%s replaced_by=%s", sid, new_refresh_hash[:12])
+            return {"user_id": user_id, "sid": sid, "refresh_token": new_refresh_token}
+
+        if status == "rotated":
+            if self._within_reuse_grace(data.get("rotated_at", "")):
+                logger.warning("refresh replay within grace sid=%s", sid)
+                raise ValueError("refresh token already rotated")
+            if sid:
+                self.revoke_session(sid)
+            logger.warning("refresh reuse detected sid=%s", sid)
+            raise ValueError("refresh token reuse detected")
+
+        logger.warning("refresh rejected reason=status_%s sid=%s", status, sid)
+        raise ValueError("invalid refresh token")
 
     def revoke_session(self, sid: str) -> None:
-        get_redis().set(f"{settings.session_prefix}{sid}", "revoked")
+        self.sessions.revoke_session(sid)
+
+    def ensure_session_active(self, sid: str) -> None:
+        self.sessions.ensure_session_active(sid)
+
+    def _refresh_key(self, refresh_token: str) -> str:
+        return f"{settings.refresh_token_prefix}{sha256_text(refresh_token)}"
+
+    def _is_expired(self, expires_at: str) -> bool:
+        expires = self._parse_timestamp(expires_at)
+        return expires is None or expires <= datetime.now(timezone.utc)
+
+    def _within_reuse_grace(self, rotated_at: str) -> bool:
+        rotated = self._parse_timestamp(rotated_at)
+        if rotated is None:
+            return False
+        elapsed = datetime.now(timezone.utc) - rotated
+        return elapsed <= timedelta(seconds=settings.refresh_token_reuse_grace_seconds)
+
+    def _parse_timestamp(self, value: str) -> datetime | None:
+        if not value:
+            return None
+        parsed = datetime.fromisoformat(value)
+        if parsed.tzinfo is None:
+            return parsed.replace(tzinfo=timezone.utc)
+        return parsed
 `
     },
     createBlacklistServiceFile(),
+    createSessionServiceFile(),
     createPythonMainConftestFile(),
     createPythonMainAuthApiTestFile(),
-    createPythonMainTokenServiceTestFile()
+    createPythonMainTokenServiceTestFile(),
+    createPythonMainRefreshTokenServiceTestFile()
   ];
 }
 
@@ -346,7 +426,8 @@ def profile(current_user: CurrentUser = Depends(require_scope("user:read"))) -> 
     },
     {
       path: "app/deps/auth.py",
-      content: `from collections.abc import Callable
+      content: `import logging
+from collections.abc import Callable
 from dataclasses import dataclass
 
 import jwt
@@ -356,8 +437,10 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from app.core.config import settings
 from app.core.security import parse_pem_key
 from app.services.blacklist_service import BlacklistService
+from app.services.session_service import SessionService
 
 security = HTTPBearer(auto_error=False)
+logger = logging.getLogger("app.auth")
 
 
 @dataclass(frozen=True)
@@ -375,6 +458,7 @@ class CurrentUser:
 
 def get_current_user(credentials: HTTPAuthorizationCredentials | None = Depends(security)) -> CurrentUser:
     if credentials is None:
+        logger.warning("auth rejected reason=missing_token")
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="invalid token")
     try:
         payload = jwt.decode(
@@ -385,6 +469,7 @@ def get_current_user(credentials: HTTPAuthorizationCredentials | None = Depends(
             audience=settings.jwt_audience,
         )
         BlacklistService().ensure_not_blacklisted(payload["jti"])
+        SessionService().ensure_session_active(payload["sid"])
         return CurrentUser(
             user_id=payload["sub"],
             sid=payload["sid"],
@@ -393,12 +478,14 @@ def get_current_user(credentials: HTTPAuthorizationCredentials | None = Depends(
             scope=payload.get("scope", ""),
         )
     except (jwt.PyJWTError, KeyError, ValueError) as exc:
+        logger.warning("auth rejected reason=invalid_or_revoked_token")
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="invalid token") from exc
 
 
 def require_scope(required_scope: str) -> Callable[[CurrentUser], CurrentUser]:
     def dependency(current_user: CurrentUser = Depends(get_current_user)) -> CurrentUser:
         if required_scope not in current_user.scopes:
+            logger.warning("authorization rejected reason=insufficient_scope user_id=%s required_scope=%s", current_user.user_id, required_scope)
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="insufficient scope")
         return current_user
 
@@ -416,6 +503,7 @@ class ProfileResponse(BaseModel):
 `
     },
     createBlacklistServiceFile(),
+    createSessionServiceFile(),
     createPythonAppConftestFile(),
     createPythonAppProfileApiTestFile()
   ];
@@ -804,17 +892,15 @@ class Settings(BaseSettings):
     jwt_algorithm: str = "RS256"
     jwt_issuer: str = "auth-service-test"
     jwt_audience: str = "backend-api-test"
-    jwt_private_key: str = ""
-    jwt_public_key: str = ""
-
+${includePrivateKey ? "    jwt_private_key: str = \"\"\n" : ""}    jwt_public_key: str = ""
+${includePrivateKey ? `
     access_token_expire_minutes: int = 60
     refresh_token_expire_days: int = 7
     refresh_token_rotate: bool = True
     refresh_token_reuse_grace_seconds: int = 10
-
+` : ""}
     token_blacklist_prefix: str = "auth:test:blacklist:jti:"
-    refresh_token_prefix: str = "auth:test:refresh:"
-    session_prefix: str = "auth:test:session:"
+${includePrivateKey ? "    refresh_token_prefix: str = \"auth:test:refresh:\"\n" : ""}    session_prefix: str = "auth:test:session:"
 
     cors_allow_origins: str = "http://localhost:5173"
     cors_allow_credentials: bool = True
@@ -1204,6 +1290,35 @@ def test_me_blacklisted_token_returns_401(client, monkeypatch: pytest.MonkeyPatc
 
     assert response.status_code == 401
     assert response.json()["detail"] == "invalid access token"
+
+
+def test_me_revoked_session_returns_401(client, monkeypatch: pytest.MonkeyPatch) -> None:
+    class FakeAuthService:
+        def current_user(self, access_token: str) -> UserResponse:
+            raise ValueError("session is revoked")
+
+    monkeypatch.setattr(auth_api, "AuthService", FakeAuthService)
+
+    response = client.get("/auth/me", headers={"Authorization": "Bearer access"})
+
+    assert response.status_code == 401
+    assert response.json()["detail"] == "invalid access token"
+
+
+def test_current_user_checks_session_status() -> None:
+    def reject_session(sid: str) -> None:
+        assert sid == "sid-123"
+        raise ValueError("session is revoked")
+
+    service = AuthService()
+    service.tokens = SimpleNamespace(
+        verify_access_token=lambda token: {"sub": "user_123", "jti": "jti-123", "sid": "sid-123", "roles": ["admin"]}
+    )
+    service.blacklist = SimpleNamespace(ensure_not_blacklisted=lambda jti: None)
+    service.refresh_tokens = SimpleNamespace(ensure_session_active=reject_session)
+
+    with pytest.raises(ValueError, match="session is revoked"):
+        service.current_user("access")
 `
   };
 }
@@ -1258,6 +1373,112 @@ def test_verify_access_token_rejects_invalid_token() -> None:
   };
 }
 
+function createPythonMainRefreshTokenServiceTestFile(): TemplateFile {
+  return {
+    path: "tests/test_refresh_token_service.py",
+    content: `from datetime import datetime, timedelta, timezone
+
+import pytest
+
+import app.services.refresh_token_service as refresh_module
+import app.services.session_service as session_module
+from app.core.config import settings
+from app.core.security import sha256_text
+from app.services.refresh_token_service import RefreshTokenService
+
+
+class FakeRedis:
+    def __init__(self) -> None:
+        self.hashes: dict[str, dict[str, str]] = {}
+        self.values: dict[str, str] = {}
+        self.expirations: dict[str, int] = {}
+
+    def hset(self, key: str, mapping: dict[str, str]) -> None:
+        self.hashes.setdefault(key, {}).update(mapping)
+
+    def hgetall(self, key: str) -> dict[str, str]:
+        return dict(self.hashes.get(key, {}))
+
+    def expire(self, key: str, ttl: int) -> None:
+        self.expirations[key] = ttl
+
+    def set(self, key: str, value: str) -> None:
+        self.values[key] = value
+
+    def get(self, key: str) -> str | None:
+        return self.values.get(key)
+
+
+@pytest.fixture
+def fake_redis(monkeypatch: pytest.MonkeyPatch) -> FakeRedis:
+    redis = FakeRedis()
+    monkeypatch.setattr(refresh_module, "get_redis", lambda: redis)
+    monkeypatch.setattr(session_module, "get_redis", lambda: redis)
+    return redis
+
+
+def refresh_key(refresh_token: str) -> str:
+    return f"{settings.refresh_token_prefix}{sha256_text(refresh_token)}"
+
+
+def session_key(sid: str) -> str:
+    return f"{settings.session_prefix}{sid}"
+
+
+def test_rotate_refresh_token_marks_old_hash_and_returns_new_token(fake_redis: FakeRedis) -> None:
+    service = RefreshTokenService()
+    refresh_token = service.create_refresh_token(user_id="user_123", sid="sid_123")
+
+    rotation = service.rotate_refresh_token(refresh_token)
+
+    old_hash = fake_redis.hgetall(refresh_key(refresh_token))
+    new_hash = fake_redis.hgetall(refresh_key(rotation["refresh_token"]))
+    assert rotation["user_id"] == "user_123"
+    assert rotation["sid"] == "sid_123"
+    assert rotation["refresh_token"] != refresh_token
+    assert old_hash["status"] == "rotated"
+    assert old_hash["rotated_at"]
+    assert old_hash["replaced_by"] == sha256_text(rotation["refresh_token"])
+    assert new_hash["status"] == "active"
+    assert new_hash["created_at"]
+
+
+def test_rotated_refresh_token_within_grace_does_not_revoke_session(fake_redis: FakeRedis) -> None:
+    service = RefreshTokenService()
+    refresh_token = service.create_refresh_token(user_id="user_123", sid="sid_123")
+    service.rotate_refresh_token(refresh_token)
+
+    with pytest.raises(ValueError, match="already rotated"):
+        service.rotate_refresh_token(refresh_token)
+
+    assert fake_redis.get(session_key("sid_123")) is None
+
+
+def test_rotated_refresh_token_after_grace_revokes_session(fake_redis: FakeRedis) -> None:
+    service = RefreshTokenService()
+    refresh_token = service.create_refresh_token(user_id="user_123", sid="sid_123")
+    service.rotate_refresh_token(refresh_token)
+    fake_redis.hashes[refresh_key(refresh_token)]["rotated_at"] = (
+        datetime.now(timezone.utc) - timedelta(seconds=settings.refresh_token_reuse_grace_seconds + 1)
+    ).isoformat()
+
+    with pytest.raises(ValueError, match="reuse detected"):
+        service.rotate_refresh_token(refresh_token)
+
+    assert fake_redis.get(session_key("sid_123")) == "revoked"
+
+
+def test_revoked_session_rejects_refresh(fake_redis: FakeRedis) -> None:
+    service = RefreshTokenService()
+    refresh_token = service.create_refresh_token(user_id="user_123", sid="sid_123")
+    service.revoke_session("sid_123")
+
+    with pytest.raises(ValueError, match="session is revoked"):
+        service.rotate_refresh_token(refresh_token)
+`
+  };
+}
+
 function createPythonAppConftestFile(): TemplateFile {
   return {
     path: "tests/conftest.py",
@@ -1282,13 +1503,18 @@ class AllowBlacklistService:
         return None
 
 
+class ActiveSessionService:
+    def ensure_session_active(self, sid: str) -> None:
+        return None
+
+
 @pytest.fixture(autouse=True)
 def configure_test_settings(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
-    monkeypatch.setattr(settings, "jwt_private_key", TEST_PRIVATE_KEY)
     monkeypatch.setattr(settings, "jwt_public_key", TEST_PUBLIC_KEY)
     monkeypatch.setattr(settings, "jwt_issuer", "auth-service-test")
     monkeypatch.setattr(settings, "jwt_audience", "backend-api-test")
     monkeypatch.setattr(auth_deps, "BlacklistService", AllowBlacklistService)
+    monkeypatch.setattr(auth_deps, "SessionService", ActiveSessionService)
     yield
 
 
@@ -1417,6 +1643,22 @@ def test_profile_rejects_blacklisted_token(client, access_token_factory, monkeyp
     assert_request_id(response)
 
 
+def test_profile_rejects_revoked_session(client, access_token_factory, monkeypatch: pytest.MonkeyPatch) -> None:
+    class RevokedSessionService:
+        def ensure_session_active(self, sid: str) -> None:
+            assert sid == "revoked-sid"
+            raise ValueError("session is revoked")
+
+    monkeypatch.setattr(auth_deps, "SessionService", RevokedSessionService)
+    token = access_token_factory(sid="revoked-sid")
+
+    response = client.get("/api/profile", headers={"Authorization": f"Bearer {token}"})
+
+    assert response.status_code == 401
+    assert response.json()["detail"] == "invalid token"
+    assert_request_id(response)
+
+
 def test_profile_rejects_insufficient_scope(client, access_token_factory) -> None:
     token = access_token_factory(scope="profile:read")
 
@@ -1446,6 +1688,24 @@ class BlacklistService:
     def ensure_not_blacklisted(self, jti: str) -> None:
         if get_redis().exists(f"{settings.token_blacklist_prefix}{jti}"):
             raise ValueError("token is blacklisted")
+`
+  };
+}
+
+function createSessionServiceFile(): TemplateFile {
+  return {
+    path: "app/services/session_service.py",
+    content: `from app.core.config import settings
+from app.core.redis import get_redis
+
+
+class SessionService:
+    def revoke_session(self, sid: str) -> None:
+        get_redis().set(f"{settings.session_prefix}{sid}", "revoked")
+
+    def ensure_session_active(self, sid: str) -> None:
+        if get_redis().get(f"{settings.session_prefix}{sid}") == "revoked":
+            raise ValueError("session is revoked")
 `
   };
 }
@@ -1628,14 +1888,14 @@ JWT_ISSUER=${issuer}
 JWT_AUDIENCE=${audience}
 ${includePrivateKey ? "JWT_PRIVATE_KEY=\"-----BEGIN PRIVATE KEY-----\\\\n...\\\\n-----END PRIVATE KEY-----\"\n" : ""}JWT_PUBLIC_KEY="-----BEGIN PUBLIC KEY-----\\\\n...\\\\n-----END PUBLIC KEY-----"
 
-ACCESS_TOKEN_EXPIRE_MINUTES=${isProduct ? "30" : "60"}
+${includePrivateKey ? `ACCESS_TOKEN_EXPIRE_MINUTES=${isProduct ? "30" : "60"}
 REFRESH_TOKEN_EXPIRE_DAYS=${isProduct ? "30" : "7"}
 REFRESH_TOKEN_ROTATE=true
 REFRESH_TOKEN_REUSE_GRACE_SECONDS=10
-
+` : ""}
 TOKEN_BLACKLIST_PREFIX=auth:${env}:blacklist:jti:
-REFRESH_TOKEN_PREFIX=auth:${env}:refresh:
-SESSION_PREFIX=auth:${env}:session:
+${includePrivateKey ? `REFRESH_TOKEN_PREFIX=auth:${env}:refresh:
+` : ""}SESSION_PREFIX=auth:${env}:session:
 
 CORS_ALLOW_ORIGINS=${isProduct ? "https://app.example.com,https://admin.example.com" : "https://test.example.com,http://localhost:5173"}
 CORS_ALLOW_CREDENTIALS=true
@@ -1683,7 +1943,10 @@ function createPythonTemplateUsageDocs(options: SharedPythonOptions): string {
       '',
       '- Access tokens are not stored in Redis.',
       '- Refresh tokens are stored as SHA-256 hashes, not plaintext values.',
+      '- Refresh token rotation stores `created_at`, `rotated_at`, and `replaced_by` metadata on the old token hash.',
+      '- Replaying a rotated refresh token within `REFRESH_TOKEN_REUSE_GRACE_SECONDS` is rejected without revoking the session; replaying it after the grace window revokes the session.',
       '- Logout writes the current access-token `jti` into the blacklist and marks the session revoked.',
+      '- `/auth/me` also checks the session status so revoked sessions are rejected before access token expiry.',
       '',
       '## Database Migrations and Seed',
       '',
@@ -1732,8 +1995,10 @@ function createPythonTemplateUsageDocs(options: SharedPythonOptions): string {
     '| `JWT_PUBLIC_KEY` | RS256 verification key from `python-main` |',
     '| `JWT_ISSUER` | Expected issuer value |',
     '| `JWT_AUDIENCE` | Expected audience value |',
-    '| `REDIS_URL` | Redis blacklist lookup |',
-    '| `CORS_ALLOW_ORIGINS` | Allowed browser origins |',
+      '| `REDIS_URL` | Redis blacklist and session revoke lookup |',
+      '| `TOKEN_BLACKLIST_PREFIX` | Redis prefix for revoked access-token `jti` values |',
+      '| `SESSION_PREFIX` | Redis prefix for revoked session markers from `python-main` |',
+      '| `CORS_ALLOW_ORIGINS` | Allowed browser origins |',
     '| `DATABASE_URL` | PostgreSQL connection string |',
     '| `LOG_LEVEL` | Log verbosity |',
     '| `LOG_FORMAT` | JSON or plain-text logging |',
@@ -1741,7 +2006,8 @@ function createPythonTemplateUsageDocs(options: SharedPythonOptions): string {
     '## Redis Blacklist',
     '',
     '- The resource service still checks Redis so revoked `jti` values are rejected everywhere.',
-    '- If a token is blacklisted, the request is treated as an invalid token.',
+    '- It also checks `SESSION_PREFIX` so sessions revoked by logout or refresh-token reuse in `python-main` are rejected before access token expiry.',
+      '- If a token is blacklisted or its session is revoked, the request is treated as an invalid token.',
     '',
     '## Scopes and Permissions',
     '',

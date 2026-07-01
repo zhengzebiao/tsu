@@ -909,6 +909,8 @@ test("runCli initializes python-main projects", async () => {
     assert.match(readme, /## JWT Configuration/);
     assert.match(readme, /JWT_PRIVATE_KEY/);
     assert.match(readme, /## Redis Token State/);
+    assert.match(readme, /REFRESH_TOKEN_REUSE_GRACE_SECONDS/);
+    assert.match(readme, /revokes the session/);
     assert.match(readme, /## Database Migrations and Seed/);
     assert.match(readme, /## FAQ/);
     assert.match(workflow, /docker-build:/);
@@ -931,8 +933,14 @@ test("runCli initializes python-main projects", async () => {
     assert.match(await readFile(join(cwd, "auth-service", "app", "api", "auth.py"), "utf8"), /def login/);
     assert.match(await readFile(join(cwd, "auth-service", "app", "api", "auth.py"), "utf8"), /HTTP_401_UNAUTHORIZED/);
     assert.match(await readFile(join(cwd, "auth-service", "app", "services", "auth_service.py"), "utf8"), /password123/);
+    assert.match(await readFile(join(cwd, "auth-service", "app", "services", "auth_service.py"), "utf8"), /rotate_refresh_token/);
+    assert.match(await readFile(join(cwd, "auth-service", "app", "services", "refresh_token_service.py"), "utf8"), /refresh_token_reuse_grace_seconds/);
+    assert.match(await readFile(join(cwd, "auth-service", "app", "services", "refresh_token_service.py"), "utf8"), /replaced_by/);
+    assert.match(await readFile(join(cwd, "auth-service", "app", "services", "session_service.py"), "utf8"), /ensure_session_active/);
     assert.match(await readFile(join(cwd, "auth-service", "app", "services", "token_service.py"), "utf8"), /jwt.encode/);
     assert.match(await readFile(join(cwd, "auth-service", "tests", "test_auth_api.py"), "utf8"), /test_login_failure_returns_401/);
+    assert.match(await readFile(join(cwd, "auth-service", "tests", "test_auth_api.py"), "utf8"), /test_me_revoked_session_returns_401/);
+    assert.match(await readFile(join(cwd, "auth-service", "tests", "test_refresh_token_service.py"), "utf8"), /test_rotated_refresh_token_after_grace_revokes_session/);
     assert.match(await readFile(join(cwd, "auth-service", "tests", "test_token_service.py"), "utf8"), /required_payload_claims/);
     assert.match(await readFile(join(cwd, "auth-service", ".env.test.example"), "utf8"), /JWT_PRIVATE_KEY/);
     assert.match(await readFile(join(cwd, "auth-service", ".env.product.example"), "utf8"), /DOCS_ENABLED=false/);
@@ -961,6 +969,8 @@ test("runCli initializes python-app projects", async () => {
     assert.match(readme, /Authorization: Bearer <access-token>/);
     assert.match(readme, /## Auth Integration with python-main/);
     assert.match(readme, /JWT_PUBLIC_KEY/);
+    assert.match(readme, /SESSION_PREFIX/);
+    assert.match(readme, /sessions revoked by logout or refresh-token reuse/);
     assert.match(readme, /## Scopes and Permissions/);
     assert.match(readme, /require_scope\("user:read"\)/);
     assert.match(readme, /## FAQ/);
@@ -983,10 +993,15 @@ test("runCli initializes python-app projects", async () => {
     assert.match(await readFile(join(cwd, "backend-api", "app", "api", "example.py"), "utf8"), /\/api/);
     assert.match(await readFile(join(cwd, "backend-api", "app", "api", "example.py"), "utf8"), /require_scope/);
     assert.match(await readFile(join(cwd, "backend-api", "app", "deps", "auth.py"), "utf8"), /jwt.decode/);
+    assert.match(await readFile(join(cwd, "backend-api", "app", "deps", "auth.py"), "utf8"), /SessionService/);
     assert.match(await readFile(join(cwd, "backend-api", "app", "deps", "auth.py"), "utf8"), /HTTP_403_FORBIDDEN/);
+    assert.match(await readFile(join(cwd, "backend-api", "app", "services", "session_service.py"), "utf8"), /ensure_session_active/);
+    assert.match(await readFile(join(cwd, "backend-api", "tests", "test_profile_api.py"), "utf8"), /test_profile_rejects_revoked_session/);
     assert.match(await readFile(join(cwd, "backend-api", "tests", "test_profile_api.py"), "utf8"), /test_profile_rejects_insufficient_scope/);
     assert.doesNotMatch(await readFile(join(cwd, "backend-api", ".env.test.example"), "utf8"), /JWT_PRIVATE_KEY/);
+    assert.doesNotMatch(await readFile(join(cwd, "backend-api", ".env.test.example"), "utf8"), /REFRESH_TOKEN_EXPIRE_DAYS|REFRESH_TOKEN_PREFIX/);
     assert.match(await readFile(join(cwd, "backend-api", ".env.test.example"), "utf8"), /JWT_PUBLIC_KEY/);
+    assert.match(await readFile(join(cwd, "backend-api", ".env.test.example"), "utf8"), /SESSION_PREFIX/);
     assert.match(await readFile(join(cwd, "backend-api", "tests", "test_health.py"), "utf8"), /X-Request-ID/);
   } finally {
     await rm(cwd, { force: true, recursive: true });

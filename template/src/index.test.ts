@@ -252,6 +252,7 @@ test("python-main template creates auth service files", () => {
   assert.ok(paths.includes("app/services/token_service.py"));
   assert.ok(paths.includes("app/services/refresh_token_service.py"));
   assert.ok(paths.includes("app/services/blacklist_service.py"));
+  assert.ok(paths.includes("app/services/session_service.py"));
   assert.ok(paths.includes("alembic/env.py"));
   assert.ok(paths.includes("nginx/default.conf"));
   assert.ok(paths.includes("docker-compose.yml"));
@@ -260,6 +261,7 @@ test("python-main template creates auth service files", () => {
   assert.ok(paths.includes("tests/conftest.py"));
   assert.ok(paths.includes("tests/test_auth_api.py"));
   assert.ok(paths.includes("tests/test_token_service.py"));
+  assert.ok(paths.includes("tests/test_refresh_token_service.py"));
   assert.match(files.find((file) => file.path === "Dockerfile")?.content ?? "", /pdm install --prod --no-self/);
   assert.match(files.find((file) => file.path === "Dockerfile")?.content ?? "", /gunicorn app\.main:app/);
   assert.match(files.find((file) => file.path === "Dockerfile")?.content ?? "", /uvicorn_worker\.UvicornWorker/);
@@ -289,6 +291,8 @@ test("python-main template creates auth service files", () => {
   assert.match(readme.content, /escaped newline secrets/);
   assert.match(readme.content, /## Redis Token State/);
   assert.match(readme.content, /Refresh tokens are stored as SHA-256 hashes/);
+  assert.match(readme.content, /REFRESH_TOKEN_REUSE_GRACE_SECONDS/);
+  assert.match(readme.content, /revokes the session/);
   assert.match(readme.content, /## Database Migrations and Seed/);
   assert.match(readme.content, /pdm run seed/);
   assert.match(readme.content, /## FAQ/);
@@ -304,9 +308,16 @@ test("python-main template creates auth service files", () => {
   assert.match(files.find((file) => file.path === "app/api/auth.py")?.content ?? "", /POST \/auth\/login|"\/login"/);
   assert.match(files.find((file) => file.path === "app/api/auth.py")?.content ?? "", /HTTP_401_UNAUTHORIZED/);
   assert.match(files.find((file) => file.path === "app/services/auth_service.py")?.content ?? "", /password123/);
+  assert.match(files.find((file) => file.path === "app/services/auth_service.py")?.content ?? "", /rotate_refresh_token/);
+  assert.match(files.find((file) => file.path === "app/services/refresh_token_service.py")?.content ?? "", /created_at/);
+  assert.match(files.find((file) => file.path === "app/services/refresh_token_service.py")?.content ?? "", /replaced_by/);
+  assert.match(files.find((file) => file.path === "app/services/refresh_token_service.py")?.content ?? "", /refresh_token_reuse_grace_seconds/);
+  assert.match(files.find((file) => file.path === "app/services/session_service.py")?.content ?? "", /ensure_session_active/);
   assert.match(files.find((file) => file.path === "app/services/token_service.py")?.content ?? "", /jwt.encode/);
   assert.match(files.find((file) => file.path === "tests/test_auth_api.py")?.content ?? "", /test_login_failure_returns_401/);
   assert.match(files.find((file) => file.path === "tests/test_auth_api.py")?.content ?? "", /test_logout_blacklists_jti_and_revokes_session/);
+  assert.match(files.find((file) => file.path === "tests/test_auth_api.py")?.content ?? "", /test_me_revoked_session_returns_401/);
+  assert.match(files.find((file) => file.path === "tests/test_refresh_token_service.py")?.content ?? "", /test_rotated_refresh_token_after_grace_revokes_session/);
   assert.match(files.find((file) => file.path === "tests/test_token_service.py")?.content ?? "", /test_create_access_token_includes_required_payload_claims/);
   assert.match(files.find((file) => file.path === "tests/test_token_service.py")?.content ?? "", /\"iat\", \"exp\", \"jti\", \"iss\", \"aud\"/);
 });
@@ -334,6 +345,7 @@ test("python-app template creates resource service files", () => {
   assert.ok(paths.includes("app/deps/auth.py"));
   assert.ok(paths.includes("app/schemas/profile.py"));
   assert.ok(paths.includes("app/services/blacklist_service.py"));
+  assert.ok(paths.includes("app/services/session_service.py"));
   assert.ok(paths.includes("app/core/config.py"));
   assert.ok(paths.includes("app/core/logging.py"));
   assert.ok(paths.includes("alembic/env.py"));
@@ -365,6 +377,8 @@ test("python-app template creates resource service files", () => {
   assert.match(readme.content, /JWT_AUDIENCE/);
   assert.match(readme.content, /Do not add `JWT_PRIVATE_KEY`/);
   assert.match(readme.content, /## Redis Blacklist/);
+  assert.match(readme.content, /SESSION_PREFIX/);
+  assert.match(readme.content, /sessions revoked by logout or refresh-token reuse/);
   assert.match(readme.content, /## Scopes and Permissions/);
   assert.match(readme.content, /require_scope\("user:read"\)/);
   assert.match(readme.content, /## FAQ/);
@@ -373,13 +387,18 @@ test("python-app template creates resource service files", () => {
   assert.match(envTest.content, /WEB_CONCURRENCY=1/);
   assert.match(envTest.content, /LOG_FORMAT=json/);
   assert.doesNotMatch(envTest.content, /JWT_PRIVATE_KEY/);
+  assert.doesNotMatch(envTest.content, /REFRESH_TOKEN_EXPIRE_DAYS|REFRESH_TOKEN_PREFIX/);
   assert.match(envTest.content, /JWT_PUBLIC_KEY/);
+  assert.match(envTest.content, /SESSION_PREFIX/);
   assert.match(files.find((file) => file.path === "app/deps/auth.py")?.content ?? "", /jwt.decode/);
+  assert.match(files.find((file) => file.path === "app/deps/auth.py")?.content ?? "", /SessionService/);
+  assert.match(files.find((file) => file.path === "app/deps/auth.py")?.content ?? "", /ensure_session_active/);
   assert.match(files.find((file) => file.path === "app/deps/auth.py")?.content ?? "", /require_scope/);
   assert.match(files.find((file) => file.path === "app/deps/auth.py")?.content ?? "", /HTTP_403_FORBIDDEN/);
   assert.doesNotMatch(files.find((file) => file.path === "app/deps/auth.py")?.content ?? "", /jwt.encode/);
   assert.match(files.find((file) => file.path === "tests/test_profile_api.py")?.content ?? "", /test_profile_requires_token/);
   assert.match(files.find((file) => file.path === "tests/test_profile_api.py")?.content ?? "", /test_profile_rejects_invalid_signature/);
+  assert.match(files.find((file) => file.path === "tests/test_profile_api.py")?.content ?? "", /test_profile_rejects_revoked_session/);
   assert.match(files.find((file) => file.path === "tests/test_profile_api.py")?.content ?? "", /test_profile_rejects_insufficient_scope/);
 });
 

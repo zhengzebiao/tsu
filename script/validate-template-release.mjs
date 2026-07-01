@@ -40,20 +40,25 @@ try {
   await access(join(bundleDir, "react", "package.json"));
   await access(join(bundleDir, "python-main", "pyproject.toml"));
   await access(join(bundleDir, "python-main", "app", "main.py"));
+  await access(join(bundleDir, "python-main", "app", "services", "session_service.py"));
   await access(join(bundleDir, "python-main", ".github", "workflows", "ci.yml"));
   await access(join(bundleDir, "python-main", "tests", "test_auth_api.py"));
   await access(join(bundleDir, "python-main", "tests", "test_token_service.py"));
+  await access(join(bundleDir, "python-main", "tests", "test_refresh_token_service.py"));
   await assertReadmeContains(join(bundleDir, "python-main", "README.md"), [
     "## Auth API",
     "POST /auth/login",
     "## JWT Configuration",
     "JWT_PRIVATE_KEY",
     "## Redis Token State",
+    "REFRESH_TOKEN_REUSE_GRACE_SECONDS",
+    "revokes the session",
     "## Database Migrations and Seed",
     "## FAQ"
   ]);
   await access(join(bundleDir, "python-app", "pyproject.toml"));
   await access(join(bundleDir, "python-app", "app", "main.py"));
+  await access(join(bundleDir, "python-app", "app", "services", "session_service.py"));
   await access(join(bundleDir, "python-app", ".github", "workflows", "ci.yml"));
   await access(join(bundleDir, "python-app", "tests", "test_profile_api.py"));
   await assertReadmeContains(join(bundleDir, "python-app", "README.md"), [
@@ -62,6 +67,8 @@ try {
     "## Auth Integration with python-main",
     "JWT_PUBLIC_KEY",
     "## Redis Blacklist",
+    "SESSION_PREFIX",
+    "sessions revoked by logout or refresh-token reuse",
     "## Scopes and Permissions",
     "## FAQ"
   ]);
