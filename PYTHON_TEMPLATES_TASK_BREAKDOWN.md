@@ -8,7 +8,7 @@
 
 > 状态更新时间：2026-07-01  
 > 当前实现分支：`implement-python-templates`
-> 当前推进阶段：阶段 4/5/6/10：认证状态闭环补全（已补 refresh token rotation/reuse grace/session revoke、`python-app` revoked session 校验和对应模板/CLI/release/pytest 验证）
+> 当前推进阶段：阶段 7：Alembic、Seed 与数据库策略（已补 `python-main` / `python-app` 初始 migration、默认数据幂等 seed、README 边界说明和模板/CLI/release 校验）
 
 | 阶段 | 状态 | 说明 |
 | --- | --- | --- |
@@ -19,7 +19,7 @@
 | 阶段 4：`python-main` 认证中心核心能力 | 🚧 部分完成 | 已生成登录、刷新、注销、当前用户、RS256 token service、refresh rotation/session revoke/blacklist service 的基础闭环；真实账号校验和数据库用户/权限集成仍需深化 |
 | 阶段 5：Redis Token 状态管理 | 🚧 部分完成 | 已补 refresh token hash 的 `created_at`/`rotated_at`/`replaced_by` 元数据、rotation、reuse grace 判定、超出宽限期复用吊销 session、jti blacklist 和 session revoke 检查；并发刷新幂等响应和更高级泄露恢复策略仍需深化 |
 | 阶段 6：`python-app` 业务服务鉴权能力 | 🚧 部分完成 | 已生成 Bearer Token 解析、公钥校验、issuer/audience/exp 校验、Redis 黑名单读取、revoked session 检查和基础鉴权失败日志；roles/scope 策略仍需深化 |
-| 阶段 7：Alembic、Seed 与数据库策略 | 🚧 部分完成 | 已生成 Alembic 环境和 seed 入口；具体 migration、默认数据和幂等 seed 逻辑仍需深化 |
+| 阶段 7：Alembic、Seed 与数据库策略 | ✅ 已完成基础版 | 已生成 Alembic 环境、`python-main` / `python-app` 初始 migration、默认数据幂等 seed、README migration/seed/downgrade/product 边界说明，并补充模板/CLI/release 校验；真实 DB 登录和完整 RBAC 策略仍归阶段 4/6 后续深化 |
 | 阶段 8：Docker 与 Nginx | ✅ 已完成基础版 | 已生成 Dockerfile、开发 compose、Nginx 反向代理、安全响应头和 Request ID 透传；Dockerfile 使用生产 Gunicorn + Uvicorn Worker，compose 使用开发 Uvicorn `--reload` |
 | 阶段 9：GitHub Actions / Secrets / Environments | ✅ 已完成基础 deploy 模板 | 已生成 PDM CI、Alembic 状态检查、Docker build、test/product environment、docker push 与 deploy 占位 job；README 已说明 secrets 分离和 product 保护规则，真实平台 deploy 命令留给使用方替换 |
 | 阶段 10：测试覆盖与验收 | 🚧 部分完成 | 已补模板生成测试、CLI 初始化测试、release bundle 校验、生成文件 Python 语法 smoke check、`python-main` auth/token/refresh rotation pytest、`python-app` profile/auth/session revoke pytest，并已验证生成项目 pytest；跨服务端到端认证和日志脱敏细粒度断言仍需深化 |
@@ -36,7 +36,14 @@ pnpm --filter @tsuz/cli build
 pnpm --filter @tsuz/cli test
 pnpm template:release:build --version=0.0.0
 TEMPLATE_VERSION=0.0.0 pnpm validate:template-release
+python3 -m compileall -q <release-python-main>/app <release-python-main>/tests <release-python-app>/app <release-python-app>/tests
 python3 -m compileall -q <generated-auth-service>/app <generated-auth-service>/tests <generated-backend-api>/app <generated-backend-api>/tests
+DATABASE_URL=sqlite+pysqlite:///<generated-auth-service>/stage7.db PYTHONPATH=<generated-auth-service> uv run --project <generated-auth-service> --group dev alembic upgrade head
+DATABASE_URL=sqlite+pysqlite:///<generated-auth-service>/stage7.db PYTHONPATH=<generated-auth-service> uv run --project <generated-auth-service> --group dev python -m app.seed
+DATABASE_URL=sqlite+pysqlite:///<generated-auth-service>/stage7.db PYTHONPATH=<generated-auth-service> uv run --project <generated-auth-service> --group dev python -m app.seed
+DATABASE_URL=sqlite+pysqlite:///<generated-backend-api>/stage7.db PYTHONPATH=<generated-backend-api> uv run --project <generated-backend-api> --group dev alembic upgrade head
+DATABASE_URL=sqlite+pysqlite:///<generated-backend-api>/stage7.db PYTHONPATH=<generated-backend-api> uv run --project <generated-backend-api> --group dev python -m app.seed
+DATABASE_URL=sqlite+pysqlite:///<generated-backend-api>/stage7.db PYTHONPATH=<generated-backend-api> uv run --project <generated-backend-api> --group dev python -m app.seed
 PYTHONPATH=<generated-auth-service> uv run --project <generated-auth-service> --group dev pytest <generated-auth-service>/tests
 PYTHONPATH=<generated-backend-api> uv run --project <generated-backend-api> --group dev pytest <generated-backend-api>/tests
 ```

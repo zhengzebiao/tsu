@@ -94,7 +94,7 @@ def me(credentials: HTTPAuthorizationCredentials | None = Depends(security)) -> 
     },
     {
       path: "app/models/user.py",
-      content: `from sqlalchemy import Boolean, String
+      content: `from sqlalchemy import Boolean, Integer, String
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.database import Base
@@ -103,7 +103,7 @@ from app.core.database import Base
 class User(Base):
     __tablename__ = "users"
 
-    id: Mapped[int] = mapped_column(primary_key=True, index=True)
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
     email: Mapped[str] = mapped_column(String(320), unique=True, index=True)
     hashed_password: Mapped[str] = mapped_column(String(255))
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
@@ -111,23 +111,53 @@ class User(Base):
     },
     {
       path: "app/models/role.py",
-      content: `from sqlalchemy import String
+      content: `from sqlalchemy import Column, ForeignKey, Integer, String, Table
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.database import Base
+
+user_roles = Table(
+    "user_roles",
+    Base.metadata,
+    Column("user_id", ForeignKey("users.id", ondelete="CASCADE"), primary_key=True),
+    Column("role_id", ForeignKey("roles.id", ondelete="CASCADE"), primary_key=True),
+)
+
+role_permissions = Table(
+    "role_permissions",
+    Base.metadata,
+    Column("role_id", ForeignKey("roles.id", ondelete="CASCADE"), primary_key=True),
+    Column("permission_id", ForeignKey("permissions.id", ondelete="CASCADE"), primary_key=True),
+)
 
 
 class Role(Base):
     __tablename__ = "roles"
 
-    id: Mapped[int] = mapped_column(primary_key=True, index=True)
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
     name: Mapped[str] = mapped_column(String(64), unique=True, index=True)
+`
+    },
+    {
+      path: "app/models/permission.py",
+      content: `from sqlalchemy import Integer, String
+from sqlalchemy.orm import Mapped, mapped_column
+
+from app.core.database import Base
+
+
+class Permission(Base):
+    __tablename__ = "permissions"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    name: Mapped[str] = mapped_column(String(128), unique=True, index=True)
+    description: Mapped[str] = mapped_column(String(255), default="")
 `
     },
     {
       path: "app/models/session.py",
       content: `from datetime import datetime
-from sqlalchemy import DateTime, String
+from sqlalchemy import DateTime, Integer, String
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.database import Base
@@ -136,7 +166,7 @@ from app.core.database import Base
 class Session(Base):
     __tablename__ = "sessions"
 
-    id: Mapped[int] = mapped_column(primary_key=True, index=True)
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
     sid: Mapped[str] = mapped_column(String(64), unique=True, index=True)
     user_id: Mapped[str] = mapped_column(String(64), index=True)
     status: Mapped[str] = mapped_column(String(32), default="active")
@@ -521,7 +551,7 @@ interface SharedPythonOptions {
 function createSharedPythonFiles(options: SharedPythonOptions): TemplateFile[] {
   const includePrivateKey = options.templateName === "python-main";
   const apiImport = options.templateName === "python-main" ? "from app.api.auth import router as feature_router" : "from app.api.example import router as feature_router";
-  const modelImports = options.templateName === "python-main" ? "from app.models import role, session, user  # noqa: F401" : "# Import application models here so Alembic can detect metadata.";
+  const modelImports = options.templateName === "python-main" ? "from app.models import permission, role, session, user  # noqa: F401" : "from app.models import app_setting, sample_profile  # noqa: F401";
 
   return [
     {
@@ -547,6 +577,7 @@ dependencies = [
   "redis>=5.2.1",
   "pyjwt[crypto]>=2.10.1",
   "passlib[bcrypt]>=1.7.4",
+  "bcrypt>=4.0.1,<5.0.0",
   "email-validator>=2.2.0"
 ]
 
@@ -584,8 +615,6 @@ line-length = 120
 .env.*
 !.env.test.example
 !.env.product.example
-alembic/versions/*.py
-!alembic/versions/.gitkeep
 `
     },
     {
@@ -999,6 +1028,7 @@ def get_db() -> Generator[Session, None, None]:
         db.close()
 `
     },
+    ...createStageSevenFiles(options),
     {
       path: "app/core/redis.py",
       content: `from functools import lru_cache
@@ -1056,18 +1086,7 @@ def sha256_text(value: str) -> str:
     },
     {
       path: "app/seed/__main__.py",
-      content: `import logging
-
-logger = logging.getLogger(__name__)
-
-
-def main() -> None:
-    logger.info("seed completed")
-
-
-if __name__ == "__main__":
-    main()
-`
+      content: createSeedMainContent(options)
     },
     {
       path: "tests/test_health.py",
@@ -1592,7 +1611,8 @@ def test_profile_accepts_valid_token(client, access_token_factory) -> None:
 
 def test_profile_rejects_invalid_signature(client, access_token_factory) -> None:
     token = access_token_factory()
-    invalid_token = token[:-1] + ("a" if token[-1] != "a" else "b")
+    header, payload, signature = token.split(".")
+    invalid_token = f"{header}.{payload}.invalid-{signature}"
 
     response = client.get("/api/profile", headers={"Authorization": f"Bearer {invalid_token}"})
 
@@ -1708,6 +1728,376 @@ class SessionService:
             raise ValueError("session is revoked")
 `
   };
+}
+
+function createStageSevenFiles(options: SharedPythonOptions): TemplateFile[] {
+  if (options.templateName === "python-main") {
+    return [
+      {
+        path: "alembic/versions/0001_initial_auth_schema.py",
+        content: `"""initial auth schema
+
+Revision ID: 0001_initial_auth_schema
+Revises:
+Create Date: 2026-07-02
+"""
+from collections.abc import Sequence
+
+from alembic import op
+import sqlalchemy as sa
+
+revision: str = "0001_initial_auth_schema"
+down_revision: str | None = None
+branch_labels: str | Sequence[str] | None = None
+depends_on: str | Sequence[str] | None = None
+
+
+def upgrade() -> None:
+    op.create_table(
+        "users",
+        sa.Column("id", sa.Integer(), primary_key=True),
+        sa.Column("email", sa.String(length=320), nullable=False),
+        sa.Column("hashed_password", sa.String(length=255), nullable=False),
+        sa.Column("is_active", sa.Boolean(), nullable=False, server_default=sa.true()),
+    )
+    op.create_index("ix_users_id", "users", ["id"])
+    op.create_index("ix_users_email", "users", ["email"], unique=True)
+
+    op.create_table(
+        "roles",
+        sa.Column("id", sa.Integer(), primary_key=True),
+        sa.Column("name", sa.String(length=64), nullable=False),
+    )
+    op.create_index("ix_roles_id", "roles", ["id"])
+    op.create_index("ix_roles_name", "roles", ["name"], unique=True)
+
+    op.create_table(
+        "permissions",
+        sa.Column("id", sa.Integer(), primary_key=True),
+        sa.Column("name", sa.String(length=128), nullable=False),
+        sa.Column("description", sa.String(length=255), nullable=False, server_default=""),
+    )
+    op.create_index("ix_permissions_id", "permissions", ["id"])
+    op.create_index("ix_permissions_name", "permissions", ["name"], unique=True)
+
+    op.create_table(
+        "sessions",
+        sa.Column("id", sa.Integer(), primary_key=True),
+        sa.Column("sid", sa.String(length=64), nullable=False),
+        sa.Column("user_id", sa.String(length=64), nullable=False),
+        sa.Column("status", sa.String(length=32), nullable=False, server_default="active"),
+        sa.Column("created_at", sa.DateTime(), nullable=False),
+    )
+    op.create_index("ix_sessions_id", "sessions", ["id"])
+    op.create_index("ix_sessions_sid", "sessions", ["sid"], unique=True)
+    op.create_index("ix_sessions_user_id", "sessions", ["user_id"])
+
+    op.create_table(
+        "user_roles",
+        sa.Column("user_id", sa.Integer(), sa.ForeignKey("users.id", ondelete="CASCADE"), primary_key=True),
+        sa.Column("role_id", sa.Integer(), sa.ForeignKey("roles.id", ondelete="CASCADE"), primary_key=True),
+    )
+    op.create_table(
+        "role_permissions",
+        sa.Column("role_id", sa.Integer(), sa.ForeignKey("roles.id", ondelete="CASCADE"), primary_key=True),
+        sa.Column("permission_id", sa.Integer(), sa.ForeignKey("permissions.id", ondelete="CASCADE"), primary_key=True),
+    )
+
+
+def downgrade() -> None:
+    op.drop_table("role_permissions")
+    op.drop_table("user_roles")
+    op.drop_index("ix_sessions_user_id", table_name="sessions")
+    op.drop_index("ix_sessions_sid", table_name="sessions")
+    op.drop_index("ix_sessions_id", table_name="sessions")
+    op.drop_table("sessions")
+    op.drop_index("ix_permissions_name", table_name="permissions")
+    op.drop_index("ix_permissions_id", table_name="permissions")
+    op.drop_table("permissions")
+    op.drop_index("ix_roles_name", table_name="roles")
+    op.drop_index("ix_roles_id", table_name="roles")
+    op.drop_table("roles")
+    op.drop_index("ix_users_email", table_name="users")
+    op.drop_index("ix_users_id", table_name="users")
+    op.drop_table("users")
+`
+      }
+    ];
+  }
+
+  return [
+    {
+      path: "app/models/app_setting.py",
+      content: `from sqlalchemy import Integer, String
+from sqlalchemy.orm import Mapped, mapped_column
+
+from app.core.database import Base
+
+
+class AppSetting(Base):
+    __tablename__ = "app_settings"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    key: Mapped[str] = mapped_column(String(128), unique=True, index=True)
+    value: Mapped[str] = mapped_column(String(512))
+    description: Mapped[str] = mapped_column(String(255), default="")
+`
+    },
+    {
+      path: "app/models/sample_profile.py",
+      content: `from sqlalchemy import Boolean, Integer, String
+from sqlalchemy.orm import Mapped, mapped_column
+
+from app.core.database import Base
+
+
+class SampleProfile(Base):
+    __tablename__ = "sample_profiles"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    slug: Mapped[str] = mapped_column(String(128), unique=True, index=True)
+    display_name: Mapped[str] = mapped_column(String(255))
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+`
+    },
+    {
+      path: "alembic/versions/0001_initial_app_schema.py",
+      content: `"""initial app schema
+
+Revision ID: 0001_initial_app_schema
+Revises:
+Create Date: 2026-07-02
+"""
+from collections.abc import Sequence
+
+from alembic import op
+import sqlalchemy as sa
+
+revision: str = "0001_initial_app_schema"
+down_revision: str | None = None
+branch_labels: str | Sequence[str] | None = None
+depends_on: str | Sequence[str] | None = None
+
+
+def upgrade() -> None:
+    op.create_table(
+        "app_settings",
+        sa.Column("id", sa.Integer(), primary_key=True),
+        sa.Column("key", sa.String(length=128), nullable=False),
+        sa.Column("value", sa.String(length=512), nullable=False),
+        sa.Column("description", sa.String(length=255), nullable=False, server_default=""),
+    )
+    op.create_index("ix_app_settings_id", "app_settings", ["id"])
+    op.create_index("ix_app_settings_key", "app_settings", ["key"], unique=True)
+
+    op.create_table(
+        "sample_profiles",
+        sa.Column("id", sa.Integer(), primary_key=True),
+        sa.Column("slug", sa.String(length=128), nullable=False),
+        sa.Column("display_name", sa.String(length=255), nullable=False),
+        sa.Column("is_active", sa.Boolean(), nullable=False, server_default=sa.true()),
+    )
+    op.create_index("ix_sample_profiles_id", "sample_profiles", ["id"])
+    op.create_index("ix_sample_profiles_slug", "sample_profiles", ["slug"], unique=True)
+
+
+def downgrade() -> None:
+    op.drop_index("ix_sample_profiles_slug", table_name="sample_profiles")
+    op.drop_index("ix_sample_profiles_id", table_name="sample_profiles")
+    op.drop_table("sample_profiles")
+    op.drop_index("ix_app_settings_key", table_name="app_settings")
+    op.drop_index("ix_app_settings_id", table_name="app_settings")
+    op.drop_table("app_settings")
+`
+    }
+  ];
+}
+
+function createSeedMainContent(options: SharedPythonOptions): string {
+  if (options.templateName === "python-main") {
+    return `import logging
+
+from sqlalchemy import select
+from sqlalchemy.orm import Session
+
+from app.core.database import SessionLocal
+from app.core.logging import configure_logging
+from app.core.security import hash_password
+from app.models.permission import Permission
+from app.models.role import Role, role_permissions, user_roles
+from app.models.user import User
+
+logger = logging.getLogger(__name__)
+
+DEFAULT_ADMIN_EMAIL = "admin@example.com"
+DEFAULT_ADMIN_PASSWORD = "password123"
+DEFAULT_ROLE = "admin"
+DEFAULT_PERMISSIONS = {
+    "user:read": "Read current user profile data",
+    "user:write": "Update user profile data",
+}
+
+
+def ensure_admin_user(db: Session) -> User:
+    user = db.scalar(select(User).where(User.email == DEFAULT_ADMIN_EMAIL))
+    if user is not None:
+        logger.info("seed skipped existing admin user email=%s", DEFAULT_ADMIN_EMAIL)
+        return user
+    user = User(email=DEFAULT_ADMIN_EMAIL, hashed_password=hash_password(DEFAULT_ADMIN_PASSWORD), is_active=True)
+    db.add(user)
+    db.flush()
+    logger.info("seed created admin user email=%s", DEFAULT_ADMIN_EMAIL)
+    return user
+
+
+def ensure_role(db: Session, name: str) -> Role:
+    role = db.scalar(select(Role).where(Role.name == name))
+    if role is not None:
+        logger.info("seed skipped existing role name=%s", name)
+        return role
+    role = Role(name=name)
+    db.add(role)
+    db.flush()
+    logger.info("seed created role name=%s", name)
+    return role
+
+
+def ensure_permission(db: Session, name: str, description: str) -> Permission:
+    permission = db.scalar(select(Permission).where(Permission.name == name))
+    if permission is not None:
+        logger.info("seed skipped existing permission name=%s", name)
+        return permission
+    permission = Permission(name=name, description=description)
+    db.add(permission)
+    db.flush()
+    logger.info("seed created permission name=%s", name)
+    return permission
+
+
+def ensure_user_role(db: Session, user: User, role: Role) -> None:
+    exists = db.execute(select(user_roles.c.user_id).where(user_roles.c.user_id == user.id, user_roles.c.role_id == role.id)).first()
+    if exists is not None:
+        logger.info("seed skipped existing user role user_id=%s role=%s", user.id, role.name)
+        return
+    db.execute(user_roles.insert().values(user_id=user.id, role_id=role.id))
+    logger.info("seed attached role user_id=%s role=%s", user.id, role.name)
+
+
+def ensure_role_permission(db: Session, role: Role, permission: Permission) -> None:
+    exists = db.execute(
+        select(role_permissions.c.role_id).where(
+            role_permissions.c.role_id == role.id,
+            role_permissions.c.permission_id == permission.id,
+        )
+    ).first()
+    if exists is not None:
+        logger.info("seed skipped existing role permission role=%s permission=%s", role.name, permission.name)
+        return
+    db.execute(role_permissions.insert().values(role_id=role.id, permission_id=permission.id))
+    logger.info("seed attached permission role=%s permission=%s", role.name, permission.name)
+
+
+def seed(db: Session) -> None:
+    logger.info("seed started target=python-main")
+    admin = ensure_admin_user(db)
+    role = ensure_role(db, DEFAULT_ROLE)
+    ensure_user_role(db, admin, role)
+    for permission_name, description in DEFAULT_PERMISSIONS.items():
+        permission = ensure_permission(db, permission_name, description)
+        ensure_role_permission(db, role, permission)
+    logger.info("seed completed target=python-main")
+
+
+def main() -> None:
+    configure_logging()
+    db = SessionLocal()
+    try:
+        seed(db)
+        db.commit()
+    except Exception:
+        db.rollback()
+        logger.exception("seed failed target=python-main")
+        raise
+    finally:
+        db.close()
+
+
+if __name__ == "__main__":
+    main()
+`;
+  }
+
+  return `import logging
+
+from sqlalchemy import select
+from sqlalchemy.orm import Session
+
+from app.core.database import SessionLocal
+from app.core.logging import configure_logging
+from app.models.app_setting import AppSetting
+from app.models.sample_profile import SampleProfile
+
+logger = logging.getLogger(__name__)
+
+DEFAULT_SETTINGS = {
+    "site_name": ("Backend API", "Display name for the generated API service"),
+    "feature.profile_demo_enabled": ("true", "Enable the scaffolded profile demo endpoint"),
+}
+DEFAULT_SAMPLE_PROFILES = {
+    "starter-profile": "Starter Profile",
+}
+
+
+def ensure_setting(db: Session, key: str, value: str, description: str) -> AppSetting:
+    setting = db.scalar(select(AppSetting).where(AppSetting.key == key))
+    if setting is not None:
+        logger.info("seed skipped existing setting key=%s", key)
+        return setting
+    setting = AppSetting(key=key, value=value, description=description)
+    db.add(setting)
+    db.flush()
+    logger.info("seed created setting key=%s", key)
+    return setting
+
+
+def ensure_sample_profile(db: Session, slug: str, display_name: str) -> SampleProfile:
+    profile = db.scalar(select(SampleProfile).where(SampleProfile.slug == slug))
+    if profile is not None:
+        logger.info("seed skipped existing sample profile slug=%s", slug)
+        return profile
+    profile = SampleProfile(slug=slug, display_name=display_name, is_active=True)
+    db.add(profile)
+    db.flush()
+    logger.info("seed created sample profile slug=%s", slug)
+    return profile
+
+
+def seed(db: Session) -> None:
+    logger.info("seed started target=python-app")
+    for key, (value, description) in DEFAULT_SETTINGS.items():
+        ensure_setting(db, key, value, description)
+    for slug, display_name in DEFAULT_SAMPLE_PROFILES.items():
+        ensure_sample_profile(db, slug, display_name)
+    logger.info("seed completed target=python-app")
+
+
+def main() -> None:
+    configure_logging()
+    db = SessionLocal()
+    try:
+        seed(db)
+        db.commit()
+    except Exception:
+        db.rollback()
+        logger.exception("seed failed target=python-app")
+        raise
+    finally:
+        db.close()
+
+
+if __name__ == "__main__":
+    main()
+`;
 }
 
 function createGithubActionsWorkflow(options: SharedPythonOptions, includePrivateKey: boolean): string {
@@ -1950,10 +2340,13 @@ function createPythonTemplateUsageDocs(options: SharedPythonOptions): string {
       '',
       '## Database Migrations and Seed',
       '',
-      '- Use `pdm run migrate` to apply Alembic migrations.',
       '- Use `pdm run alembic-current` to inspect the active revision.',
+      '- Use `pdm run migrate` to apply Alembic migrations.',
+      '- Use `alembic downgrade -1` or `alembic downgrade <revision_id>` only for development, test, or pre-release rollback drills.',
       '- Use `pdm run seed` to populate baseline auth data for local development.',
-      '- Prefer forward-compatible product migrations over rollback-driven deployment plans.',
+      '- The seed is idempotent and ensures the default admin user, admin role, and starter permissions exist without duplicating rows.',
+      '- Product does not auto-run seed; execute it manually only after reviewing the target environment.',
+      '- Prefer immutable image rollback and forward-compatible repair migrations over relying on product database downgrade.',
       '',
       '## Logging and Request ID',
       '',
@@ -2013,6 +2406,16 @@ function createPythonTemplateUsageDocs(options: SharedPythonOptions): string {
     '',
     '- The scaffold uses `require_scope("user:read")` on `/api/profile`.',
     '- Add new authorization rules by wrapping endpoints with `require_scope(...)` or a similar dependency.',
+    '',
+    '## Database Migrations and Seed',
+    '',
+    '- Use `pdm run alembic-current` to inspect the active revision.',
+    '- Use `pdm run migrate` to apply Alembic migrations.',
+    '- Use `alembic downgrade -1` or `alembic downgrade <revision_id>` only for development, test, or pre-release rollback drills.',
+    '- Use `pdm run seed` to populate the default app settings and sample profile data.',
+    '- The seed is idempotent and can be run repeatedly without duplicating rows.',
+    '- Product does not auto-run seed; execute it manually only after reviewing the target environment.',
+    '- Prefer immutable image rollback and forward-compatible repair migrations over relying on product database downgrade.',
     '',
     '## Logging and Request ID',
     '',

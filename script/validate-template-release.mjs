@@ -40,7 +40,10 @@ try {
   await access(join(bundleDir, "react", "package.json"));
   await access(join(bundleDir, "python-main", "pyproject.toml"));
   await access(join(bundleDir, "python-main", "app", "main.py"));
+  await access(join(bundleDir, "python-main", "alembic", "versions", "0001_initial_auth_schema.py"));
+  await access(join(bundleDir, "python-main", "app", "models", "permission.py"));
   await access(join(bundleDir, "python-main", "app", "services", "session_service.py"));
+  await access(join(bundleDir, "python-main", "app", "seed", "__main__.py"));
   await access(join(bundleDir, "python-main", ".github", "workflows", "ci.yml"));
   await access(join(bundleDir, "python-main", "tests", "test_auth_api.py"));
   await access(join(bundleDir, "python-main", "tests", "test_token_service.py"));
@@ -54,11 +57,19 @@ try {
     "REFRESH_TOKEN_REUSE_GRACE_SECONDS",
     "revokes the session",
     "## Database Migrations and Seed",
+    "alembic downgrade -1",
+    "alembic downgrade <revision_id>",
+    "seed is idempotent",
+    "Product does not auto-run seed",
     "## FAQ"
   ]);
   await access(join(bundleDir, "python-app", "pyproject.toml"));
   await access(join(bundleDir, "python-app", "app", "main.py"));
+  await access(join(bundleDir, "python-app", "alembic", "versions", "0001_initial_app_schema.py"));
+  await access(join(bundleDir, "python-app", "app", "models", "app_setting.py"));
+  await access(join(bundleDir, "python-app", "app", "models", "sample_profile.py"));
   await access(join(bundleDir, "python-app", "app", "services", "session_service.py"));
+  await access(join(bundleDir, "python-app", "app", "seed", "__main__.py"));
   await access(join(bundleDir, "python-app", ".github", "workflows", "ci.yml"));
   await access(join(bundleDir, "python-app", "tests", "test_profile_api.py"));
   await assertReadmeContains(join(bundleDir, "python-app", "README.md"), [
@@ -70,6 +81,11 @@ try {
     "SESSION_PREFIX",
     "sessions revoked by logout or refresh-token reuse",
     "## Scopes and Permissions",
+    "## Database Migrations and Seed",
+    "alembic downgrade -1",
+    "alembic downgrade <revision_id>",
+    "seed is idempotent",
+    "Product does not auto-run seed",
     "## FAQ"
   ]);
   process.stdout.write(`Validated release archive ${archivePath}\n`);

@@ -912,6 +912,10 @@ test("runCli initializes python-main projects", async () => {
     assert.match(readme, /REFRESH_TOKEN_REUSE_GRACE_SECONDS/);
     assert.match(readme, /revokes the session/);
     assert.match(readme, /## Database Migrations and Seed/);
+    assert.match(readme, /alembic downgrade -1/);
+    assert.match(readme, /alembic downgrade <revision_id>/);
+    assert.match(readme, /seed is idempotent/);
+    assert.match(readme, /Product does not auto-run seed/);
     assert.match(readme, /## FAQ/);
     assert.match(workflow, /docker-build:/);
     assert.match(workflow, /deploy-test:/);
@@ -937,6 +941,10 @@ test("runCli initializes python-main projects", async () => {
     assert.match(await readFile(join(cwd, "auth-service", "app", "services", "refresh_token_service.py"), "utf8"), /refresh_token_reuse_grace_seconds/);
     assert.match(await readFile(join(cwd, "auth-service", "app", "services", "refresh_token_service.py"), "utf8"), /replaced_by/);
     assert.match(await readFile(join(cwd, "auth-service", "app", "services", "session_service.py"), "utf8"), /ensure_session_active/);
+    assert.match(await readFile(join(cwd, "auth-service", "app", "models", "permission.py"), "utf8"), /class Permission/);
+    assert.match(await readFile(join(cwd, "auth-service", "alembic", "versions", "0001_initial_auth_schema.py"), "utf8"), /role_permissions/);
+    assert.match(await readFile(join(cwd, "auth-service", "app", "seed", "__main__.py"), "utf8"), /ensure_admin_user/);
+    assert.match(await readFile(join(cwd, "auth-service", "app", "seed", "__main__.py"), "utf8"), /DEFAULT_PERMISSIONS/);
     assert.match(await readFile(join(cwd, "auth-service", "app", "services", "token_service.py"), "utf8"), /jwt.encode/);
     assert.match(await readFile(join(cwd, "auth-service", "tests", "test_auth_api.py"), "utf8"), /test_login_failure_returns_401/);
     assert.match(await readFile(join(cwd, "auth-service", "tests", "test_auth_api.py"), "utf8"), /test_me_revoked_session_returns_401/);
@@ -973,6 +981,11 @@ test("runCli initializes python-app projects", async () => {
     assert.match(readme, /sessions revoked by logout or refresh-token reuse/);
     assert.match(readme, /## Scopes and Permissions/);
     assert.match(readme, /require_scope\("user:read"\)/);
+    assert.match(readme, /## Database Migrations and Seed/);
+    assert.match(readme, /alembic downgrade -1/);
+    assert.match(readme, /pdm run seed/);
+    assert.match(readme, /seed is idempotent/);
+    assert.match(readme, /Product does not auto-run seed/);
     assert.match(readme, /## FAQ/);
     assert.match(workflow, /docker-build:/);
     assert.match(workflow, /deploy-test:/);
@@ -996,6 +1009,11 @@ test("runCli initializes python-app projects", async () => {
     assert.match(await readFile(join(cwd, "backend-api", "app", "deps", "auth.py"), "utf8"), /SessionService/);
     assert.match(await readFile(join(cwd, "backend-api", "app", "deps", "auth.py"), "utf8"), /HTTP_403_FORBIDDEN/);
     assert.match(await readFile(join(cwd, "backend-api", "app", "services", "session_service.py"), "utf8"), /ensure_session_active/);
+    assert.match(await readFile(join(cwd, "backend-api", "app", "models", "app_setting.py"), "utf8"), /class AppSetting/);
+    assert.match(await readFile(join(cwd, "backend-api", "app", "models", "sample_profile.py"), "utf8"), /class SampleProfile/);
+    assert.match(await readFile(join(cwd, "backend-api", "alembic", "versions", "0001_initial_app_schema.py"), "utf8"), /sample_profiles/);
+    assert.match(await readFile(join(cwd, "backend-api", "app", "seed", "__main__.py"), "utf8"), /ensure_setting/);
+    assert.match(await readFile(join(cwd, "backend-api", "app", "seed", "__main__.py"), "utf8"), /DEFAULT_SAMPLE_PROFILES/);
     assert.match(await readFile(join(cwd, "backend-api", "tests", "test_profile_api.py"), "utf8"), /test_profile_rejects_revoked_session/);
     assert.match(await readFile(join(cwd, "backend-api", "tests", "test_profile_api.py"), "utf8"), /test_profile_rejects_insufficient_scope/);
     assert.doesNotMatch(await readFile(join(cwd, "backend-api", ".env.test.example"), "utf8"), /JWT_PRIVATE_KEY/);

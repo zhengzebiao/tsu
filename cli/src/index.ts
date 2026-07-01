@@ -860,8 +860,8 @@ const templateExpectedFiles: Record<string, string[]> = {
   vue3: ["package.json", "README.md", "src/main.ts", "src/App.vue", "vite.config.ts"],
   mfe: ["package.json", "README.md", "apps/host/package.json", "apps/subapp/package.json", "packages/shared/src/index.ts"],
   react: ["package.json", "README.md", "src/main.tsx", "src/App.tsx", "vite.config.ts"],
-  "python-main": ["pyproject.toml", "README.md", "app/main.py", "app/api/auth.py", "app/core/config.py", "app/services/session_service.py"],
-  "python-app": ["pyproject.toml", "README.md", "app/main.py", "app/api/example.py", "app/deps/auth.py", "app/services/session_service.py"]
+  "python-main": ["pyproject.toml", "README.md", "app/main.py", "app/api/auth.py", "app/core/config.py", "app/services/session_service.py", "alembic/versions/0001_initial_auth_schema.py"],
+  "python-app": ["pyproject.toml", "README.md", "app/main.py", "app/api/example.py", "app/deps/auth.py", "app/services/session_service.py", "alembic/versions/0001_initial_app_schema.py"]
 };
 
 function pass(label: string, details?: string): DoctorCheck {
