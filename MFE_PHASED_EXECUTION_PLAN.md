@@ -1,0 +1,448 @@
+# 微前端模板分阶段执行方案
+
+## 1. 目标
+
+按阶段推进 `mfe-main` 与 `mfe-app` 模板落地，确保每一阶段都可验证、可回退、可交付。
+
+本方案默认与模板生成方案一致，核心约定如下：
+
+- 新增两个模板：`mfe-main`、`mfe-app`
+- 微前端技术栈：React + TS + Vite + qiankun
+- 主应用负责登录与登录态管理
+- 子应用负责业务场景
+- 公共包先放 UI、类型、工具，再逐步扩展
+- CI / Deploy 分离
+- Docker 不使用 `latest`
+- 发布 tag：`test-v1.0.1`、`product-v1.0.1`
+- 单一 `docker-compose.yml`
+- `deploy.yml` 自动上传 compose 文件到服务器
+
+---
+
+## Phase 1：模板注册与基础骨架
+
+### 目标
+
+让模板库识别 `mfe-main` 和 `mfe-app`，并可以正常生成最小骨架。
+
+### 任务
+
+1. 新增模板文件：
+   - `template/src/mfe-main.ts`
+   - `template/src/mfe-app.ts`
+2. 修改 [template/src/index.ts](template/src/index.ts)：
+   - 扩展 `TemplateName`
+   - 添加 `templateDefinitions`
+   - 添加 `createTemplateSourceFiles()` 分支
+3. 更新测试：
+   - [template/src/index.test.ts](template/src/index.test.ts)
+   - [cli/src/index.test.ts](cli/src/index.test.ts)
+4. 更新生成脚本验证：
+   - [script/validate-generated-apps.mjs](script/validate-generated-apps.mjs)
+
+### 验收标准
+
+- `listTemplates()` 中能看到 `mfe-main`、`mfe-app`
+- CLI 可以正常展示模板信息
+- 模板可被生成
+- 基础测试通过
+
+### 建议输出
+
+```sh
+pnpm --filter @tsuz/template build
+pnpm --filter @tsuz/template test
+pnpm --filter @tsuz/cli test
+```
+
+---
+
+## Phase 2：生成 `mfe-main` 主应用骨架
+
+### 目标
+
+生成一个可安装、可启动、可构建的主应用工程。
+
+### 任务
+
+1. 生成 workspace 文件：
+   - `package.json`
+   - `pnpm-workspace.yaml`
+   - `turbo.json`
+   - `tsconfig.base.json`
+2. 生成主应用目录：
+   - `apps/main/package.json`
+   - `apps/main/src/main.tsx`
+   - `apps/main/src/App.tsx`
+   - `apps/main/vite.config.ts`
+3. 接入依赖：
+   - React
+   - Vite
+   - TypeScript
+   - React Router
+   - Ant Design
+   - Tailwind CSS
+4. 生成基础配置：
+   - ESLint
+   - Prettier
+   - `.gitignore`
+   - `.dockerignore`
+
+### 验收标准
+
+- `pnpm install` 成功
+- `pnpm dev` 可启动
+- `pnpm build` 成功
+- `pnpm lint` 成功
+
+---
+
+## Phase 3：主应用登录态与 qiankun 接入
+
+### 目标
+
+主应用具备登录、登录态管理和子应用注册能力。
+
+### 任务
+
+1. 增加登录页：
+   - `LoginPage.tsx`
+2. 增加 auth store：
+   - `auth.store.ts`
+3. 增加 auth service：
+   - `auth.service.ts`
+4. 增加 React Query 相关封装
+5. 增加 qiankun 注册：
+   - `micro-apps/registry.ts`
+6. 主应用向子应用传递：
+   - `apiBaseUrl`
+   - `getAccessToken`
+   - `getCurrentUser`
+   - `logout`
+7. 增加单元测试
+
+### 验收标准
+
+- 登录流程可运行
+- 子应用注册逻辑可运行
+- 登录态可传递给子应用
+- 单测通过
+
+---
+
+## Phase 4：公共包 `packages/shared`、`packages/ui`、`packages/api`
+
+### 目标
+
+抽出可复用的基础能力，减少主应用和子应用重复代码。
+
+### 任务
+
+1. 新增 `packages/shared`
+2. 新增 `packages/ui`
+3. 新增 `packages/api`
+4. 配置 workspace 依赖
+5. 配置 tsconfig path alias
+6. 配置 Vite alias
+
+### 包职责
+
+- `packages/shared`：类型、常量、工具
+- `packages/ui`：Logo、页面容器、空状态、错误状态
+- `packages/api`：通用 API client
+
+### 验收标准
+
+- 主应用和子应用都可引用公共包
+- 公共包不包含具体业务逻辑
+- 依赖关系清晰
+
+---
+
+## Phase 5：生成 `mfe-app` 子应用骨架
+
+### 目标
+
+生成可独立启动、可被 qiankun 加载的子应用工程。
+
+### 任务
+
+1. 生成 `apps/app`
+2. 增加入口：
+   - `main.tsx`
+   - `bootstrap.tsx`
+   - `qiankun.ts`
+3. 支持独立运行和 qiankun mount/unmount
+4. 增加业务首页：
+   - `BusinessHomePage.tsx`
+5. 增加状态和查询封装
+6. 增加测试
+
+### 验收标准
+
+- 独立运行可用
+- 被主应用加载可用
+- 生命周期正常
+- 单测通过
+
+---
+
+## Phase 6：测试体系
+
+### 目标
+
+将单元测试和 E2E 纳入模板默认能力。
+
+### 任务
+
+1. 接入 Vitest
+2. 接入 Testing Library
+3. 接入 Playwright
+4. 主应用 E2E：
+   - 登录
+   - 加载子应用
+5. 子应用 E2E：
+   - 独立启动
+   - 页面渲染
+
+### 验收标准
+
+- `pnpm test` 通过
+- `pnpm test:e2e` 通过
+- CI 中可稳定运行
+
+---
+
+## Phase 7：Docker、nginx、compose
+
+### 目标
+
+模板生成的项目可以直接容器化部署。
+
+### 任务
+
+1. 生成 `Dockerfile`
+2. 生成 `nginx/nginx.conf`
+3. 生成单一 `docker-compose.yml`
+4. Dockerfile 支持 build args：
+   - `VITE_API_BASE_URL`
+   - `VITE_MFE_APP_ENTRY`
+   - `VITE_APP_ENV`
+5. `docker-compose.yml` 使用环境变量：
+   - `DOCKER_IMAGE_NAME`
+   - `APP_VERSION`
+   - `CONTAINER_NAME`
+   - `APP_PORT`
+   - `APP_ENV`
+
+### 验收标准
+
+- 镜像可构建
+- 容器可启动
+- nginx 可正常提供 SPA
+- compose 可正常编排
+
+---
+
+## Phase 8：CI 工作流
+
+### 目标
+
+为模板内置质量门禁。
+
+### 任务
+
+1. 新增 `.github/workflows/ci.yml`
+2. 触发：
+   - PR
+   - push 到 `main` / `master`
+3. 执行：
+   - install
+   - lint
+   - format check
+   - test
+   - build
+   - E2E
+
+### 验收标准
+
+- PR 自动跑 CI
+- 主分支推送自动跑 CI
+- CI 失败时能准确阻断合并
+
+---
+
+## Phase 9：Deploy 工作流
+
+### 目标
+
+支持通过 tag 发布 test / product，并支持手动回滚。
+
+### 任务
+
+1. 新增 `.github/workflows/deploy.yml`
+2. 支持 tag：
+   - `test-v*.*.*`
+   - `product-v*.*.*`
+3. 根据 tag 解析：
+   - `environment`
+   - `image_tag`
+   - `version`
+4. 使用 GitHub Environment 变量
+5. 构建并推送 Docker 镜像
+6. 自动上传 `docker-compose.yml`
+7. SSH 部署到服务器
+8. 支持 `workflow_dispatch` 回滚历史镜像
+
+### 验收标准
+
+- `git tag test-v1.0.1` 可以发布测试环境
+- `git tag product-v1.0.1` 可以发布正式环境
+- 回滚可指定历史 `image_tag`
+- 服务器不需要手工维护 compose 文件
+
+---
+
+## Phase 10：发布验证
+
+### 目标
+
+确保模板生成后真实可用。
+
+### 任务
+
+1. 更新 [script/validate-generated-apps.mjs](script/validate-generated-apps.mjs)
+2. 增加 `mfe-main`、`mfe-app`
+3. 对生成项目执行：
+   - `pnpm install`
+   - `pnpm lint`
+   - `pnpm test`
+   - `pnpm build`
+
+### 验收标准
+
+- 生成项目可安装
+- 可构建
+- 可测试
+- 可部署
+
+---
+
+## Phase 11：文档完善
+
+### 目标
+
+让用户拿到模板后可以直接上手。
+
+### 任务
+
+1. 更新模板 README
+2. 写清楚本地开发
+3. 写清楚 GitHub Environment 配置
+4. 写清楚 tag 发布流程
+5. 写清楚回滚流程
+6. 写清楚 `VITE_API_BASE_URL` 是构建期变量
+7. 写清楚 `deploy.yml` 自动上传 `docker-compose.yml`
+
+### 验收标准
+
+- README 能指导用户完成从生成到部署的全部流程
+- test / product 的发布说明清晰
+- 回滚说明清晰
+
+---
+
+## 2. 推荐执行顺序
+
+建议按下面顺序落地：
+
+1. 模板注册
+2. 主应用骨架
+3. 主应用登录与 qiankun
+4. 公共包
+5. 子应用骨架
+6. 测试体系
+7. Docker / nginx / compose
+8. CI
+9. Deploy
+10. 发布验证
+11. 文档
+
+---
+
+## 3. 每阶段交付物
+
+### Phase 1
+
+- 模板可识别
+- 基础测试更新
+
+### Phase 2
+
+- 主应用骨架生成完成
+
+### Phase 3
+
+- 主应用可以登录并注册子应用
+
+### Phase 4
+
+- 公共包可复用
+
+### Phase 5
+
+- 子应用可独立运行并被主应用加载
+
+### Phase 6
+
+- 单测与 E2E 可用
+
+### Phase 7
+
+- 容器化部署可用
+
+### Phase 8
+
+- CI 可用
+
+### Phase 9
+
+- Tag 发布和回滚可用
+
+### Phase 10
+
+- 生成物验证通过
+
+### Phase 11
+
+- README 完整
+
+---
+
+## 4. 最终验收命令
+
+建议最终至少满足：
+
+```sh
+pnpm build
+pnpm test
+pnpm validate:generated-apps
+```
+
+如果启用了 E2E：
+
+```sh
+pnpm test:e2e
+```
+
+---
+
+## 5. 备注
+
+如果后续想把主应用和子应用拆成独立仓库，建议直接把：
+
+- `packages/shared`
+- `packages/ui`
+- `packages/api`
+
+演进为可发布的私有 npm 包，以减少微前端之间的仓库耦合。
