@@ -19,7 +19,9 @@
 
 ---
 
-## Phase 1：模板注册与基础骨架
+## Phase 1：模板注册与基础骨架（已完成）
+
+**状态：已完成**
 
 ### 目标
 
@@ -27,32 +29,39 @@
 
 ### 任务
 
-1. 新增模板文件：
-   - `template/src/mfe-main.ts`
-   - `template/src/mfe-app.ts`
-2. 修改 [template/src/index.ts](template/src/index.ts)：
-   - 扩展 `TemplateName`
-   - 添加 `templateDefinitions`
-   - 添加 `createTemplateSourceFiles()` 分支
-3. 更新测试：
-   - [template/src/index.test.ts](template/src/index.test.ts)
-   - [cli/src/index.test.ts](cli/src/index.test.ts)
-4. 更新生成脚本验证：
-   - [script/validate-generated-apps.mjs](script/validate-generated-apps.mjs)
+- [x] 新增模板文件：
+  - [x] `template/src/mfe-main.ts`
+  - [x] `template/src/mfe-app.ts`
+- [x] 修改 [template/src/index.ts](template/src/index.ts)：
+  - [x] 扩展 `TemplateName`
+  - [x] 添加 `templateDefinitions`
+  - [x] 添加 `createTemplateSourceFiles()` 分支
+- [x] 更新测试：
+  - [x] [template/src/index.test.ts](template/src/index.test.ts)
+  - [x] [cli/src/index.test.ts](cli/src/index.test.ts)
+- [x] 更新生成脚本验证：
+  - [x] [script/validate-generated-apps.mjs](script/validate-generated-apps.mjs)
 
 ### 验收标准
 
-- `listTemplates()` 中能看到 `mfe-main`、`mfe-app`
-- CLI 可以正常展示模板信息
-- 模板可被生成
-- 基础测试通过
+- [x] `listTemplates()` 中能看到 `mfe-main`、`mfe-app`
+- [x] CLI 可以正常展示模板信息
+- [x] 模板可被生成
+- [x] 基础测试通过
 
-### 建议输出
+### 已验证命令
 
 ```sh
 pnpm --filter @tsuz/template build
 pnpm --filter @tsuz/template test
+pnpm --filter @tsuz/cli build
 pnpm --filter @tsuz/cli test
+node cli/dist/index.js template list
+node cli/dist/index.js template info mfe-main
+node cli/dist/index.js template info mfe-app
+node cli/dist/index.js init mfe-main-demo --template mfe-main --local --cwd ./tmp --force
+node cli/dist/index.js init mfe-app-demo --template mfe-app --local --cwd ./tmp --force
+pnpm validate:generated-apps
 ```
 
 ---

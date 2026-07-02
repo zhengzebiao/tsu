@@ -10,7 +10,9 @@ const cliEntry = join(repoRoot, "cli", "dist", "index.js");
 const appTemplates = [
   { name: "vue3", projectName: "web-app", useLocalPackages: true, commands: [["lint"], ["test"], ["build"]] },
   { name: "react", projectName: "react-app", useLocalPackages: true, commands: [["lint"], ["build"]] },
-  { name: "mfe", projectName: "mfe-platform", useLocalPackages: false, commands: [["lint"], ["build"]] }
+  { name: "mfe", projectName: "mfe-platform", useLocalPackages: false, commands: [["lint"], ["build"]] },
+  { name: "mfe-main", projectName: "mfe-main-platform", useLocalPackages: false, commands: [["lint"], ["build"]] },
+  { name: "mfe-app", projectName: "mfe-business-app", useLocalPackages: false, commands: [["lint"], ["build"]] }
 ];
 const tempRoot = join(repoRoot, "tmp", "validate-generated-apps");
 

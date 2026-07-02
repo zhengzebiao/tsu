@@ -56,6 +56,8 @@ pdm run dev
 | `vue3` | 中后台、仪表盘、Web App | Vite、Vue Router、Pinia dashboard store、Vitest、TypeScript、ESLint、Docker、CI |
 | `react` | React Web App、仪表盘 | Vite、React Router、TypeScript、ESLint、Docker、CI |
 | `mfe` | 微前端工作区 | Host 应用、Vue 子应用、qiankun、共享包、Docker、CI |
+| `mfe-main` | React 微前端主应用 / 基座 | React、Vite、qiankun 主应用占位、Zustand、TanStack Query、Ant Design、Turbo |
+| `mfe-app` | React 微前端子应用 / 业务应用 | React、Vite、qiankun 生命周期占位、Zustand、TanStack Query、Ant Design、Turbo |
 | `monorepo` | 多包团队仓库 | pnpm workspace、Turbo、Changesets、TypeScript packages |
 | `python-main` | FastAPI 认证服务 | PDM、PostgreSQL、Redis、Alembic、RS256 JWT 签发、Docker、Nginx、CI/CD Environments |
 | `python-app` | FastAPI 业务服务 | PDM、PostgreSQL、Redis 黑名单校验、RS256 JWT 验证、Docker、Nginx、CI/CD Environments |
@@ -97,7 +99,7 @@ tsu-cli init admin-console --template vue3
 
 | 参数 | 说明 |
 | --- | --- |
-| `-t, --template <name>` | 模板名称：`default`、`vue3`、`react`、`mfe`、`monorepo`、`python-main`、`python-app` |
+| `-t, --template <name>` | 模板名称：`default`、`vue3`、`react`、`mfe`、`mfe-main`、`mfe-app`、`monorepo`、`python-main`、`python-app` |
 | `-v, --version <value>` | 模板发布版本，例如 `1.0.3` 或 `latest` |
 | `--repo <owner/repo>` | 承载模板 release asset 的 GitHub 仓库 |
 | `--cwd <path>` | 项目创建目录 |

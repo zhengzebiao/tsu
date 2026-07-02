@@ -41,6 +41,8 @@ demo-app/
 | `vue3` | `tsu-cli init web-app --template vue3` | Vue 3 + Vite + Router + Pinia 前端项目模板 |
 | `react` | `tsu-cli init react-app --template react` | React + Vite + TypeScript + Router 前端项目模板 |
 | `mfe` | `tsu-cli init mfe-app --template mfe` | Vue 3 + Vite + qiankun 微前端主子应用模板 |
+| `mfe-main` | `tsu-cli init mfe-main-app --template mfe-main` | React + Vite + qiankun 主应用 / 基座最小骨架 |
+| `mfe-app` | `tsu-cli init mfe-business-app --template mfe-app` | React + Vite + qiankun 子应用 / 业务应用最小骨架 |
 | `monorepo` | `tsu-cli init platform --template monorepo` | 符合当前 PRD 的 pnpm + Turborepo + Changesets 多包仓库模板 |
 
 默认情况下，CLI 会尝试从 GitHub Release asset 拉取模板；如果提供了 `--local`，则使用本地模板生成。

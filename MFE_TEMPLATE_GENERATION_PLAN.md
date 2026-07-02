@@ -41,6 +41,8 @@
 
 ## 2. 模板注册方式
 
+> Phase 1 状态：已完成。`mfe-main` 与 `mfe-app` 已完成模板注册和最小骨架生成能力，后续阶段继续补齐主应用、子应用、公共包、测试、Docker 与 CI/CD 能力。
+
 在模板库中新增：
 
 - `template/src/mfe-main.ts`

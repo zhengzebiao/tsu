@@ -41,6 +41,8 @@ test("createTemplateListMessage reports available templates", () => {
   assert.match(message, /vue3\s+Vue 3 app.*admin, dashboard, web app/);
   assert.match(message, /react\s+React app.*react app, dashboard, web app/);
   assert.match(message, /mfe\s+Micro frontend workspace.*micro frontend, multi app/);
+  assert.match(message, /mfe-main\s+React qiankun host shell starter.*micro frontend host, auth shell, app container/);
+  assert.match(message, /mfe-app\s+React qiankun sub application starter.*micro frontend sub app, business app, remote module/);
   assert.match(message, /monorepo\s+Multi-package workspace.*workspace, packages, team standard/);
   assert.match(message, /python-main\s+FastAPI auth service.*auth service, jwt issuer, backend api/);
   assert.match(message, /python-app\s+FastAPI resource service.*resource service, business api, jwt verifier/);
@@ -109,6 +111,24 @@ test("createTemplateInfoMessage reports template details", () => {
   assert.match(message, /Node: >=20/);
   assert.match(message, /Package managers: pnpm/);
   assert.match(message, /pnpm install/);
+});
+
+test("createTemplateInfoMessage reports MFE template details", () => {
+  const mainMessage = createTemplateInfoMessage("mfe-main");
+  const appMessage = createTemplateInfoMessage("mfe-app");
+
+  assert.match(mainMessage, /Template: mfe-main/);
+  assert.match(mainMessage, /Description: React qiankun host shell starter/);
+  assert.match(mainMessage, /Tags: mfe, qiankun, react, host, vite/);
+  assert.match(mainMessage, /Recommended for: micro frontend host, auth shell, app container/);
+  assert.match(mainMessage, /pnpm install/);
+  assert.match(mainMessage, /pnpm dev/);
+  assert.match(appMessage, /Template: mfe-app/);
+  assert.match(appMessage, /Description: React qiankun sub application starter/);
+  assert.match(appMessage, /Tags: mfe, qiankun, react, sub app, vite/);
+  assert.match(appMessage, /Recommended for: micro frontend sub app, business app, remote module/);
+  assert.match(appMessage, /pnpm install/);
+  assert.match(appMessage, /pnpm dev/);
 });
 
 test("createRemoteTemplateInfoMessage reports versioned template details", () => {

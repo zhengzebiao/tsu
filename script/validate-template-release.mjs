@@ -22,7 +22,7 @@ try {
 
   const templateNames = manifest.templates.map((template) => template.name);
 
-  const expectedTemplates = ["default", "monorepo", "vue3", "mfe", "react", "python-main", "python-app"];
+  const expectedTemplates = ["default", "monorepo", "vue3", "mfe", "mfe-main", "mfe-app", "react", "python-main", "python-app"];
   const missingTemplates = expectedTemplates.filter((templateName) => !templateNames.includes(templateName));
 
   if (missingTemplates.length > 0) {
@@ -37,6 +37,12 @@ try {
   await access(join(bundleDir, "monorepo", "package.json"));
   await access(join(bundleDir, "vue3", "package.json"));
   await access(join(bundleDir, "mfe", "package.json"));
+  await access(join(bundleDir, "mfe-main", "package.json"));
+  await access(join(bundleDir, "mfe-main", "apps", "main", "package.json"));
+  await access(join(bundleDir, "mfe-main", "apps", "main", "src", "main.tsx"));
+  await access(join(bundleDir, "mfe-app", "package.json"));
+  await access(join(bundleDir, "mfe-app", "apps", "app", "package.json"));
+  await access(join(bundleDir, "mfe-app", "apps", "app", "src", "qiankun.ts"));
   await access(join(bundleDir, "react", "package.json"));
   await access(join(bundleDir, "python-main", "pyproject.toml"));
   await access(join(bundleDir, "python-main", "app", "main.py"));
