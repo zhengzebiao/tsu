@@ -21,7 +21,9 @@ export function createPythonMainTemplateFiles(projectName: string): TemplateFile
       content: `import jwt
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from sqlalchemy.orm import Session as DbSession
 
+from app.core.database import get_db
 from app.schemas.auth import LoginRequest, LogoutResponse, RefreshTokenRequest, TokenResponse, UserResponse
 from app.services.auth_service import AuthService
 
@@ -46,9 +48,9 @@ def _require_access_token(credentials: HTTPAuthorizationCredentials | None) -> s
     summary="Login and issue tokens",
     responses={401: {"description": "Invalid credentials"}},
 )
-def login(payload: LoginRequest) -> TokenResponse:
+def login(payload: LoginRequest, db: DbSession = Depends(get_db)) -> TokenResponse:
     try:
-        return AuthService().login(payload)
+        return AuthService(db).login(payload)
     except ValueError as exc:
         raise _unauthorized("invalid credentials") from exc
 
@@ -59,9 +61,9 @@ def login(payload: LoginRequest) -> TokenResponse:
     summary="Passively refresh access token",
     responses={401: {"description": "Invalid refresh token"}},
 )
-def refresh(payload: RefreshTokenRequest) -> TokenResponse:
+def refresh(payload: RefreshTokenRequest, db: DbSession = Depends(get_db)) -> TokenResponse:
     try:
-        return AuthService().refresh(payload.refresh_token)
+        return AuthService(db).refresh(payload.refresh_token)
     except ValueError as exc:
         raise _unauthorized("invalid refresh token") from exc
 
@@ -72,9 +74,12 @@ def refresh(payload: RefreshTokenRequest) -> TokenResponse:
     summary="Logout current session and blacklist current access token jti",
     responses={401: {"description": "Invalid access token"}},
 )
-def logout(credentials: HTTPAuthorizationCredentials | None = Depends(security)) -> LogoutResponse:
+def logout(
+    credentials: HTTPAuthorizationCredentials | None = Depends(security),
+    db: DbSession = Depends(get_db),
+) -> LogoutResponse:
     try:
-        return AuthService().logout(_require_access_token(credentials))
+        return AuthService(db).logout(_require_access_token(credentials))
     except (jwt.PyJWTError, ValueError) as exc:
         raise _unauthorized("invalid access token") from exc
 
@@ -85,9 +90,12 @@ def logout(credentials: HTTPAuthorizationCredentials | None = Depends(security))
     summary="Return current authenticated user",
     responses={401: {"description": "Invalid access token"}},
 )
-def me(credentials: HTTPAuthorizationCredentials | None = Depends(security)) -> UserResponse:
+def me(
+    credentials: HTTPAuthorizationCredentials | None = Depends(security),
+    db: DbSession = Depends(get_db),
+) -> UserResponse:
     try:
-        return AuthService().current_user(_require_access_token(credentials))
+        return AuthService(db).current_user(_require_access_token(credentials))
     except (jwt.PyJWTError, ValueError) as exc:
         raise _unauthorized("invalid access token") from exc
 `
@@ -157,7 +165,7 @@ class Permission(Base):
     {
       path: "app/models/session.py",
       content: `from datetime import datetime
-from sqlalchemy import DateTime, Integer, String
+from sqlalchemy import DateTime, ForeignKey, Integer, String
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.database import Base
@@ -168,7 +176,7 @@ class Session(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
     sid: Mapped[str] = mapped_column(String(64), unique=True, index=True)
-    user_id: Mapped[str] = mapped_column(String(64), index=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
     status: Mapped[str] = mapped_column(String(32), default="active")
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 `
@@ -207,7 +215,16 @@ class UserResponse(BaseModel):
     {
       path: "app/services/auth_service.py",
       content: `import logging
+from uuid import uuid4
 
+from sqlalchemy import select
+from sqlalchemy.orm import Session as DbSession
+
+from app.core.security import verify_password
+from app.models.permission import Permission
+from app.models.role import Role, role_permissions, user_roles
+from app.models.session import Session as AuthSession
+from app.models.user import User
 from app.schemas.auth import LoginRequest, LogoutResponse, TokenResponse, UserResponse
 from app.services.blacklist_service import BlacklistService
 from app.services.refresh_token_service import RefreshTokenService
@@ -217,41 +234,135 @@ logger = logging.getLogger("app.auth")
 
 
 class AuthService:
-    def __init__(self) -> None:
+    def __init__(self, db: DbSession) -> None:
+        self.db = db
         self.tokens = TokenService()
         self.refresh_tokens = RefreshTokenService()
         self.blacklist = BlacklistService()
 
     def login(self, payload: LoginRequest) -> TokenResponse:
-        # Replace this demo credential check with a database lookup.
-        if str(payload.username).lower() != "admin@example.com" or payload.password != "password123":
-            logger.warning("login failed username=%s", str(payload.username).lower())
+        email = str(payload.username).lower()
+        user = self._get_user_by_email(email)
+        if user is None or not user.is_active or not verify_password(payload.password, user.hashed_password):
+            logger.warning("login failed username=%s reason=invalid_credentials", email)
             raise ValueError("invalid credentials")
-        user_id = "user_123"
-        sid = "sess_demo"
-        access_token = self.tokens.create_access_token(user_id=user_id, sid=sid, roles=["admin"], scope="user:read")
-        refresh_token = self.refresh_tokens.create_refresh_token(user_id=user_id, sid=sid)
-        logger.info("login succeeded user_id=%s sid=%s", user_id, sid)
-        return TokenResponse(access_token=access_token, refresh_token=refresh_token, expires_in=self.tokens.expires_in_seconds)
+
+        sid = self._create_db_session(user)
+        roles, scope = self._build_claims(user)
+        access_token = self.tokens.create_access_token(
+            user_id=str(user.id), sid=sid, roles=roles, scope=scope
+        )
+        refresh_token = self.refresh_tokens.create_refresh_token(user_id=str(user.id), sid=sid)
+        self.db.commit()
+        logger.info("login succeeded user_id=%s sid=%s", user.id, sid)
+        return TokenResponse(
+            access_token=access_token,
+            refresh_token=refresh_token,
+            expires_in=self.tokens.expires_in_seconds,
+        )
 
     def refresh(self, refresh_token: str) -> TokenResponse:
         rotation = self.refresh_tokens.rotate_refresh_token(refresh_token)
-        access_token = self.tokens.create_access_token(user_id=rotation["user_id"], sid=rotation["sid"], roles=["admin"], scope="user:read")
-        logger.info("refresh succeeded user_id=%s sid=%s", rotation["user_id"], rotation["sid"])
-        return TokenResponse(access_token=access_token, refresh_token=rotation["refresh_token"], expires_in=self.tokens.expires_in_seconds)
+        user = self._get_active_user_by_id(rotation["user_id"])
+        self._ensure_db_session_active(rotation["sid"])
+        roles, scope = self._build_claims(user)
+        access_token = self.tokens.create_access_token(
+            user_id=str(user.id), sid=rotation["sid"], roles=roles, scope=scope
+        )
+        logger.info("refresh succeeded user_id=%s sid=%s", user.id, rotation["sid"])
+        return TokenResponse(
+            access_token=access_token,
+            refresh_token=rotation["refresh_token"],
+            expires_in=self.tokens.expires_in_seconds,
+        )
 
     def logout(self, access_token: str) -> LogoutResponse:
         payload = self.tokens.verify_access_token(access_token)
-        self.blacklist.add_jti(payload["jti"], payload["exp"])
-        self.refresh_tokens.revoke_session(payload["sid"])
-        logger.info("logout succeeded sid=%s jti=%s", payload["sid"], payload["jti"])
+        jti = self._required_string_claim(payload, "jti")
+        sid = self._required_string_claim(payload, "sid")
+        exp = payload.get("exp")
+        if not isinstance(exp, int):
+            raise ValueError("invalid access token")
+        self.blacklist.add_jti(jti, exp)
+        self.refresh_tokens.revoke_session(sid)
+        self._mark_db_session_revoked(sid)
+        self.db.commit()
+        logger.info("logout succeeded sid=%s jti=%s", sid, jti)
         return LogoutResponse(message="logged out")
 
     def current_user(self, access_token: str) -> UserResponse:
         payload = self.tokens.verify_access_token(access_token)
-        self.blacklist.ensure_not_blacklisted(payload["jti"])
-        self.refresh_tokens.ensure_session_active(payload["sid"])
-        return UserResponse(id=payload["sub"], username="admin@example.com", roles=payload.get("roles", []))
+        user_id = self._required_string_claim(payload, "sub")
+        jti = self._required_string_claim(payload, "jti")
+        sid = self._required_string_claim(payload, "sid")
+        self.blacklist.ensure_not_blacklisted(jti)
+        self.refresh_tokens.ensure_session_active(sid)
+        self._ensure_db_session_active(sid)
+        user = self._get_active_user_by_id(user_id)
+        roles, _scope = self._build_claims(user)
+        return UserResponse(id=str(user.id), username=user.email, roles=roles)
+
+    def _get_user_by_email(self, email: str) -> User | None:
+        return self.db.scalar(select(User).where(User.email == email))
+
+    def _get_active_user_by_id(self, user_id: str | int) -> User:
+        try:
+            numeric_user_id = int(user_id)
+        except (TypeError, ValueError) as exc:
+            raise ValueError("invalid user") from exc
+        user = self.db.get(User, numeric_user_id)
+        if user is None or not user.is_active:
+            raise ValueError("invalid user")
+        return user
+
+    def _get_user_roles(self, user_id: int) -> list[str]:
+        roles = self.db.scalars(
+            select(Role.name)
+            .join(user_roles, user_roles.c.role_id == Role.id)
+            .where(user_roles.c.user_id == user_id)
+            .order_by(Role.name)
+        ).all()
+        return list(roles)
+
+    def _get_user_permissions(self, user_id: int) -> list[str]:
+        permissions = self.db.scalars(
+            select(Permission.name)
+            .distinct()
+            .join(role_permissions, role_permissions.c.permission_id == Permission.id)
+            .join(user_roles, user_roles.c.role_id == role_permissions.c.role_id)
+            .where(user_roles.c.user_id == user_id)
+            .order_by(Permission.name)
+        ).all()
+        return list(permissions)
+
+    def _build_claims(self, user: User) -> tuple[list[str], str]:
+        roles = self._get_user_roles(user.id)
+        permissions = self._get_user_permissions(user.id)
+        return roles, " ".join(permissions)
+
+    def _create_db_session(self, user: User) -> str:
+        sid = uuid4().hex
+        self.db.add(AuthSession(sid=sid, user_id=user.id, status="active"))
+        self.db.flush()
+        return sid
+
+    def _ensure_db_session_active(self, sid: str) -> AuthSession:
+        session = self.db.scalar(select(AuthSession).where(AuthSession.sid == sid))
+        if session is None or session.status != "active":
+            raise ValueError("session is revoked")
+        return session
+
+    def _mark_db_session_revoked(self, sid: str) -> None:
+        session = self.db.scalar(select(AuthSession).where(AuthSession.sid == sid))
+        if session is not None:
+            session.status = "revoked"
+            self.db.flush()
+
+    def _required_string_claim(self, payload: dict, claim: str) -> str:
+        value = payload.get(claim)
+        if not isinstance(value, str) or not value:
+            raise ValueError("invalid access token")
+        return value
 `
     },
     {
@@ -413,7 +524,8 @@ class RefreshTokenService:
     createPythonMainConftestFile(),
     createPythonMainAuthApiTestFile(),
     createPythonMainTokenServiceTestFile(),
-    createPythonMainRefreshTokenServiceTestFile()
+    createPythonMainRefreshTokenServiceTestFile(),
+    createPythonMainAuthServiceTestFile()
   ];
 }
 
@@ -485,6 +597,10 @@ class CurrentUser:
     def scopes(self) -> set[str]:
         return {scope for scope in self.scope.split() if scope}
 
+    @property
+    def role_set(self) -> set[str]:
+        return set(self.roles)
+
 
 def get_current_user(credentials: HTTPAuthorizationCredentials | None = Depends(security)) -> CurrentUser:
     if credentials is None:
@@ -498,28 +614,91 @@ def get_current_user(credentials: HTTPAuthorizationCredentials | None = Depends(
             issuer=settings.jwt_issuer,
             audience=settings.jwt_audience,
         )
-        BlacklistService().ensure_not_blacklisted(payload["jti"])
-        SessionService().ensure_session_active(payload["sid"])
-        return CurrentUser(
-            user_id=payload["sub"],
-            sid=payload["sid"],
-            jti=payload["jti"],
-            roles=payload.get("roles", []),
-            scope=payload.get("scope", ""),
-        )
-    except (jwt.PyJWTError, KeyError, ValueError) as exc:
-        logger.warning("auth rejected reason=invalid_or_revoked_token")
+        user_id = _required_string_claim(payload, "sub")
+        sid = _required_string_claim(payload, "sid")
+        jti = _required_string_claim(payload, "jti")
+        roles = _roles_claim(payload)
+        scope = _scope_claim(payload)
+    except jwt.PyJWTError as exc:
+        logger.warning("auth rejected reason=invalid_token")
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="invalid token") from exc
+    except ValueError as exc:
+        logger.warning("auth rejected reason=invalid_claims")
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="invalid token") from exc
+
+    try:
+        BlacklistService().ensure_not_blacklisted(jti)
+    except ValueError as exc:
+        logger.warning("auth rejected reason=blacklisted_token jti=%s", jti)
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="invalid token") from exc
+
+    try:
+        SessionService().ensure_session_active(sid)
+    except ValueError as exc:
+        logger.warning("auth rejected reason=revoked_session sid=%s", sid)
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="invalid token") from exc
+
+    return CurrentUser(user_id=user_id, sid=sid, jti=jti, roles=roles, scope=scope)
 
 
 def require_scope(required_scope: str) -> Callable[[CurrentUser], CurrentUser]:
+    return require_scopes(required_scope)
+
+
+def require_scopes(*required_scopes: str) -> Callable[[CurrentUser], CurrentUser]:
+    required = set(required_scopes)
+
     def dependency(current_user: CurrentUser = Depends(get_current_user)) -> CurrentUser:
-        if required_scope not in current_user.scopes:
-            logger.warning("authorization rejected reason=insufficient_scope user_id=%s required_scope=%s", current_user.user_id, required_scope)
+        missing = required - current_user.scopes
+        if missing:
+            logger.warning(
+                "authorization rejected reason=insufficient_scope user_id=%s required_scopes=%s",
+                current_user.user_id,
+                ",".join(sorted(missing)),
+            )
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="insufficient scope")
         return current_user
 
     return dependency
+
+
+def require_role(required_role: str) -> Callable[[CurrentUser], CurrentUser]:
+    def dependency(current_user: CurrentUser = Depends(get_current_user)) -> CurrentUser:
+        if required_role not in current_user.role_set:
+            logger.warning(
+                "authorization rejected reason=insufficient_role user_id=%s required_role=%s",
+                current_user.user_id,
+                required_role,
+            )
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="insufficient role")
+        return current_user
+
+    return dependency
+
+
+def _required_string_claim(payload: dict, claim: str) -> str:
+    value = payload.get(claim)
+    if not isinstance(value, str) or not value:
+        raise ValueError(f"invalid {claim} claim")
+    return value
+
+
+def _roles_claim(payload: dict) -> list[str]:
+    value = payload.get("roles", [])
+    if value is None:
+        return []
+    if not isinstance(value, list) or not all(isinstance(role, str) and role for role in value):
+        raise ValueError("invalid roles claim")
+    return value
+
+
+def _scope_claim(payload: dict) -> str:
+    value = payload.get("scope", "")
+    if value is None:
+        return ""
+    if not isinstance(value, str):
+        raise ValueError("invalid scope claim")
+    return value
 `
     },
     {
@@ -1185,18 +1364,18 @@ def test_keys() -> dict[str, str]:
 function createPythonMainAuthApiTestFile(): TemplateFile {
   return {
     path: "tests/test_auth_api.py",
-    content: `from types import SimpleNamespace
-
-import pytest
+    content: `import pytest
 
 import app.api.auth as auth_api
-from app.schemas.auth import LogoutResponse, TokenResponse, UserResponse
 from app.schemas.auth import LoginRequest
-from app.services.auth_service import AuthService
+from app.schemas.auth import LogoutResponse, TokenResponse, UserResponse
 
 
 def test_login_success_returns_tokens(client, monkeypatch: pytest.MonkeyPatch) -> None:
     class FakeAuthService:
+        def __init__(self, db) -> None:
+            self.db = db
+
         def login(self, payload: LoginRequest) -> TokenResponse:
             assert str(payload.username).lower() == "admin@example.com"
             return TokenResponse(access_token="access", refresh_token="refresh", expires_in=3600)
@@ -1211,7 +1390,16 @@ def test_login_success_returns_tokens(client, monkeypatch: pytest.MonkeyPatch) -
     assert response.headers["X-Request-ID"]
 
 
-def test_login_failure_returns_401(client) -> None:
+def test_login_failure_returns_401(client, monkeypatch: pytest.MonkeyPatch) -> None:
+    class FakeAuthService:
+        def __init__(self, db) -> None:
+            self.db = db
+
+        def login(self, payload: LoginRequest) -> TokenResponse:
+            raise ValueError("invalid credentials")
+
+    monkeypatch.setattr(auth_api, "AuthService", FakeAuthService)
+
     response = client.post("/auth/login", json={"username": "admin@example.com", "password": "wrong"})
 
     assert response.status_code == 401
@@ -1221,6 +1409,9 @@ def test_login_failure_returns_401(client) -> None:
 
 def test_refresh_success_returns_new_tokens(client, monkeypatch: pytest.MonkeyPatch) -> None:
     class FakeAuthService:
+        def __init__(self, db) -> None:
+            self.db = db
+
         def refresh(self, refresh_token: str) -> TokenResponse:
             assert refresh_token == "refresh"
             return TokenResponse(access_token="new-access", refresh_token="new-refresh", expires_in=3600)
@@ -1236,6 +1427,9 @@ def test_refresh_success_returns_new_tokens(client, monkeypatch: pytest.MonkeyPa
 
 def test_refresh_failure_returns_401(client, monkeypatch: pytest.MonkeyPatch) -> None:
     class FakeAuthService:
+        def __init__(self, db) -> None:
+            self.db = db
+
         def refresh(self, refresh_token: str) -> TokenResponse:
             raise ValueError("invalid refresh token")
 
@@ -1249,6 +1443,9 @@ def test_refresh_failure_returns_401(client, monkeypatch: pytest.MonkeyPatch) ->
 
 def test_logout_success_returns_message(client, monkeypatch: pytest.MonkeyPatch) -> None:
     class FakeAuthService:
+        def __init__(self, db) -> None:
+            self.db = db
+
         def logout(self, access_token: str) -> LogoutResponse:
             assert access_token == "access"
             return LogoutResponse(message="logged out")
@@ -1268,38 +1465,29 @@ def test_logout_missing_token_returns_401(client) -> None:
     assert response.json()["detail"] == "invalid access token"
 
 
-def test_logout_blacklists_jti_and_revokes_session() -> None:
-    calls: dict[str, object] = {}
-    service = AuthService()
-    service.tokens = SimpleNamespace(
-        verify_access_token=lambda token: {"jti": "jti-123", "exp": 4_102_444_800, "sid": "sid-123"}
-    )
-    service.blacklist = SimpleNamespace(add_jti=lambda jti, exp: calls.update({"jti": jti, "exp": exp}))
-    service.refresh_tokens = SimpleNamespace(revoke_session=lambda sid: calls.update({"sid": sid}))
-
-    response = service.logout("access")
-
-    assert response.message == "logged out"
-    assert calls == {"jti": "jti-123", "exp": 4_102_444_800, "sid": "sid-123"}
-
-
 def test_me_success_returns_current_user(client, monkeypatch: pytest.MonkeyPatch) -> None:
     class FakeAuthService:
+        def __init__(self, db) -> None:
+            self.db = db
+
         def current_user(self, access_token: str) -> UserResponse:
             assert access_token == "access"
-            return UserResponse(id="user_123", username="admin@example.com", roles=["admin"])
+            return UserResponse(id="1", username="admin@example.com", roles=["admin"])
 
     monkeypatch.setattr(auth_api, "AuthService", FakeAuthService)
 
     response = client.get("/auth/me", headers={"Authorization": "Bearer access"})
 
     assert response.status_code == 200
-    assert response.json()["id"] == "user_123"
+    assert response.json()["id"] == "1"
     assert response.json()["roles"] == ["admin"]
 
 
 def test_me_blacklisted_token_returns_401(client, monkeypatch: pytest.MonkeyPatch) -> None:
     class FakeAuthService:
+        def __init__(self, db) -> None:
+            self.db = db
+
         def current_user(self, access_token: str) -> UserResponse:
             raise ValueError("token is blacklisted")
 
@@ -1313,6 +1501,9 @@ def test_me_blacklisted_token_returns_401(client, monkeypatch: pytest.MonkeyPatc
 
 def test_me_revoked_session_returns_401(client, monkeypatch: pytest.MonkeyPatch) -> None:
     class FakeAuthService:
+        def __init__(self, db) -> None:
+            self.db = db
+
         def current_user(self, access_token: str) -> UserResponse:
             raise ValueError("session is revoked")
 
@@ -1322,23 +1513,221 @@ def test_me_revoked_session_returns_401(client, monkeypatch: pytest.MonkeyPatch)
 
     assert response.status_code == 401
     assert response.json()["detail"] == "invalid access token"
+`
+  };
+}
+
+function createPythonMainAuthServiceTestFile(): TemplateFile {
+  return {
+    path: "tests/test_auth_service.py",
+    content: `from collections.abc import Iterator
+
+import pytest
+from sqlalchemy import create_engine, select
+from sqlalchemy.orm import Session as DbSession, sessionmaker
+
+from app.core.database import Base
+from app.core.security import hash_password
+from app.models.permission import Permission
+from app.models.role import Role, role_permissions, user_roles
+from app.models.session import Session as AuthSession
+from app.models.user import User
+from app.schemas.auth import LoginRequest
+from app.services.auth_service import AuthService
 
 
-def test_current_user_checks_session_status() -> None:
-    def reject_session(sid: str) -> None:
-        assert sid == "sid-123"
-        raise ValueError("session is revoked")
+class RecordingTokenService:
+    expires_in_seconds = 3600
 
-    service = AuthService()
-    service.tokens = SimpleNamespace(
-        verify_access_token=lambda token: {"sub": "user_123", "jti": "jti-123", "sid": "sid-123", "roles": ["admin"]}
+    def __init__(self, payload: dict | None = None) -> None:
+        self.payload = payload or {}
+        self.created: list[dict[str, object]] = []
+
+    def create_access_token(self, user_id: str, sid: str, roles: list[str], scope: str) -> str:
+        self.created.append({"user_id": user_id, "sid": sid, "roles": roles, "scope": scope})
+        return "access-token"
+
+    def verify_access_token(self, token: str) -> dict:
+        assert token == "access"
+        return dict(self.payload)
+
+
+class RecordingRefreshTokenService:
+    def __init__(self, rotation: dict | None = None) -> None:
+        self.rotation = rotation or {}
+        self.created: list[dict[str, str]] = []
+        self.revoked: list[str] = []
+        self.session_checks: list[str] = []
+
+    def create_refresh_token(self, user_id: str, sid: str) -> str:
+        self.created.append({"user_id": user_id, "sid": sid})
+        return "refresh-token"
+
+    def rotate_refresh_token(self, refresh_token: str) -> dict:
+        assert refresh_token == "refresh"
+        return dict(self.rotation)
+
+    def revoke_session(self, sid: str) -> None:
+        self.revoked.append(sid)
+
+    def ensure_session_active(self, sid: str) -> None:
+        self.session_checks.append(sid)
+
+
+class RecordingBlacklistService:
+    def __init__(self) -> None:
+        self.added: list[tuple[str, int]] = []
+        self.checked: list[str] = []
+
+    def add_jti(self, jti: str, exp: int) -> None:
+        self.added.append((jti, exp))
+
+    def ensure_not_blacklisted(self, jti: str) -> None:
+        self.checked.append(jti)
+
+
+@pytest.fixture
+def db_session() -> Iterator[DbSession]:
+    engine = create_engine("sqlite+pysqlite:///:memory:")
+    Base.metadata.create_all(engine)
+    TestingSessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False)
+    db = TestingSessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
+        Base.metadata.drop_all(engine)
+        engine.dispose()
+
+
+def create_user_with_rbac(db: DbSession, *, active: bool = True, password: str = "password123") -> User:
+    user = User(email="admin@example.com", hashed_password=hash_password(password), is_active=active)
+    role = Role(name="admin")
+    read_permission = Permission(name="user:read", description="Read current user")
+    write_permission = Permission(name="user:write", description="Write current user")
+    db.add_all([user, role, read_permission, write_permission])
+    db.flush()
+    db.execute(user_roles.insert().values(user_id=user.id, role_id=role.id))
+    db.execute(role_permissions.insert().values(role_id=role.id, permission_id=read_permission.id))
+    db.execute(role_permissions.insert().values(role_id=role.id, permission_id=write_permission.id))
+    db.commit()
+    return user
+
+
+def attach_service_fakes(service: AuthService, *, token_payload: dict | None = None, rotation: dict | None = None):
+    tokens = RecordingTokenService(payload=token_payload)
+    refresh_tokens = RecordingRefreshTokenService(rotation=rotation)
+    blacklist = RecordingBlacklistService()
+    service.tokens = tokens
+    service.refresh_tokens = refresh_tokens
+    service.blacklist = blacklist
+    return tokens, refresh_tokens, blacklist
+
+
+def test_login_uses_db_user_password_and_rbac_claims(db_session: DbSession) -> None:
+    user = create_user_with_rbac(db_session)
+    service = AuthService(db_session)
+    tokens, refresh_tokens, _blacklist = attach_service_fakes(service)
+
+    response = service.login(LoginRequest(username="admin@example.com", password="password123"))
+
+    assert response.access_token == "access-token"
+    assert response.refresh_token == "refresh-token"
+    sid = tokens.created[0]["sid"]
+    assert tokens.created == [
+        {"user_id": str(user.id), "sid": sid, "roles": ["admin"], "scope": "user:read user:write"}
+    ]
+    assert refresh_tokens.created == [{"user_id": str(user.id), "sid": sid}]
+    db_session.expire_all()
+    auth_session = db_session.scalar(select(AuthSession).where(AuthSession.user_id == user.id))
+    assert auth_session is not None
+    assert auth_session.sid == sid
+    assert auth_session.status == "active"
+
+
+def test_login_rejects_wrong_password(db_session: DbSession) -> None:
+    create_user_with_rbac(db_session)
+    service = AuthService(db_session)
+    attach_service_fakes(service)
+
+    with pytest.raises(ValueError, match="invalid credentials"):
+        service.login(LoginRequest(username="admin@example.com", password="wrong"))
+
+
+def test_login_rejects_inactive_user(db_session: DbSession) -> None:
+    create_user_with_rbac(db_session, active=False)
+    service = AuthService(db_session)
+    attach_service_fakes(service)
+
+    with pytest.raises(ValueError, match="invalid credentials"):
+        service.login(LoginRequest(username="admin@example.com", password="password123"))
+
+
+def test_refresh_uses_db_user_session_and_rbac_claims(db_session: DbSession) -> None:
+    user = create_user_with_rbac(db_session)
+    db_session.add(AuthSession(sid="sid-refresh", user_id=user.id, status="active"))
+    db_session.commit()
+    service = AuthService(db_session)
+    tokens, _refresh_tokens, _blacklist = attach_service_fakes(
+        service,
+        rotation={"user_id": str(user.id), "sid": "sid-refresh", "refresh_token": "new-refresh-token"},
     )
-    service.blacklist = SimpleNamespace(ensure_not_blacklisted=lambda jti: None)
-    service.refresh_tokens = SimpleNamespace(ensure_session_active=reject_session)
+
+    response = service.refresh("refresh")
+
+    assert response.access_token == "access-token"
+    assert response.refresh_token == "new-refresh-token"
+    assert tokens.created == [
+        {"user_id": str(user.id), "sid": "sid-refresh", "roles": ["admin"], "scope": "user:read user:write"}
+    ]
+
+
+def test_current_user_returns_db_email_and_roles(db_session: DbSession) -> None:
+    user = create_user_with_rbac(db_session)
+    db_session.add(AuthSession(sid="sid-current", user_id=user.id, status="active"))
+    db_session.commit()
+    service = AuthService(db_session)
+    token_payload = {"sub": str(user.id), "jti": "jti-current", "sid": "sid-current", "exp": 4_102_444_800}
+    _tokens, refresh_tokens, blacklist = attach_service_fakes(service, token_payload=token_payload)
+
+    response = service.current_user("access")
+
+    assert response.id == str(user.id)
+    assert response.username == "admin@example.com"
+    assert response.roles == ["admin"]
+    assert blacklist.checked == ["jti-current"]
+    assert refresh_tokens.session_checks == ["sid-current"]
+
+
+def test_current_user_rejects_revoked_db_session(db_session: DbSession) -> None:
+    user = create_user_with_rbac(db_session)
+    db_session.add(AuthSession(sid="sid-current", user_id=user.id, status="revoked"))
+    db_session.commit()
+    service = AuthService(db_session)
+    token_payload = {"sub": str(user.id), "jti": "jti-current", "sid": "sid-current", "exp": 4_102_444_800}
+    attach_service_fakes(service, token_payload=token_payload)
 
     with pytest.raises(ValueError, match="session is revoked"):
         service.current_user("access")
-`
+
+
+def test_logout_blacklists_jti_revokes_redis_and_db_session(db_session: DbSession) -> None:
+    user = create_user_with_rbac(db_session)
+    db_session.add(AuthSession(sid="sid-logout", user_id=user.id, status="active"))
+    db_session.commit()
+    service = AuthService(db_session)
+    token_payload = {"sub": str(user.id), "jti": "jti-logout", "sid": "sid-logout", "exp": 4_102_444_800}
+    _tokens, refresh_tokens, blacklist = attach_service_fakes(service, token_payload=token_payload)
+
+    response = service.logout("access")
+
+    assert response.message == "logged out"
+    assert blacklist.added == [("jti-logout", 4_102_444_800)]
+    assert refresh_tokens.revoked == ["sid-logout"]
+    db_session.expire_all()
+    auth_session = db_session.scalar(select(AuthSession).where(AuthSession.sid == "sid-logout"))
+    assert auth_session is not None
+    assert auth_session.status == "revoked"`
   };
 }
 
@@ -1554,9 +1943,10 @@ def _make_access_token(
     audience: str | None = None,
     expires_delta: timedelta = timedelta(minutes=5),
     private_key: str = TEST_PRIVATE_KEY,
+    payload_overrides: dict[str, object] | None = None,
 ) -> str:
     now = datetime.now(timezone.utc)
-    payload = {
+    payload: dict[str, object] = {
         "sub": user_id,
         "iss": issuer or settings.jwt_issuer,
         "aud": audience or settings.jwt_audience,
@@ -1564,9 +1954,11 @@ def _make_access_token(
         "exp": int((now + expires_delta).timestamp()),
         "jti": jti or str(uuid4()),
         "sid": sid,
-        "roles": roles or ["admin"],
+        "roles": roles if roles is not None else ["admin"],
         "scope": scope,
     }
+    if payload_overrides:
+        payload.update(payload_overrides)
     return jwt.encode(payload, private_key, algorithm=settings.jwt_algorithm)
 
 
@@ -1648,6 +2040,24 @@ def test_profile_rejects_expired_token(client, access_token_factory) -> None:
     assert response.json()["detail"] == "invalid token"
 
 
+def test_profile_rejects_malformed_roles_claim(client, access_token_factory) -> None:
+    token = access_token_factory(payload_overrides={"roles": "admin"})
+
+    response = client.get("/api/profile", headers={"Authorization": f"Bearer {token}"})
+
+    assert response.status_code == 401
+    assert response.json()["detail"] == "invalid token"
+
+
+def test_profile_rejects_malformed_scope_claim(client, access_token_factory) -> None:
+    token = access_token_factory(payload_overrides={"scope": ["user:read"]})
+
+    response = client.get("/api/profile", headers={"Authorization": f"Bearer {token}"})
+
+    assert response.status_code == 401
+    assert response.json()["detail"] == "invalid token"
+
+
 def test_profile_rejects_blacklisted_token(client, access_token_factory, monkeypatch: pytest.MonkeyPatch) -> None:
     class RejectingBlacklistService:
         def ensure_not_blacklisted(self, jti: str) -> None:
@@ -1687,6 +2097,28 @@ def test_profile_rejects_insufficient_scope(client, access_token_factory) -> Non
     assert response.status_code == 403
     assert response.json()["detail"] == "insufficient scope"
     assert_request_id(response)
+
+
+def test_require_role_accepts_matching_role() -> None:
+    dependency = auth_deps.require_role("admin")
+    user = auth_deps.CurrentUser(
+        user_id="user_123", sid="sid_123", jti="jti_123", roles=["admin"], scope=""
+    )
+
+    assert dependency(user) is user
+
+
+def test_require_role_rejects_missing_role() -> None:
+    dependency = auth_deps.require_role("admin")
+    user = auth_deps.CurrentUser(
+        user_id="user_123", sid="sid_123", jti="jti_123", roles=["member"], scope=""
+    )
+
+    with pytest.raises(auth_deps.HTTPException) as exc_info:
+        dependency(user)
+
+    assert exc_info.value.status_code == 403
+    assert exc_info.value.detail == "insufficient role"
 `
   };
 }
@@ -1784,7 +2216,7 @@ def upgrade() -> None:
         "sessions",
         sa.Column("id", sa.Integer(), primary_key=True),
         sa.Column("sid", sa.String(length=64), nullable=False),
-        sa.Column("user_id", sa.String(length=64), nullable=False),
+        sa.Column("user_id", sa.Integer(), sa.ForeignKey("users.id", ondelete="CASCADE"), nullable=False),
         sa.Column("status", sa.String(length=32), nullable=False, server_default="active"),
         sa.Column("created_at", sa.DateTime(), nullable=False),
     )
@@ -2361,7 +2793,7 @@ function createPythonTemplateUsageDocs(options: SharedPythonOptions): string {
       '',
       '## FAQ',
       '',
-      '- **Why does login fail?** The demo credentials must match the scaffolded example user.',
+      '- **Why does login fail?** Confirm the seeded admin exists, the user is active, and the password matches the stored hash.',
       '- **Why does refresh fail?** The refresh token may be expired, rotated, or revoked.',
       '- **Why is `/auth/me` rejected?** The access token may be blacklisted or signed for the wrong issuer/audience.'
     ].join(newline);
@@ -2405,7 +2837,9 @@ function createPythonTemplateUsageDocs(options: SharedPythonOptions): string {
     '## Scopes and Permissions',
     '',
     '- The scaffold uses `require_scope("user:read")` on `/api/profile`.',
-    '- Add new authorization rules by wrapping endpoints with `require_scope(...)` or a similar dependency.',
+    '- `scope` values should come from permission names assigned to the user roles in `python-main`.',
+    '- `roles` should come from role names assigned to the authenticated user in `python-main`.',
+    '- Add new authorization rules by wrapping endpoints with `require_scope(...)`, `require_scopes(...)`, or `require_role(...)` dependencies.',
     '',
     '## Database Migrations and Seed',
     '',

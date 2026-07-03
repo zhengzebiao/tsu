@@ -265,6 +265,7 @@ test("python-main template creates auth service files", () => {
   assert.ok(paths.includes("tests/test_auth_api.py"));
   assert.ok(paths.includes("tests/test_token_service.py"));
   assert.ok(paths.includes("tests/test_refresh_token_service.py"));
+  assert.ok(paths.includes("tests/test_auth_service.py"));
   assert.match(files.find((file) => file.path === "Dockerfile")?.content ?? "", /pdm install --prod --no-self/);
   assert.match(files.find((file) => file.path === "Dockerfile")?.content ?? "", /gunicorn app\.main:app/);
   assert.match(files.find((file) => file.path === "Dockerfile")?.content ?? "", /uvicorn_worker\.UvicornWorker/);
@@ -314,19 +315,27 @@ test("python-main template creates auth service files", () => {
   assert.match(envProduct.content, /OPENAPI_ENABLED=false/);
   assert.match(files.find((file) => file.path === "app/api/auth.py")?.content ?? "", /POST \/auth\/login|"\/login"/);
   assert.match(files.find((file) => file.path === "app/api/auth.py")?.content ?? "", /HTTP_401_UNAUTHORIZED/);
-  assert.match(files.find((file) => file.path === "app/services/auth_service.py")?.content ?? "", /password123/);
-  assert.match(files.find((file) => file.path === "app/services/auth_service.py")?.content ?? "", /rotate_refresh_token/);
+  const authService = files.find((file) => file.path === "app/services/auth_service.py")?.content ?? "";
+  assert.match(authService, /verify_password/);
+  assert.match(authService, /select\(User\)/);
+  assert.match(authService, /user_roles/);
+  assert.match(authService, /role_permissions/);
+  assert.match(authService, /AuthSession/);
+  assert.match(authService, /rotate_refresh_token/);
+  assert.doesNotMatch(authService, /password123/);
   assert.match(files.find((file) => file.path === "app/services/refresh_token_service.py")?.content ?? "", /created_at/);
   assert.match(files.find((file) => file.path === "app/services/refresh_token_service.py")?.content ?? "", /replaced_by/);
   assert.match(files.find((file) => file.path === "app/services/refresh_token_service.py")?.content ?? "", /refresh_token_reuse_grace_seconds/);
   assert.match(files.find((file) => file.path === "app/services/session_service.py")?.content ?? "", /ensure_session_active/);
   assert.match(files.find((file) => file.path === "alembic/versions/0001_initial_auth_schema.py")?.content ?? "", /role_permissions/);
   assert.match(files.find((file) => file.path === "app/seed/__main__.py")?.content ?? "", /ensure_admin_user/);
+  assert.match(files.find((file) => file.path === "app/seed/__main__.py")?.content ?? "", /DEFAULT_ADMIN_PASSWORD = "password123"/);
   assert.match(files.find((file) => file.path === "app/seed/__main__.py")?.content ?? "", /DEFAULT_PERMISSIONS/);
   assert.match(files.find((file) => file.path === "app/services/token_service.py")?.content ?? "", /jwt.encode/);
   assert.match(files.find((file) => file.path === "tests/test_auth_api.py")?.content ?? "", /test_login_failure_returns_401/);
-  assert.match(files.find((file) => file.path === "tests/test_auth_api.py")?.content ?? "", /test_logout_blacklists_jti_and_revokes_session/);
   assert.match(files.find((file) => file.path === "tests/test_auth_api.py")?.content ?? "", /test_me_revoked_session_returns_401/);
+  assert.match(files.find((file) => file.path === "tests/test_auth_service.py")?.content ?? "", /test_login_uses_db_user_password_and_rbac_claims/);
+  assert.match(files.find((file) => file.path === "tests/test_auth_service.py")?.content ?? "", /test_logout_blacklists_jti_revokes_redis_and_db_session/);
   assert.match(files.find((file) => file.path === "tests/test_refresh_token_service.py")?.content ?? "", /test_rotated_refresh_token_after_grace_revokes_session/);
   assert.match(files.find((file) => file.path === "tests/test_token_service.py")?.content ?? "", /test_create_access_token_includes_required_payload_claims/);
   assert.match(files.find((file) => file.path === "tests/test_token_service.py")?.content ?? "", /\"iat\", \"exp\", \"jti\", \"iss\", \"aud\"/);
@@ -395,6 +404,7 @@ test("python-app template creates resource service files", () => {
   assert.match(readme.content, /sessions revoked by logout or refresh-token reuse/);
   assert.match(readme.content, /## Scopes and Permissions/);
   assert.match(readme.content, /require_scope\("user:read"\)/);
+  assert.match(readme.content, /require_role\(\.\.\.\)/);
   assert.match(readme.content, /## Database Migrations and Seed/);
   assert.match(readme.content, /alembic downgrade -1/);
   assert.match(readme.content, /pdm run seed/);
@@ -413,6 +423,7 @@ test("python-app template creates resource service files", () => {
   assert.match(files.find((file) => file.path === "app/deps/auth.py")?.content ?? "", /SessionService/);
   assert.match(files.find((file) => file.path === "app/deps/auth.py")?.content ?? "", /ensure_session_active/);
   assert.match(files.find((file) => file.path === "app/deps/auth.py")?.content ?? "", /require_scope/);
+  assert.match(files.find((file) => file.path === "app/deps/auth.py")?.content ?? "", /require_role/);
   assert.match(files.find((file) => file.path === "alembic/versions/0001_initial_app_schema.py")?.content ?? "", /sample_profiles/);
   assert.match(files.find((file) => file.path === "app/seed/__main__.py")?.content ?? "", /ensure_setting/);
   assert.match(files.find((file) => file.path === "app/seed/__main__.py")?.content ?? "", /DEFAULT_SAMPLE_PROFILES/);
@@ -422,6 +433,8 @@ test("python-app template creates resource service files", () => {
   assert.match(files.find((file) => file.path === "tests/test_profile_api.py")?.content ?? "", /test_profile_rejects_invalid_signature/);
   assert.match(files.find((file) => file.path === "tests/test_profile_api.py")?.content ?? "", /test_profile_rejects_revoked_session/);
   assert.match(files.find((file) => file.path === "tests/test_profile_api.py")?.content ?? "", /test_profile_rejects_insufficient_scope/);
+  assert.match(files.find((file) => file.path === "tests/test_profile_api.py")?.content ?? "", /test_profile_rejects_malformed_roles_claim/);
+  assert.match(files.find((file) => file.path === "tests/test_profile_api.py")?.content ?? "", /test_require_role_rejects_missing_role/);
 });
 
 test("mfe template creates qiankun workspace files", () => {
