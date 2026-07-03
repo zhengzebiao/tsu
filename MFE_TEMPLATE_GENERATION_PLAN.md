@@ -42,6 +42,8 @@
 ## 2. 模板注册方式
 
 > Phase 1 状态：已完成。`mfe-main` 与 `mfe-app` 已完成模板注册和最小骨架生成能力，后续阶段继续补齐主应用、子应用、公共包、测试、Docker 与 CI/CD 能力。
+>
+> Phase 2 状态：已完成。`mfe-main` 主应用骨架已补齐为可安装、可启动、可构建、可 lint 的 React + Vite + TypeScript + React Router + Ant Design + Tailwind CSS 工程，并已接入 ESLint、Prettier、pnpm workspace 与 Turbo。登录页、auth store/service、真实 qiankun registry、公共包、Docker/nginx/compose、CI/CD 与 E2E 仍在后续阶段完成。
 
 在模板库中新增：
 

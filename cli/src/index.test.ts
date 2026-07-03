@@ -907,6 +907,42 @@ test("runCli initializes react projects", async () => {
   }
 });
 
+test("runCli initializes mfe-main projects", async () => {
+  const cwd = await mkdtemp(join(tmpdir(), "quick-start-"));
+
+  try {
+    const message = await runCli(["init", "mfe-main-platform", "--template", "mfe-main", "--local"], cwd);
+
+    assert.match(message, /^Created mfe-main-platform from mfe-main@latest\nLocation: /);
+    assert.match(message, /pnpm install/);
+    assert.match(message, /pnpm dev/);
+    const projectRoot = join(cwd, "mfe-main-platform");
+    const packageJson = await readFile(join(projectRoot, "package.json"), "utf8");
+    const appPackageJson = await readFile(join(projectRoot, "apps", "main", "package.json"), "utf8");
+    const app = await readFile(join(projectRoot, "apps", "main", "src", "App.tsx"), "utf8");
+    const styles = await readFile(join(projectRoot, "apps", "main", "src", "styles", "main.css"), "utf8");
+
+    assert.match(packageJson, /"lint": "eslint \. --max-warnings 0 && turbo run lint"/);
+    assert.match(packageJson, /"format": "prettier \. --write"/);
+    assert.match(appPackageJson, /"tailwindcss"/);
+    assert.match(appPackageJson, /"postcss"/);
+    assert.match(appPackageJson, /"autoprefixer"/);
+    assert.match(await readFile(join(projectRoot, ".dockerignore"), "utf8"), /apps\/main\/dist/);
+    assert.match(await readFile(join(projectRoot, "eslint.config.js"), "utf8"), /react-hooks/);
+    assert.match(await readFile(join(projectRoot, "eslint.config.js"), "utf8"), /react-refresh/);
+    assert.match(await readFile(join(projectRoot, "prettier.config.js"), "utf8"), /printWidth/);
+    assert.match(await readFile(join(projectRoot, "apps", "main", "tailwind.config.js"), "utf8"), /\.\/src\/\*\*\/\*\.\{ts,tsx\}/);
+    assert.match(await readFile(join(projectRoot, "apps", "main", "postcss.config.js"), "utf8"), /tailwindcss/);
+    assert.match(styles, /@tailwind base/);
+    assert.match(styles, /@tailwind components/);
+    assert.match(styles, /@tailwind utilities/);
+    assert.match(app, /id="subapp-container"/);
+    assert.match(app, /qiankun will mount sub applications here in Phase 3/);
+  } finally {
+    await rm(cwd, { force: true, recursive: true });
+  }
+});
+
 test("runCli initializes python-main projects", async () => {
   const cwd = await mkdtemp(join(tmpdir(), "quick-start-"));
 

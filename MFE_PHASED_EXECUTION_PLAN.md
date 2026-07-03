@@ -66,7 +66,9 @@ pnpm validate:generated-apps
 
 ---
 
-## Phase 2：生成 `mfe-main` 主应用骨架
+## Phase 2：生成 `mfe-main` 主应用骨架（已完成）
+
+**状态：已完成**
 
 ### 目标
 
@@ -74,35 +76,47 @@ pnpm validate:generated-apps
 
 ### 任务
 
-1. 生成 workspace 文件：
-   - `package.json`
-   - `pnpm-workspace.yaml`
-   - `turbo.json`
-   - `tsconfig.base.json`
-2. 生成主应用目录：
-   - `apps/main/package.json`
-   - `apps/main/src/main.tsx`
-   - `apps/main/src/App.tsx`
-   - `apps/main/vite.config.ts`
-3. 接入依赖：
-   - React
-   - Vite
-   - TypeScript
-   - React Router
-   - Ant Design
-   - Tailwind CSS
-4. 生成基础配置：
-   - ESLint
-   - Prettier
-   - `.gitignore`
-   - `.dockerignore`
+- [x] 生成 workspace 文件：
+  - [x] `package.json`
+  - [x] `pnpm-workspace.yaml`
+  - [x] `turbo.json`
+  - [x] `tsconfig.base.json`
+- [x] 生成主应用目录：
+  - [x] `apps/main/package.json`
+  - [x] `apps/main/src/main.tsx`
+  - [x] `apps/main/src/App.tsx`
+  - [x] `apps/main/vite.config.ts`
+- [x] 接入依赖：
+  - [x] React
+  - [x] Vite
+  - [x] TypeScript
+  - [x] React Router
+  - [x] Ant Design
+  - [x] Tailwind CSS
+- [x] 生成基础配置：
+  - [x] ESLint
+  - [x] Prettier
+  - [x] `.gitignore`
+  - [x] `.dockerignore`
 
 ### 验收标准
 
-- `pnpm install` 成功
-- `pnpm dev` 可启动
-- `pnpm build` 成功
-- `pnpm lint` 成功
+- [x] `pnpm install` 成功
+- [x] `pnpm dev` 可启动
+- [x] `pnpm build` 成功
+- [x] `pnpm lint` 成功
+
+### 已验证命令
+
+```sh
+pnpm --filter @tsuz/template build
+pnpm --filter @tsuz/template test
+pnpm --filter @tsuz/cli build
+pnpm --filter @tsuz/cli test
+pnpm validate:generated-apps
+```
+
+`pnpm validate:generated-apps` 已覆盖 `mfe-main` 生成项目的 `pnpm install`、`pnpm lint`、`pnpm build` 和 dev server smoke check（`http://127.0.0.1:7200/`）。
 
 ---
 
