@@ -997,7 +997,10 @@ test("runCli initializes python-app projects", async () => {
     assert.match(readme, /sessions revoked by logout or refresh-token reuse/);
     assert.match(readme, /## Scopes and Permissions/);
     assert.match(readme, /require_scope\("user:read"\)/);
-    assert.match(readme, /require_role\(\.\.\.\)/);
+    assert.match(readme, /require_scopes\("a", "b"\)/);
+    assert.match(readme, /require_any_scope\("a", "b"\)/);
+    assert.match(readme, /require_role\("admin"\)/);
+    assert.match(readme, /require_any_role\("admin", "operator"\)/);
     assert.match(readme, /## Database Migrations and Seed/);
     assert.match(readme, /alembic downgrade -1/);
     assert.match(readme, /pdm run seed/);
@@ -1030,7 +1033,9 @@ test("runCli initializes python-app projects", async () => {
     assert.match(appAuthDeps, /invalid_audience/);
     assert.match(appAuthDeps, /SessionService/);
     assert.match(appAuthDeps, /HTTP_403_FORBIDDEN/);
+    assert.match(appAuthDeps, /require_any_scope/);
     assert.match(appAuthDeps, /require_role/);
+    assert.match(appAuthDeps, /require_any_role/);
     assert.match(await readFile(join(cwd, "backend-api", "app", "services", "session_service.py"), "utf8"), /ensure_session_active/);
     assert.match(await readFile(join(cwd, "backend-api", "app", "models", "app_setting.py"), "utf8"), /class AppSetting/);
     assert.match(await readFile(join(cwd, "backend-api", "app", "models", "sample_profile.py"), "utf8"), /class SampleProfile/);
@@ -1043,6 +1048,10 @@ test("runCli initializes python-app projects", async () => {
     assert.match(await readFile(join(cwd, "backend-api", "tests", "test_profile_api.py"), "utf8"), /test_profile_rejects_malformed_roles_list_contents/);
     assert.match(await readFile(join(cwd, "backend-api", "tests", "test_profile_api.py"), "utf8"), /test_profile_rejects_missing_required_claims/);
     assert.match(await readFile(join(cwd, "backend-api", "tests", "test_profile_api.py"), "utf8"), /test_openapi_documents_profile_bearer_auth/);
+    assert.match(await readFile(join(cwd, "backend-api", "tests", "test_profile_api.py"), "utf8"), /test_require_any_scope_accepts_matching_scope/);
+    assert.match(await readFile(join(cwd, "backend-api", "tests", "test_profile_api.py"), "utf8"), /test_require_any_scope_rejects_missing_scope/);
+    assert.match(await readFile(join(cwd, "backend-api", "tests", "test_profile_api.py"), "utf8"), /test_require_any_role_accepts_matching_role/);
+    assert.match(await readFile(join(cwd, "backend-api", "tests", "test_profile_api.py"), "utf8"), /test_require_any_role_rejects_missing_role/);
     assert.match(await readFile(join(cwd, "backend-api", "tests", "test_profile_api.py"), "utf8"), /test_require_role_rejects_missing_role/);
     assert.match(await readFile(join(cwd, "backend-api", "tests", "test_logging.py"), "utf8"), /test_security_logs_redact_sensitive_values/);
     assert.match(await readFile(join(cwd, "backend-api", "tests", "test_redis_state_services.py"), "utf8"), /test_session_service_uses_configured_prefix_for_revocation/);

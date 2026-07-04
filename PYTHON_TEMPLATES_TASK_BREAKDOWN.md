@@ -6,9 +6,9 @@
 
 ## 0. 当前执行状态
 
-> 状态更新时间：2026-07-04  
+> 状态更新时间：2026-07-05
 > 当前实现分支：`implement-python-templates`
-> 当前推进阶段：阶段 10：测试覆盖与验收深化（已补共享日志脱敏、Request ID 日志断言、`python-main` refresh reuse DB session 吊销、`python-app` 细分鉴权日志/claim 边界/OpenAPI Bearer 测试，并新增生成 Python 模板验证脚本）
+> 当前推进阶段：阶段 10：测试覆盖与验收完成（已补 `python-app` 简单组合鉴权 helper、生成 pytest/README/模板/CLI/release 断言，并通过本地 Redis 跨服务生成模板验证）
 
 | 阶段 | 状态 | 说明 |
 | --- | --- | --- |
@@ -18,11 +18,11 @@
 | 阶段 3：日志记录基础设施 | ✅ 已完成 | 已生成 JSON 日志基础设施和 `X-Request-ID` middleware |
 | 阶段 4：`python-main` 认证中心核心能力 | ✅ 已完成核心版 | 已接入 DB 用户校验、bcrypt hash password 校验、DB session 创建/吊销、roles/permissions 查询、RBAC-derived `roles`/`scope` claims、刷新时重新读取 DB 权限、`/auth/me` 返回真实用户；已补登录失败、logout、refresh reuse 等安全日志脱敏断言 |
 | 阶段 5：Redis Token 状态管理 | ✅ 已完成基础版 | 已补 refresh token hash 的 `created_at`/`rotated_at`/`replaced_by` 元数据、rotation、reuse grace 判定、超出宽限期复用吊销 Redis session 并同步吊销 DB session、jti blacklist TTL 和 session revoke key 检查、refresh token 明文不落 Redis 断言；基础模板明确采用安全优先策略：grace window 内 401 不吊销、grace window 后吊销 session，前端用 single-flight refresh 配合，不默认做服务端幂等响应缓存 |
-| 阶段 6：`python-app` 业务服务鉴权能力 | 🚧 部分完成 | 已生成 Bearer Token 解析、公钥校验、issuer/audience/exp 校验、Redis 黑名单读取、revoked session 检查、`sub`/`sid`/`jti`/`roles`/`scope` claim 规范化、`require_scope`/`require_scopes`/`require_role` 依赖、细分鉴权失败日志、claim 边界测试和 OpenAPI Bearer Auth 测试；后续策略组合已收敛为简单模板版：补 `require_any_scope` / `require_any_role`，不引入复杂 `require_policy` / deny 系列 |
+| 阶段 6：`python-app` 业务服务鉴权能力 | ✅ 已完成基础版 | 已生成 Bearer Token 解析、公钥校验、issuer/audience/exp 校验、Redis 黑名单读取、revoked session 检查、`sub`/`sid`/`jti`/`roles`/`scope` claim 规范化、`require_scope`/`require_scopes`/`require_any_scope`/`require_role`/`require_any_role` 依赖、细分鉴权失败日志、claim 边界测试、组合鉴权 helper 测试和 OpenAPI Bearer Auth 测试；基础模板不引入复杂 `require_policy` / deny 系列 |
 | 阶段 7：Alembic、Seed 与数据库策略 | ✅ 已完成基础版 | 已生成 Alembic 环境、`python-main` / `python-app` 初始 migration、默认数据幂等 seed、README migration/seed/downgrade/product 边界说明，并补充模板/CLI/release 校验；本轮将 `sessions.user_id` 对齐为 DB user 外键 |
 | 阶段 8：Docker 与 Nginx | ✅ 已完成基础版 | 已生成 Dockerfile、开发 compose、Nginx 反向代理、安全响应头和 Request ID 透传；Dockerfile 使用生产 Gunicorn + Uvicorn Worker，compose 使用开发 Uvicorn `--reload` |
 | 阶段 9：GitHub Actions / Secrets / Environments | ✅ 已完成基础 deploy 模板 | 已生成 PDM CI、Alembic 状态检查、Docker build、test/product environment、docker push 与 deploy 占位 job；README 已说明 secrets 分离和 product 保护规则，真实平台 deploy 命令留给使用方替换 |
-| 阶段 10：测试覆盖与验收 | 🚧 部分完成 | 已补模板生成测试、CLI 初始化测试、release bundle 校验、生成文件 Python 语法 smoke check、`python-main` auth/token/refresh rotation/DB-backed auth service pytest、共享日志脱敏/Request ID pytest、Redis state service pytest、`python-app` profile/auth/session revoke/malformed claim/role dependency/细分日志/OpenAPI pytest，并新增 `validate:generated-python` 生成项目与跨服务验证脚本；跨服务验证需本地可用 Redis 后执行通过 |
+| 阶段 10：测试覆盖与验收 | ✅ 已完成基础验收 | 已补模板生成测试、CLI 初始化测试、release bundle 校验、生成文件 Python 语法 smoke check、`python-main` auth/token/refresh rotation/DB-backed auth service pytest、共享日志脱敏/Request ID pytest、Redis state service pytest、`python-app` profile/auth/session revoke/malformed claim/role dependency/任意 scope/role helper/细分日志/OpenAPI pytest，并通过 `validate:generated-python` 在本地 Redis 上完成生成项目与跨服务验证 |
 | 阶段 11：README 与模板使用文档 | ✅ 已完成基础完整使用文档 | 已生成 README 基础说明、PDM 依赖管理说明、开发/生产 app server 说明、安全说明、基础部署、Secrets 和 Environments 说明，并补齐 `python-main` 认证接口/JWT/Redis/migration/seed/FAQ 与 `python-app` 受保护接口/public key/issuer/audience/scope/roles/FAQ 文档 |
 
 本轮已验证：
@@ -36,23 +36,10 @@ pnpm --filter @tsuz/cli build
 pnpm --filter @tsuz/cli test
 pnpm template:release:build --version=0.0.0
 TEMPLATE_VERSION=0.0.0 pnpm validate:template-release
-node <repo>/cli/dist/index.js init auth-service --template python-main --local --cwd <tmpdir>
-node <repo>/cli/dist/index.js init backend-api --template python-app --local --cwd <tmpdir>
-python3 -m compileall -q <generated-auth-service>/app <generated-auth-service>/tests <generated-backend-api>/app <generated-backend-api>/tests
-cd <generated-auth-service>
-DATABASE_URL=sqlite+pysqlite:///verify.db PYTHONPATH=. uv run --project . --group dev alembic upgrade head
-DATABASE_URL=sqlite+pysqlite:///verify.db PYTHONPATH=. uv run --project . --group dev python -m app.seed
-DATABASE_URL=sqlite+pysqlite:///verify.db PYTHONPATH=. uv run --project . --group dev python -m app.seed
-PYTHONPATH=. uv run --project . --group dev ruff check .
-PYTHONPATH=. uv run --project . --group dev pytest tests
-cd <generated-backend-api>
-DATABASE_URL=sqlite+pysqlite:///verify.db PYTHONPATH=. uv run --project . --group dev alembic upgrade head
-DATABASE_URL=sqlite+pysqlite:///verify.db PYTHONPATH=. uv run --project . --group dev python -m app.seed
-DATABASE_URL=sqlite+pysqlite:///verify.db PYTHONPATH=. uv run --project . --group dev python -m app.seed
-PYTHONPATH=. uv run --project . --group dev ruff check .
-PYTHONPATH=. uv run --project . --group dev pytest tests
-# 运行时验证：启动生成的 auth-service/backend-api，观察 DB-backed login、/auth/me、/api/profile、malformed roles 401、wrong scope 403、logout 后 profile 401、refresh 后置 401。
+REDIS_URL=redis://localhost:6379/15 pnpm validate:generated-python
 ```
+
+`validate:generated-python` 已覆盖：通过本地 CLI 生成 `auth-service` / `backend-api`、`compileall`、Alembic upgrade、seed 幂等、Ruff、pytest、启动两个生成服务并验证 DB-backed login、`/auth/me`、`/api/profile`、wrong scope `403`、malformed claims `401`、logout 后 profile `401`、Request ID 透传和敏感日志不泄露。
 
 ## 1. 总体目标
 

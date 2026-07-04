@@ -686,6 +686,22 @@ def require_scopes(*required_scopes: str) -> Callable[[CurrentUser], CurrentUser
     return dependency
 
 
+def require_any_scope(*required_scopes: str) -> Callable[[CurrentUser], CurrentUser]:
+    required = set(required_scopes)
+
+    def dependency(current_user: CurrentUser = Depends(get_current_user)) -> CurrentUser:
+        if current_user.scopes.isdisjoint(required):
+            logger.warning(
+                "authorization rejected reason=insufficient_scope user_id=%s required_scopes=%s",
+                current_user.user_id,
+                ",".join(sorted(required)),
+            )
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="insufficient scope")
+        return current_user
+
+    return dependency
+
+
 def require_role(required_role: str) -> Callable[[CurrentUser], CurrentUser]:
     def dependency(current_user: CurrentUser = Depends(get_current_user)) -> CurrentUser:
         if required_role not in current_user.role_set:
@@ -693,6 +709,22 @@ def require_role(required_role: str) -> Callable[[CurrentUser], CurrentUser]:
                 "authorization rejected reason=insufficient_role user_id=%s required_role=%s",
                 current_user.user_id,
                 required_role,
+            )
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="insufficient role")
+        return current_user
+
+    return dependency
+
+
+def require_any_role(*required_roles: str) -> Callable[[CurrentUser], CurrentUser]:
+    required = set(required_roles)
+
+    def dependency(current_user: CurrentUser = Depends(get_current_user)) -> CurrentUser:
+        if current_user.role_set.isdisjoint(required):
+            logger.warning(
+                "authorization rejected reason=insufficient_role user_id=%s required_roles=%s",
+                current_user.user_id,
+                ",".join(sorted(required)),
             )
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="insufficient role")
         return current_user
@@ -2443,6 +2475,62 @@ def test_openapi_documents_profile_bearer_auth(client) -> None:
     assert {"HTTPBearer": []} in profile_operation["security"]
 
 
+def test_require_any_scope_accepts_matching_scope() -> None:
+    dependency = auth_deps.require_any_scope("admin:read", "user:read")
+    user = auth_deps.CurrentUser(
+        user_id="user_123",
+        sid="sid_123",
+        jti="jti_123",
+        roles=[],
+        scope="profile:read user:read",
+    )
+
+    assert dependency(user) is user
+
+
+def test_require_any_scope_rejects_missing_scope(caplog) -> None:
+    dependency = auth_deps.require_any_scope("admin:read", "user:read")
+    user = auth_deps.CurrentUser(
+        user_id="user_123",
+        sid="sid_123",
+        jti="jti_123",
+        roles=[],
+        scope="profile:read",
+    )
+
+    with caplog.at_level(logging.WARNING, logger="app.auth"):
+        with pytest.raises(auth_deps.HTTPException) as exc_info:
+            dependency(user)
+
+    assert exc_info.value.status_code == 403
+    assert exc_info.value.detail == "insufficient scope"
+    assert "reason=insufficient_scope" in caplog.text
+
+
+def test_require_any_role_accepts_matching_role() -> None:
+    dependency = auth_deps.require_any_role("admin", "operator")
+    user = auth_deps.CurrentUser(
+        user_id="user_123", sid="sid_123", jti="jti_123", roles=["operator"], scope=""
+    )
+
+    assert dependency(user) is user
+
+
+def test_require_any_role_rejects_missing_role(caplog) -> None:
+    dependency = auth_deps.require_any_role("admin", "operator")
+    user = auth_deps.CurrentUser(
+        user_id="user_123", sid="sid_123", jti="jti_123", roles=["member"], scope=""
+    )
+
+    with caplog.at_level(logging.WARNING, logger="app.auth"):
+        with pytest.raises(auth_deps.HTTPException) as exc_info:
+            dependency(user)
+
+    assert exc_info.value.status_code == 403
+    assert exc_info.value.detail == "insufficient role"
+    assert "reason=insufficient_role" in caplog.text
+
+
 def test_require_role_accepts_matching_role() -> None:
     dependency = auth_deps.require_role("admin")
     user = auth_deps.CurrentUser(
@@ -3185,7 +3273,8 @@ function createPythonTemplateUsageDocs(options: SharedPythonOptions): string {
     '- The scaffold uses `require_scope("user:read")` on `/api/profile`.',
     '- `scope` values should come from permission names assigned to the user roles in `python-main`.',
     '- `roles` should come from role names assigned to the authenticated user in `python-main`.',
-    '- Add new authorization rules by wrapping endpoints with `require_scope(...)`, `require_scopes(...)`, or `require_role(...)` dependencies.',
+    '- Add new authorization rules by wrapping endpoints with `require_scope("user:read")`, `require_scopes("a", "b")`, `require_any_scope("a", "b")`, `require_role("admin")`, or `require_any_role("admin", "operator")` dependencies.',
+    '- The base template intentionally avoids complex policy and deny-helper APIs; keep those rules in application code when you need them.',
     '',
     '## Database Migrations and Seed',
     '',

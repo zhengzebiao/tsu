@@ -419,7 +419,10 @@ test("python-app template creates resource service files", () => {
   assert.match(readme.content, /sessions revoked by logout or refresh-token reuse/);
   assert.match(readme.content, /## Scopes and Permissions/);
   assert.match(readme.content, /require_scope\("user:read"\)/);
-  assert.match(readme.content, /require_role\(\.\.\.\)/);
+  assert.match(readme.content, /require_scopes\("a", "b"\)/);
+  assert.match(readme.content, /require_any_scope\("a", "b"\)/);
+  assert.match(readme.content, /require_role\("admin"\)/);
+  assert.match(readme.content, /require_any_role\("admin", "operator"\)/);
   assert.match(readme.content, /## Database Migrations and Seed/);
   assert.match(readme.content, /alembic downgrade -1/);
   assert.match(readme.content, /pdm run seed/);
@@ -443,7 +446,9 @@ test("python-app template creates resource service files", () => {
   assert.match(appAuthDeps, /SessionService/);
   assert.match(appAuthDeps, /ensure_session_active/);
   assert.match(appAuthDeps, /require_scope/);
+  assert.match(appAuthDeps, /require_any_scope/);
   assert.match(appAuthDeps, /require_role/);
+  assert.match(appAuthDeps, /require_any_role/);
   assert.match(files.find((file) => file.path === "alembic/versions/0001_initial_app_schema.py")?.content ?? "", /sample_profiles/);
   assert.match(files.find((file) => file.path === "app/seed/__main__.py")?.content ?? "", /ensure_setting/);
   assert.match(files.find((file) => file.path === "app/seed/__main__.py")?.content ?? "", /DEFAULT_SAMPLE_PROFILES/);
@@ -457,6 +462,10 @@ test("python-app template creates resource service files", () => {
   assert.match(files.find((file) => file.path === "tests/test_profile_api.py")?.content ?? "", /test_profile_rejects_malformed_roles_list_contents/);
   assert.match(files.find((file) => file.path === "tests/test_profile_api.py")?.content ?? "", /test_profile_rejects_missing_required_claims/);
   assert.match(files.find((file) => file.path === "tests/test_profile_api.py")?.content ?? "", /test_openapi_documents_profile_bearer_auth/);
+  assert.match(files.find((file) => file.path === "tests/test_profile_api.py")?.content ?? "", /test_require_any_scope_accepts_matching_scope/);
+  assert.match(files.find((file) => file.path === "tests/test_profile_api.py")?.content ?? "", /test_require_any_scope_rejects_missing_scope/);
+  assert.match(files.find((file) => file.path === "tests/test_profile_api.py")?.content ?? "", /test_require_any_role_accepts_matching_role/);
+  assert.match(files.find((file) => file.path === "tests/test_profile_api.py")?.content ?? "", /test_require_any_role_rejects_missing_role/);
   assert.match(files.find((file) => file.path === "tests/test_profile_api.py")?.content ?? "", /test_require_role_rejects_missing_role/);
   assert.match(files.find((file) => file.path === "tests/test_logging.py")?.content ?? "", /test_security_logs_redact_sensitive_values/);
   assert.match(files.find((file) => file.path === "tests/test_redis_state_services.py")?.content ?? "", /test_session_service_uses_configured_prefix_for_revocation/);

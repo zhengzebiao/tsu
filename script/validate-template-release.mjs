@@ -85,6 +85,8 @@ try {
     "SESSION_PREFIX",
     "sessions revoked by logout or refresh-token reuse",
     "## Scopes and Permissions",
+    "require_any_scope",
+    "require_any_role",
     "## Database Migrations and Seed",
     "alembic downgrade -1",
     "alembic downgrade <revision_id>",
