@@ -48,6 +48,8 @@ try {
   await access(join(bundleDir, "python-main", "tests", "test_auth_api.py"));
   await access(join(bundleDir, "python-main", "tests", "test_token_service.py"));
   await access(join(bundleDir, "python-main", "tests", "test_refresh_token_service.py"));
+  await access(join(bundleDir, "python-main", "tests", "test_logging.py"));
+  await access(join(bundleDir, "python-main", "tests", "test_redis_state_services.py"));
   await assertReadmeContains(join(bundleDir, "python-main", "README.md"), [
     "## Auth API",
     "POST /auth/login",
@@ -72,6 +74,8 @@ try {
   await access(join(bundleDir, "python-app", "app", "seed", "__main__.py"));
   await access(join(bundleDir, "python-app", ".github", "workflows", "ci.yml"));
   await access(join(bundleDir, "python-app", "tests", "test_profile_api.py"));
+  await access(join(bundleDir, "python-app", "tests", "test_logging.py"));
+  await access(join(bundleDir, "python-app", "tests", "test_redis_state_services.py"));
   await assertReadmeContains(join(bundleDir, "python-app", "README.md"), [
     "## Protected API Usage",
     "Authorization: Bearer <access-token>",

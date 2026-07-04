@@ -227,7 +227,7 @@ from app.models.session import Session as AuthSession
 from app.models.user import User
 from app.schemas.auth import LoginRequest, LogoutResponse, TokenResponse, UserResponse
 from app.services.blacklist_service import BlacklistService
-from app.services.refresh_token_service import RefreshTokenService
+from app.services.refresh_token_service import RefreshTokenReuseError, RefreshTokenService
 from app.services.token_service import TokenService
 
 logger = logging.getLogger("app.auth")
@@ -262,7 +262,13 @@ class AuthService:
         )
 
     def refresh(self, refresh_token: str) -> TokenResponse:
-        rotation = self.refresh_tokens.rotate_refresh_token(refresh_token)
+        try:
+            rotation = self.refresh_tokens.rotate_refresh_token(refresh_token)
+        except RefreshTokenReuseError as exc:
+            if exc.sid:
+                self._mark_db_session_revoked(exc.sid)
+                self.db.commit()
+            raise ValueError("refresh token reuse detected") from exc
         user = self._get_active_user_by_id(rotation["user_id"])
         self._ensure_db_session_active(rotation["sid"])
         roles, scope = self._build_claims(user)
@@ -422,6 +428,12 @@ from app.services.session_service import SessionService
 logger = logging.getLogger("app.auth.refresh")
 
 
+class RefreshTokenReuseError(ValueError):
+    def __init__(self, sid: str) -> None:
+        super().__init__("refresh token reuse detected")
+        self.sid = sid
+
+
 class RefreshTokenService:
     def __init__(self) -> None:
         self.sessions = SessionService()
@@ -485,7 +497,7 @@ class RefreshTokenService:
             if sid:
                 self.revoke_session(sid)
             logger.warning("refresh reuse detected sid=%s", sid)
-            raise ValueError("refresh token reuse detected")
+            raise RefreshTokenReuseError(sid)
 
         logger.warning("refresh rejected reason=status_%s sid=%s", status, sid)
         raise ValueError("invalid refresh token")
@@ -573,7 +585,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 
 import jwt
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, HTTPException, Security, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
 from app.core.config import settings
@@ -602,7 +614,7 @@ class CurrentUser:
         return set(self.roles)
 
 
-def get_current_user(credentials: HTTPAuthorizationCredentials | None = Depends(security)) -> CurrentUser:
+def get_current_user(credentials: HTTPAuthorizationCredentials | None = Security(security)) -> CurrentUser:
     if credentials is None:
         logger.warning("auth rejected reason=missing_token")
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="invalid token")
@@ -619,6 +631,18 @@ def get_current_user(credentials: HTTPAuthorizationCredentials | None = Depends(
         jti = _required_string_claim(payload, "jti")
         roles = _roles_claim(payload)
         scope = _scope_claim(payload)
+    except jwt.ExpiredSignatureError as exc:
+        logger.warning("auth rejected reason=expired_token")
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="invalid token") from exc
+    except jwt.InvalidSignatureError as exc:
+        logger.warning("auth rejected reason=invalid_signature")
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="invalid token") from exc
+    except jwt.InvalidIssuerError as exc:
+        logger.warning("auth rejected reason=invalid_issuer")
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="invalid token") from exc
+    except jwt.InvalidAudienceError as exc:
+        logger.warning("auth rejected reason=invalid_audience")
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="invalid token") from exc
     except jwt.PyJWTError as exc:
         logger.warning("auth rejected reason=invalid_token")
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="invalid token") from exc
@@ -1129,6 +1153,7 @@ settings = Settings()
       path: "app/core/logging.py",
       content: `import json
 import logging
+import re
 import time
 from contextvars import ContextVar
 from uuid import uuid4
@@ -1140,6 +1165,41 @@ from starlette.responses import Response
 from app.core.config import settings
 
 request_id_context: ContextVar[str] = ContextVar("request_id", default="")
+_original_log_record_factory = logging.getLogRecordFactory()
+_redacting_factory_configured = False
+
+_PEM_KEY_RE = re.compile(r"-----BEGIN [A-Z ]*KEY-----.*?-----END [A-Z ]*KEY-----", re.DOTALL)
+_BEARER_RE = re.compile(r"(?i)Authorization:\\s*Bearer\\s+[^\\s,;]+")
+_JWT_RE = re.compile(r"\\beyJ[A-Za-z0-9_-]+\\.[A-Za-z0-9_-]+\\.[A-Za-z0-9_-]+\\b")
+_FIELD_RE = re.compile(
+    r"(?i)\\b(password|access_token|refresh_token|jwt_private_key|jwt_public_key|github_[a-z0-9_]*secret)"
+    r"\\s*[=:]\\s*([^\\s,;]+)"
+)
+_JSON_FIELD_RE = re.compile(
+    r'(?i)("(?:password|access_token|refresh_token|jwt_private_key|jwt_public_key|github_[a-z0-9_]*secret)"\\s*:\\s*")'
+    r'([^"]+)(")'
+)
+_URL_PASSWORD_RE = re.compile(r"\\b((?:postgresql(?:\\+psycopg)?|redis)://[^:\\s/@]+):[^@\\s]+@")
+
+
+def redact_sensitive(value: object) -> object:
+    if not isinstance(value, str):
+        return value
+    redacted = _PEM_KEY_RE.sub("[REDACTED_KEY]", value)
+    redacted = _BEARER_RE.sub("Authorization: Bearer [REDACTED]", redacted)
+    redacted = _JWT_RE.sub("[REDACTED_JWT]", redacted)
+    redacted = _JSON_FIELD_RE.sub(r"\\1[REDACTED]\\3", redacted)
+    redacted = _FIELD_RE.sub(lambda match: f"{match.group(1)}=[REDACTED]", redacted)
+    redacted = _URL_PASSWORD_RE.sub(r"\\1:[REDACTED]@", redacted)
+    return redacted
+
+
+def _redacting_log_record_factory(*args, **kwargs) -> logging.LogRecord:
+    record = _original_log_record_factory(*args, **kwargs)
+    record.msg = redact_sensitive(record.getMessage())
+    record.args = ()
+    record.request_id = request_id_context.get()
+    return record
 
 
 class JsonFormatter(logging.Formatter):
@@ -1150,14 +1210,20 @@ class JsonFormatter(logging.Formatter):
             "message": record.getMessage(),
             "service": settings.service_name,
             "env": settings.app_env,
-            "request_id": request_id_context.get(),
+            "request_id": getattr(record, "request_id", request_id_context.get()),
         }
         return json.dumps(payload, ensure_ascii=False)
 
 
 def configure_logging() -> None:
+    global _redacting_factory_configured
+    if not _redacting_factory_configured:
+        logging.setLogRecordFactory(_redacting_log_record_factory)
+        _redacting_factory_configured = True
     handler = logging.StreamHandler()
-    handler.setFormatter(JsonFormatter() if settings.log_format == "json" else logging.Formatter("%(levelname)s %(name)s %(message)s"))
+    handler.setFormatter(
+        JsonFormatter() if settings.log_format == "json" else logging.Formatter("%(levelname)s %(name)s %(message)s")
+    )
     logging.basicConfig(level=settings.log_level.upper(), handlers=[handler], force=True)
 
 
@@ -1281,8 +1347,142 @@ def test_health_returns_service_status() -> None:
     assert response.json()["status"] == "ok"
     assert response.headers["X-Request-ID"]
 `
-    }
+    },
+    createPythonLoggingTestFile(),
+    createPythonRedisStateServicesTestFile()
   ];
+}
+
+function createPythonLoggingTestFile(): TemplateFile {
+  return {
+    path: "tests/test_logging.py",
+    content: `import logging
+
+from app.core.logging import redact_sensitive
+
+
+RAW_JWT = "eyJhbGciOiJSUzI1NiJ9.eyJzdWIiOiIxIn0.signature"
+RAW_PRIVATE_KEY = """-----BEGIN PRIVATE KEY-----
+secret-key-material
+-----END PRIVATE KEY-----"""
+
+
+def test_request_id_is_echoed_and_attached_to_request_log(client, caplog) -> None:
+    with caplog.at_level(logging.INFO, logger="app.request"):
+        response = client.get("/health", headers={"X-Request-ID": "req-test-123"})
+
+    assert response.status_code == 200
+    assert response.headers["X-Request-ID"] == "req-test-123"
+    assert any(
+        record.name == "app.request" and getattr(record, "request_id", "") == "req-test-123"
+        for record in caplog.records
+    )
+
+
+def test_security_logs_redact_sensitive_values(caplog) -> None:
+    logger = logging.getLogger("app.security.test")
+    raw_refresh_token = "refresh-token-secret"
+    raw_password = "correct-horse-battery-staple"
+    raw_database_url = "postgresql+psycopg://test_user:test_password@localhost:5432/app"
+
+    with caplog.at_level(logging.INFO, logger="app.security.test"):
+        logger.info(
+            "Authorization: Bearer %s access_token=%s refresh_token=%s password=%s db=%s key=%s",
+            RAW_JWT,
+            RAW_JWT,
+            raw_refresh_token,
+            raw_password,
+            raw_database_url,
+            RAW_PRIVATE_KEY,
+        )
+
+    assert RAW_JWT not in caplog.text
+    assert raw_refresh_token not in caplog.text
+    assert raw_password not in caplog.text
+    assert "test_password" not in caplog.text
+    assert "secret-key-material" not in caplog.text
+    assert "[REDACTED" in caplog.text
+
+
+def test_redact_sensitive_handles_json_and_env_style_secrets() -> None:
+    message = (
+        '{"password":"plain", "refresh_token":"refresh-secret"} '
+        "JWT_PRIVATE_KEY=-----BEGIN PRIVATE KEY-----\\nsecret\\n-----END PRIVATE KEY----- "
+        "redis://default:redis_password@localhost:6379/0"
+    )
+
+    redacted = redact_sensitive(message)
+
+    assert "plain" not in redacted
+    assert "refresh-secret" not in redacted
+    assert "secret" not in redacted
+    assert "redis_password" not in redacted
+    assert "[REDACTED" in redacted
+`
+  };
+}
+
+function createPythonRedisStateServicesTestFile(): TemplateFile {
+  return {
+    path: "tests/test_redis_state_services.py",
+    content: `from datetime import datetime, timezone
+
+import pytest
+
+import app.services.blacklist_service as blacklist_module
+import app.services.session_service as session_module
+from app.core.config import settings
+from app.services.blacklist_service import BlacklistService
+from app.services.session_service import SessionService
+
+
+class FakeRedis:
+    def __init__(self) -> None:
+        self.values: dict[str, str] = {}
+        self.expirations: dict[str, int] = {}
+
+    def setex(self, key: str, ttl: int, value: str) -> None:
+        self.values[key] = value
+        self.expirations[key] = ttl
+
+    def exists(self, key: str) -> bool:
+        return key in self.values
+
+    def set(self, key: str, value: str) -> None:
+        self.values[key] = value
+
+    def get(self, key: str) -> str | None:
+        return self.values.get(key)
+
+
+@pytest.fixture
+def fake_redis(monkeypatch: pytest.MonkeyPatch) -> FakeRedis:
+    redis = FakeRedis()
+    monkeypatch.setattr(blacklist_module, "get_redis", lambda: redis)
+    monkeypatch.setattr(session_module, "get_redis", lambda: redis)
+    return redis
+
+
+def test_blacklist_service_uses_configured_prefix_and_access_token_ttl(fake_redis: FakeRedis) -> None:
+    exp = int(datetime.now(timezone.utc).timestamp()) + 120
+
+    BlacklistService().add_jti("jti-123", exp)
+
+    key = f"{settings.token_blacklist_prefix}jti-123"
+    assert fake_redis.values[key] == "1"
+    assert 1 <= fake_redis.expirations[key] <= 120
+    with pytest.raises(ValueError, match="blacklisted"):
+        BlacklistService().ensure_not_blacklisted("jti-123")
+
+
+def test_session_service_uses_configured_prefix_for_revocation(fake_redis: FakeRedis) -> None:
+    SessionService().revoke_session("sid-123")
+
+    assert fake_redis.values[f"{settings.session_prefix}sid-123"] == "revoked"
+    with pytest.raises(ValueError, match="session is revoked"):
+        SessionService().ensure_session_active("sid-123")
+`
+  };
 }
 
 const PYTHON_TEST_PRIVATE_KEY = `-----BEGIN PRIVATE KEY-----
@@ -1521,6 +1721,7 @@ function createPythonMainAuthServiceTestFile(): TemplateFile {
   return {
     path: "tests/test_auth_service.py",
     content: `from collections.abc import Iterator
+import logging
 
 import pytest
 from sqlalchemy import create_engine, select
@@ -1534,6 +1735,7 @@ from app.models.session import Session as AuthSession
 from app.models.user import User
 from app.schemas.auth import LoginRequest
 from app.services.auth_service import AuthService
+from app.services.refresh_token_service import RefreshTokenReuseError
 
 
 class RecordingTokenService:
@@ -1654,6 +1856,20 @@ def test_login_rejects_wrong_password(db_session: DbSession) -> None:
         service.login(LoginRequest(username="admin@example.com", password="wrong"))
 
 
+def test_login_failure_logs_reason_without_password(db_session: DbSession, caplog) -> None:
+    create_user_with_rbac(db_session)
+    service = AuthService(db_session)
+    attach_service_fakes(service)
+    raw_password = "wrong-password-secret"
+
+    with caplog.at_level(logging.WARNING, logger="app.auth"):
+        with pytest.raises(ValueError, match="invalid credentials"):
+            service.login(LoginRequest(username="admin@example.com", password=raw_password))
+
+    assert "reason=invalid_credentials" in caplog.text
+    assert raw_password not in caplog.text
+
+
 def test_login_rejects_inactive_user(db_session: DbSession) -> None:
     create_user_with_rbac(db_session, active=False)
     service = AuthService(db_session)
@@ -1680,6 +1896,30 @@ def test_refresh_uses_db_user_session_and_rbac_claims(db_session: DbSession) -> 
     assert tokens.created == [
         {"user_id": str(user.id), "sid": "sid-refresh", "roles": ["admin"], "scope": "user:read user:write"}
     ]
+
+
+def test_refresh_reuse_revokes_db_session(db_session: DbSession) -> None:
+    user = create_user_with_rbac(db_session)
+    db_session.add(AuthSession(sid="sid-reuse", user_id=user.id, status="active"))
+    db_session.commit()
+    service = AuthService(db_session)
+    tokens, _refresh_tokens, _blacklist = attach_service_fakes(service)
+
+    class ReusedRefreshTokenService:
+        def rotate_refresh_token(self, refresh_token: str) -> dict:
+            assert refresh_token == "refresh"
+            raise RefreshTokenReuseError("sid-reuse")
+
+    service.refresh_tokens = ReusedRefreshTokenService()
+
+    with pytest.raises(ValueError, match="reuse detected"):
+        service.refresh("refresh")
+
+    assert tokens.created == []
+    db_session.expire_all()
+    auth_session = db_session.scalar(select(AuthSession).where(AuthSession.sid == "sid-reuse"))
+    assert auth_session is not None
+    assert auth_session.status == "revoked"
 
 
 def test_current_user_returns_db_email_and_roles(db_session: DbSession) -> None:
@@ -1727,7 +1967,23 @@ def test_logout_blacklists_jti_revokes_redis_and_db_session(db_session: DbSessio
     db_session.expire_all()
     auth_session = db_session.scalar(select(AuthSession).where(AuthSession.sid == "sid-logout"))
     assert auth_session is not None
-    assert auth_session.status == "revoked"`
+    assert auth_session.status == "revoked"
+
+
+def test_logout_logs_without_raw_access_token(db_session: DbSession, caplog) -> None:
+    user = create_user_with_rbac(db_session)
+    db_session.add(AuthSession(sid="sid-logout", user_id=user.id, status="active"))
+    db_session.commit()
+    service = AuthService(db_session)
+    token_payload = {"sub": str(user.id), "jti": "jti-logout", "sid": "sid-logout", "exp": 4_102_444_800}
+    attach_service_fakes(service, token_payload=token_payload)
+    raw_access_token = "access"
+
+    with caplog.at_level(logging.INFO, logger="app.auth"):
+        service.logout(raw_access_token)
+
+    assert "logout succeeded" in caplog.text
+    assert raw_access_token not in caplog.text`
   };
 }
 
@@ -1785,6 +2041,7 @@ function createPythonMainRefreshTokenServiceTestFile(): TemplateFile {
   return {
     path: "tests/test_refresh_token_service.py",
     content: `from datetime import datetime, timedelta, timezone
+import logging
 
 import pytest
 
@@ -1792,7 +2049,7 @@ import app.services.refresh_token_service as refresh_module
 import app.services.session_service as session_module
 from app.core.config import settings
 from app.core.security import sha256_text
-from app.services.refresh_token_service import RefreshTokenService
+from app.services.refresh_token_service import RefreshTokenReuseError, RefreshTokenService
 
 
 class FakeRedis:
@@ -1851,6 +2108,20 @@ def test_rotate_refresh_token_marks_old_hash_and_returns_new_token(fake_redis: F
     assert new_hash["created_at"]
 
 
+def test_refresh_token_plaintext_is_not_stored_in_redis(fake_redis: FakeRedis) -> None:
+    service = RefreshTokenService()
+    refresh_token = service.create_refresh_token(user_id="user_123", sid="sid_123")
+    rotation = service.rotate_refresh_token(refresh_token)
+    redis_material = " ".join(
+        [*fake_redis.hashes.keys(), *[str(value) for item in fake_redis.hashes.values() for value in item.values()]]
+    )
+
+    assert refresh_token not in redis_material
+    assert rotation["refresh_token"] not in redis_material
+    assert sha256_text(refresh_token) in redis_material
+    assert sha256_text(rotation["refresh_token"]) in redis_material
+
+
 def test_rotated_refresh_token_within_grace_does_not_revoke_session(fake_redis: FakeRedis) -> None:
     service = RefreshTokenService()
     refresh_token = service.create_refresh_token(user_id="user_123", sid="sid_123")
@@ -1862,7 +2133,7 @@ def test_rotated_refresh_token_within_grace_does_not_revoke_session(fake_redis: 
     assert fake_redis.get(session_key("sid_123")) is None
 
 
-def test_rotated_refresh_token_after_grace_revokes_session(fake_redis: FakeRedis) -> None:
+def test_rotated_refresh_token_after_grace_revokes_session(fake_redis: FakeRedis, caplog) -> None:
     service = RefreshTokenService()
     refresh_token = service.create_refresh_token(user_id="user_123", sid="sid_123")
     service.rotate_refresh_token(refresh_token)
@@ -1870,10 +2141,13 @@ def test_rotated_refresh_token_after_grace_revokes_session(fake_redis: FakeRedis
         datetime.now(timezone.utc) - timedelta(seconds=settings.refresh_token_reuse_grace_seconds + 1)
     ).isoformat()
 
-    with pytest.raises(ValueError, match="reuse detected"):
-        service.rotate_refresh_token(refresh_token)
+    with caplog.at_level(logging.WARNING, logger="app.auth.refresh"):
+        with pytest.raises(RefreshTokenReuseError, match="reuse detected"):
+            service.rotate_refresh_token(refresh_token)
 
     assert fake_redis.get(session_key("sid_123")) == "revoked"
+    assert "refresh reuse detected" in caplog.text
+    assert refresh_token not in caplog.text
 
 
 def test_revoked_session_rejects_refresh(fake_redis: FakeRedis) -> None:
@@ -1958,7 +2232,11 @@ def _make_access_token(
         "scope": scope,
     }
     if payload_overrides:
-        payload.update(payload_overrides)
+        for key, value in payload_overrides.items():
+            if value is None:
+                payload.pop(key, None)
+            else:
+                payload[key] = value
     return jwt.encode(payload, private_key, algorithm=settings.jwt_algorithm)
 
 
@@ -1973,6 +2251,7 @@ function createPythonAppProfileApiTestFile(): TemplateFile {
   return {
     path: "tests/test_profile_api.py",
     content: `from datetime import timedelta
+import logging
 
 import pytest
 
@@ -1983,12 +2262,21 @@ def assert_request_id(response) -> None:
     assert response.headers["X-Request-ID"]
 
 
-def test_profile_requires_token(client) -> None:
-    response = client.get("/api/profile")
+def assert_auth_log(caplog, reason: str, token: str | None = None) -> None:
+    assert reason in caplog.text
+    if token is not None:
+        assert token not in caplog.text
+        assert f"Bearer {token}" not in caplog.text
+
+
+def test_profile_requires_token(client, caplog) -> None:
+    with caplog.at_level(logging.WARNING, logger="app.auth"):
+        response = client.get("/api/profile")
 
     assert response.status_code == 401
     assert response.json()["detail"] == "invalid token"
     assert_request_id(response)
+    assert_auth_log(caplog, "reason=missing_token")
 
 
 def test_profile_accepts_valid_token(client, access_token_factory) -> None:
@@ -2001,64 +2289,103 @@ def test_profile_accepts_valid_token(client, access_token_factory) -> None:
     assert_request_id(response)
 
 
-def test_profile_rejects_invalid_signature(client, access_token_factory) -> None:
+def test_profile_rejects_invalid_signature(client, access_token_factory, caplog) -> None:
     token = access_token_factory()
     header, payload, signature = token.split(".")
     invalid_token = f"{header}.{payload}.invalid-{signature}"
 
-    response = client.get("/api/profile", headers={"Authorization": f"Bearer {invalid_token}"})
+    with caplog.at_level(logging.WARNING, logger="app.auth"):
+        response = client.get("/api/profile", headers={"Authorization": f"Bearer {invalid_token}"})
 
     assert response.status_code == 401
     assert response.json()["detail"] == "invalid token"
     assert_request_id(response)
+    assert_auth_log(caplog, "reason=invalid_signature", invalid_token)
 
 
-def test_profile_rejects_wrong_issuer(client, access_token_factory) -> None:
+def test_profile_rejects_wrong_issuer(client, access_token_factory, caplog) -> None:
     token = access_token_factory(issuer="other-issuer")
 
-    response = client.get("/api/profile", headers={"Authorization": f"Bearer {token}"})
+    with caplog.at_level(logging.WARNING, logger="app.auth"):
+        response = client.get("/api/profile", headers={"Authorization": f"Bearer {token}"})
 
     assert response.status_code == 401
     assert response.json()["detail"] == "invalid token"
+    assert_request_id(response)
+    assert_auth_log(caplog, "reason=invalid_issuer", token)
 
 
-def test_profile_rejects_wrong_audience(client, access_token_factory) -> None:
+def test_profile_rejects_wrong_audience(client, access_token_factory, caplog) -> None:
     token = access_token_factory(audience="other-audience")
 
-    response = client.get("/api/profile", headers={"Authorization": f"Bearer {token}"})
+    with caplog.at_level(logging.WARNING, logger="app.auth"):
+        response = client.get("/api/profile", headers={"Authorization": f"Bearer {token}"})
 
     assert response.status_code == 401
     assert response.json()["detail"] == "invalid token"
+    assert_request_id(response)
+    assert_auth_log(caplog, "reason=invalid_audience", token)
 
 
-def test_profile_rejects_expired_token(client, access_token_factory) -> None:
+def test_profile_rejects_expired_token(client, access_token_factory, caplog) -> None:
     token = access_token_factory(expires_delta=timedelta(minutes=-5))
 
-    response = client.get("/api/profile", headers={"Authorization": f"Bearer {token}"})
+    with caplog.at_level(logging.WARNING, logger="app.auth"):
+        response = client.get("/api/profile", headers={"Authorization": f"Bearer {token}"})
 
     assert response.status_code == 401
     assert response.json()["detail"] == "invalid token"
+    assert_request_id(response)
+    assert_auth_log(caplog, "reason=expired_token", token)
 
 
-def test_profile_rejects_malformed_roles_claim(client, access_token_factory) -> None:
+@pytest.mark.parametrize("claim", ["sub", "sid", "jti"])
+def test_profile_rejects_missing_required_claims(client, access_token_factory, caplog, claim: str) -> None:
+    token = access_token_factory(payload_overrides={claim: None})
+
+    with caplog.at_level(logging.WARNING, logger="app.auth"):
+        response = client.get("/api/profile", headers={"Authorization": f"Bearer {token}"})
+
+    assert response.status_code == 401
+    assert response.json()["detail"] == "invalid token"
+    assert_request_id(response)
+    assert_auth_log(caplog, "reason=invalid_claims", token)
+
+
+def test_profile_rejects_malformed_roles_claim(client, access_token_factory, caplog) -> None:
     token = access_token_factory(payload_overrides={"roles": "admin"})
 
-    response = client.get("/api/profile", headers={"Authorization": f"Bearer {token}"})
+    with caplog.at_level(logging.WARNING, logger="app.auth"):
+        response = client.get("/api/profile", headers={"Authorization": f"Bearer {token}"})
 
     assert response.status_code == 401
     assert response.json()["detail"] == "invalid token"
+    assert_auth_log(caplog, "reason=invalid_claims", token)
 
 
-def test_profile_rejects_malformed_scope_claim(client, access_token_factory) -> None:
+def test_profile_rejects_malformed_roles_list_contents(client, access_token_factory, caplog) -> None:
+    token = access_token_factory(payload_overrides={"roles": ["admin", 123]})
+
+    with caplog.at_level(logging.WARNING, logger="app.auth"):
+        response = client.get("/api/profile", headers={"Authorization": f"Bearer {token}"})
+
+    assert response.status_code == 401
+    assert response.json()["detail"] == "invalid token"
+    assert_auth_log(caplog, "reason=invalid_claims", token)
+
+
+def test_profile_rejects_malformed_scope_claim(client, access_token_factory, caplog) -> None:
     token = access_token_factory(payload_overrides={"scope": ["user:read"]})
 
-    response = client.get("/api/profile", headers={"Authorization": f"Bearer {token}"})
+    with caplog.at_level(logging.WARNING, logger="app.auth"):
+        response = client.get("/api/profile", headers={"Authorization": f"Bearer {token}"})
 
     assert response.status_code == 401
     assert response.json()["detail"] == "invalid token"
+    assert_auth_log(caplog, "reason=invalid_claims", token)
 
 
-def test_profile_rejects_blacklisted_token(client, access_token_factory, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_profile_rejects_blacklisted_token(client, access_token_factory, monkeypatch: pytest.MonkeyPatch, caplog) -> None:
     class RejectingBlacklistService:
         def ensure_not_blacklisted(self, jti: str) -> None:
             raise ValueError("token is blacklisted")
@@ -2066,14 +2393,16 @@ def test_profile_rejects_blacklisted_token(client, access_token_factory, monkeyp
     monkeypatch.setattr(auth_deps, "BlacklistService", RejectingBlacklistService)
     token = access_token_factory(jti="blacklisted")
 
-    response = client.get("/api/profile", headers={"Authorization": f"Bearer {token}"})
+    with caplog.at_level(logging.WARNING, logger="app.auth"):
+        response = client.get("/api/profile", headers={"Authorization": f"Bearer {token}"})
 
     assert response.status_code == 401
     assert response.json()["detail"] == "invalid token"
     assert_request_id(response)
+    assert_auth_log(caplog, "reason=blacklisted_token", token)
 
 
-def test_profile_rejects_revoked_session(client, access_token_factory, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_profile_rejects_revoked_session(client, access_token_factory, monkeypatch: pytest.MonkeyPatch, caplog) -> None:
     class RevokedSessionService:
         def ensure_session_active(self, sid: str) -> None:
             assert sid == "revoked-sid"
@@ -2082,21 +2411,36 @@ def test_profile_rejects_revoked_session(client, access_token_factory, monkeypat
     monkeypatch.setattr(auth_deps, "SessionService", RevokedSessionService)
     token = access_token_factory(sid="revoked-sid")
 
-    response = client.get("/api/profile", headers={"Authorization": f"Bearer {token}"})
+    with caplog.at_level(logging.WARNING, logger="app.auth"):
+        response = client.get("/api/profile", headers={"Authorization": f"Bearer {token}"})
 
     assert response.status_code == 401
     assert response.json()["detail"] == "invalid token"
     assert_request_id(response)
+    assert_auth_log(caplog, "reason=revoked_session", token)
 
 
-def test_profile_rejects_insufficient_scope(client, access_token_factory) -> None:
+def test_profile_rejects_insufficient_scope(client, access_token_factory, caplog) -> None:
     token = access_token_factory(scope="profile:read")
 
-    response = client.get("/api/profile", headers={"Authorization": f"Bearer {token}"})
+    with caplog.at_level(logging.WARNING, logger="app.auth"):
+        response = client.get("/api/profile", headers={"Authorization": f"Bearer {token}"})
 
     assert response.status_code == 403
     assert response.json()["detail"] == "insufficient scope"
     assert_request_id(response)
+    assert_auth_log(caplog, "reason=insufficient_scope", token)
+
+
+def test_openapi_documents_profile_bearer_auth(client) -> None:
+    response = client.get("/openapi.json")
+
+    assert response.status_code == 200
+    schema = response.json()
+    security_schemes = schema["components"]["securitySchemes"]
+    assert security_schemes["HTTPBearer"]["scheme"] == "bearer"
+    profile_operation = schema["paths"]["/api/profile"]["get"]
+    assert {"HTTPBearer": []} in profile_operation["security"]
 
 
 def test_require_role_accepts_matching_role() -> None:
@@ -2108,17 +2452,19 @@ def test_require_role_accepts_matching_role() -> None:
     assert dependency(user) is user
 
 
-def test_require_role_rejects_missing_role() -> None:
+def test_require_role_rejects_missing_role(caplog) -> None:
     dependency = auth_deps.require_role("admin")
     user = auth_deps.CurrentUser(
         user_id="user_123", sid="sid_123", jti="jti_123", roles=["member"], scope=""
     )
 
-    with pytest.raises(auth_deps.HTTPException) as exc_info:
-        dependency(user)
+    with caplog.at_level(logging.WARNING, logger="app.auth"):
+        with pytest.raises(auth_deps.HTTPException) as exc_info:
+            dependency(user)
 
     assert exc_info.value.status_code == 403
     assert exc_info.value.detail == "insufficient role"
+    assert "reason=insufficient_role" in caplog.text
 `
   };
 }
