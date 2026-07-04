@@ -17,8 +17,8 @@
 | 阶段 2：Swagger / OpenAPI 支持 | ✅ 已完成 | 已支持 `OPENAPI_ENABLED` / `DOCS_ENABLED` / `REDOC_ENABLED`，test 默认开启，product 默认关闭 |
 | 阶段 3：日志记录基础设施 | ✅ 已完成 | 已生成 JSON 日志基础设施和 `X-Request-ID` middleware |
 | 阶段 4：`python-main` 认证中心核心能力 | ✅ 已完成核心版 | 已接入 DB 用户校验、bcrypt hash password 校验、DB session 创建/吊销、roles/permissions 查询、RBAC-derived `roles`/`scope` claims、刷新时重新读取 DB 权限、`/auth/me` 返回真实用户；已补登录失败、logout、refresh reuse 等安全日志脱敏断言 |
-| 阶段 5：Redis Token 状态管理 | 🚧 部分完成 | 已补 refresh token hash 的 `created_at`/`rotated_at`/`replaced_by` 元数据、rotation、reuse grace 判定、超出宽限期复用吊销 Redis session 并同步吊销 DB session、jti blacklist TTL 和 session revoke key 检查、refresh token 明文不落 Redis 断言；并发刷新幂等响应和更高级泄露恢复策略仍需深化 |
-| 阶段 6：`python-app` 业务服务鉴权能力 | 🚧 部分完成 | 已生成 Bearer Token 解析、公钥校验、issuer/audience/exp 校验、Redis 黑名单读取、revoked session 检查、`sub`/`sid`/`jti`/`roles`/`scope` claim 规范化、`require_scope`/`require_scopes`/`require_role` 依赖、细分鉴权失败日志、claim 边界测试和 OpenAPI Bearer Auth 测试；更完整策略组合仍需深化 |
+| 阶段 5：Redis Token 状态管理 | ✅ 已完成基础版 | 已补 refresh token hash 的 `created_at`/`rotated_at`/`replaced_by` 元数据、rotation、reuse grace 判定、超出宽限期复用吊销 Redis session 并同步吊销 DB session、jti blacklist TTL 和 session revoke key 检查、refresh token 明文不落 Redis 断言；基础模板明确采用安全优先策略：grace window 内 401 不吊销、grace window 后吊销 session，前端用 single-flight refresh 配合，不默认做服务端幂等响应缓存 |
+| 阶段 6：`python-app` 业务服务鉴权能力 | 🚧 部分完成 | 已生成 Bearer Token 解析、公钥校验、issuer/audience/exp 校验、Redis 黑名单读取、revoked session 检查、`sub`/`sid`/`jti`/`roles`/`scope` claim 规范化、`require_scope`/`require_scopes`/`require_role` 依赖、细分鉴权失败日志、claim 边界测试和 OpenAPI Bearer Auth 测试；后续策略组合已收敛为简单模板版：补 `require_any_scope` / `require_any_role`，不引入复杂 `require_policy` / deny 系列 |
 | 阶段 7：Alembic、Seed 与数据库策略 | ✅ 已完成基础版 | 已生成 Alembic 环境、`python-main` / `python-app` 初始 migration、默认数据幂等 seed、README migration/seed/downgrade/product 边界说明，并补充模板/CLI/release 校验；本轮将 `sessions.user_id` 对齐为 DB user 外键 |
 | 阶段 8：Docker 与 Nginx | ✅ 已完成基础版 | 已生成 Dockerfile、开发 compose、Nginx 反向代理、安全响应头和 Request ID 透传；Dockerfile 使用生产 Gunicorn + Uvicorn Worker，compose 使用开发 Uvicorn `--reload` |
 | 阶段 9：GitHub Actions / Secrets / Environments | ✅ 已完成基础 deploy 模板 | 已生成 PDM CI、Alembic 状态检查、Docker build、test/product environment、docker push 与 deploy 占位 job；README 已说明 secrets 分离和 product 保护规则，真实平台 deploy 命令留给使用方替换 |
@@ -377,6 +377,19 @@ GET /auth/me
 8. 实现 refresh token rotation。
 9. 实现 `REFRESH_TOKEN_REUSE_GRACE_SECONDS` 宽限期逻辑。
 10. 超出宽限期重复使用时吊销 session。
+11. 简单模板推荐的 refresh token 并发策略：
+   - 保持 refresh token rotation：旧 refresh token 成功刷新后立即标记为 `rotated`，返回新的 refresh token。
+   - grace window 内旧 refresh token 再次使用：返回 401，但不吊销 session，用于容忍正常并发请求或网络重试。
+   - grace window 后旧 refresh token 再次使用：视为疑似泄露或重放攻击，吊销 Redis session 与 DB session，用户需要重新登录。
+   - 不在基础模板中实现“并发刷新幂等返回同一份新 refresh token”。
+   - 不把新 refresh token 明文或可恢复响应默认缓存到 Redis，避免扩大 Redis 泄露后的风险面。
+12. 前端 / 客户端推荐配合方案：
+   - 实现 refresh single-flight：同一时间只允许一个 refresh 请求在飞。
+   - 如果已有 refresh 请求进行中，其他 API 请求等待同一个 refresh Promise，而不是再次发起 refresh。
+   - refresh 成功后统一更新本地 access token / refresh token，再重放等待中的业务请求。
+   - refresh 返回 401 时清理本地 token 并跳转登录页。
+   - 如果遇到 grace window 内旧 refresh token replay 返回的 401，客户端不应覆盖已经成功刷新得到的新 token。
+   - 多标签页场景建议用 BroadcastChannel / storage event / 共享锁同步刷新结果，避免多个标签页同时 refresh。
 
 ### 交付物
 
@@ -384,6 +397,8 @@ GET /auth/me
 - logout 后 token 立即被拒绝。
 - refresh token 不明文落 Redis。
 - 并发刷新场景可控。
+- 文档明确基础模板采用“grace window 内 401 不吊销、grace window 后吊销 session”的安全优先策略。
+- 文档明确前端通过 single-flight refresh 配合，避免依赖服务端缓存 refresh token 明文或可恢复响应。
 
 ---
 
@@ -426,6 +441,17 @@ GET /api/profile
 9. token 缺失、无效、过期、命中黑名单时返回 401。
 10. 权限不足返回 403。
 11. 记录鉴权失败、权限不足、黑名单命中日志。
+12. 简单模板推荐的策略组合能力：
+   - 保留 `require_scope("scope:name")`：必须拥有单个 scope。
+   - 保留 `require_scopes("a", "b")`：必须同时拥有全部 scopes。
+   - 新增 `require_any_scope("a", "b")`：拥有任意一个 scope 即可。
+   - 保留 `require_role("role-name")`：必须拥有单个 role。
+   - 新增 `require_any_role("admin", "operator")`：拥有任意一个 role 即可。
+13. 不在基础模板中引入复杂策略：
+   - 暂不提供 `require_policy(...)`。
+   - 暂不提供 `require_all_roles(...)` / `require_all_scopes(...)` 别名。
+   - 暂不提供 `deny_role(...)` / `deny_scope(...)` / deny-any 系列。
+   - 原因：保持模板简单、易读，覆盖常见 90% 后端鉴权场景即可。
 
 ### 交付物
 
@@ -433,6 +459,7 @@ GET /api/profile
 - `python-app` 只能用公钥验证 Token。
 - 业务接口可通过 Bearer Token 访问。
 - 注销后的 Token 在 `python-app` 中会被拒绝。
+- 鉴权依赖提供简单易懂的 scope/role 组合：单个必需、全部 scopes、任意 scope、单个 role、任意 role。
 
 ---
 
