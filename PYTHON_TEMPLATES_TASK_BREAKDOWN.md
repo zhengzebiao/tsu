@@ -4,6 +4,43 @@
 > 来源方案：[PYTHON_TEMPLATES_ARCHITECTURE.md](PYTHON_TEMPLATES_ARCHITECTURE.md)  
 > 目标：将 `python-main` 与 `python-app` 两个 FastAPI 后端模板的建设工作拆分为可执行、可验收的阶段任务。
 
+## 0. 当前执行状态
+
+> 状态更新时间：2026-07-05
+> 当前实现分支：`implement-python-templates`
+> 当前推进阶段：阶段 10：测试覆盖与验收完成（已补 `python-app` 简单组合鉴权 helper、生成 pytest/README/模板/CLI/release 断言，并通过本地 Redis 跨服务生成模板验证）
+
+| 阶段 | 状态 | 说明 |
+| --- | --- | --- |
+| 阶段 0：模板范围确认与目录准备 | ✅ 已完成 | 已注册 `python-main` / `python-app`，并建立生成文件结构 |
+| 阶段 1：公共 FastAPI 工程骨架 | ✅ 已完成 | 已生成 FastAPI 入口、PDM 依赖与脚本管理、配置、PostgreSQL、SQLAlchemy、Alembic、Redis、健康检查和 pytest 基础结构 |
+| 阶段 2：Swagger / OpenAPI 支持 | ✅ 已完成 | 已支持 `OPENAPI_ENABLED` / `DOCS_ENABLED` / `REDOC_ENABLED`，test 默认开启，product 默认关闭 |
+| 阶段 3：日志记录基础设施 | ✅ 已完成 | 已生成 JSON 日志基础设施和 `X-Request-ID` middleware |
+| 阶段 4：`python-main` 认证中心核心能力 | ✅ 已完成核心版 | 已接入 DB 用户校验、bcrypt hash password 校验、DB session 创建/吊销、roles/permissions 查询、RBAC-derived `roles`/`scope` claims、刷新时重新读取 DB 权限、`/auth/me` 返回真实用户；已补登录失败、logout、refresh reuse 等安全日志脱敏断言 |
+| 阶段 5：Redis Token 状态管理 | ✅ 已完成基础版 | 已补 refresh token hash 的 `created_at`/`rotated_at`/`replaced_by` 元数据、rotation、reuse grace 判定、超出宽限期复用吊销 Redis session 并同步吊销 DB session、jti blacklist TTL 和 session revoke key 检查、refresh token 明文不落 Redis 断言；基础模板明确采用安全优先策略：grace window 内 401 不吊销、grace window 后吊销 session，前端用 single-flight refresh 配合，不默认做服务端幂等响应缓存 |
+| 阶段 6：`python-app` 业务服务鉴权能力 | ✅ 已完成基础版 | 已生成 Bearer Token 解析、公钥校验、issuer/audience/exp 校验、Redis 黑名单读取、revoked session 检查、`sub`/`sid`/`jti`/`roles`/`scope` claim 规范化、`require_scope`/`require_scopes`/`require_any_scope`/`require_role`/`require_any_role` 依赖、细分鉴权失败日志、claim 边界测试、组合鉴权 helper 测试和 OpenAPI Bearer Auth 测试；基础模板不引入复杂 `require_policy` / deny 系列 |
+| 阶段 7：Alembic、Seed 与数据库策略 | ✅ 已完成基础版 | 已生成 Alembic 环境、`python-main` / `python-app` 初始 migration、默认数据幂等 seed、README migration/seed/downgrade/product 边界说明，并补充模板/CLI/release 校验；本轮将 `sessions.user_id` 对齐为 DB user 外键 |
+| 阶段 8：Docker 与 Nginx | ✅ 已完成基础版 | 已生成 Dockerfile、开发 compose、Nginx 反向代理、安全响应头和 Request ID 透传；Dockerfile 使用生产 Gunicorn + Uvicorn Worker，compose 使用开发 Uvicorn `--reload` |
+| 阶段 9：GitHub Actions / Secrets / Environments | ✅ 已完成基础 deploy 模板 | 已生成 PDM CI、Alembic 状态检查、Docker build、test/product environment、docker push 与 deploy 占位 job；README 已说明 secrets 分离和 product 保护规则，真实平台 deploy 命令留给使用方替换 |
+| 阶段 10：测试覆盖与验收 | ✅ 已完成基础验收 | 已补模板生成测试、CLI 初始化测试、release bundle 校验、生成文件 Python 语法 smoke check、`python-main` auth/token/refresh rotation/DB-backed auth service pytest、共享日志脱敏/Request ID pytest、Redis state service pytest、`python-app` profile/auth/session revoke/malformed claim/role dependency/任意 scope/role helper/细分日志/OpenAPI pytest，并通过 `validate:generated-python` 在本地 Redis 上完成生成项目与跨服务验证 |
+| 阶段 11：README 与模板使用文档 | ✅ 已完成基础完整使用文档 | 已生成 README 基础说明、PDM 依赖管理说明、开发/生产 app server 说明、安全说明、基础部署、Secrets 和 Environments 说明，并补齐 `python-main` 认证接口/JWT/Redis/migration/seed/FAQ 与 `python-app` 受保护接口/public key/issuer/audience/scope/roles/FAQ 文档 |
+
+本轮已验证：
+
+```bash
+pnpm --filter @tsuz/template lint
+pnpm --filter @tsuz/template build
+pnpm --filter @tsuz/template test
+pnpm --filter @tsuz/cli lint
+pnpm --filter @tsuz/cli build
+pnpm --filter @tsuz/cli test
+pnpm template:release:build --version=0.0.0
+TEMPLATE_VERSION=0.0.0 pnpm validate:template-release
+REDIS_URL=redis://localhost:6379/15 pnpm validate:generated-python
+```
+
+`validate:generated-python` 已覆盖：通过本地 CLI 生成 `auth-service` / `backend-api`、`compileall`、Alembic upgrade、seed 幂等、Ruff、pytest、启动两个生成服务并验证 DB-backed login、`/auth/me`、`/api/profile`、wrong scope `403`、malformed claims `401`、logout 后 profile `401`、Request ID 透传和敏感日志不泄露。
+
 ## 1. 总体目标
 
 新增两个联动后端模板：
@@ -73,6 +110,11 @@
    - `APP_ENV`
    - `DEBUG`
    - `LOG_LEVEL`
+   - `LOG_FORMAT`
+   - `REQUEST_ID_HEADER`
+   - `WEB_CONCURRENCY`
+   - `GUNICORN_TIMEOUT`
+   - `GUNICORN_GRACEFUL_TIMEOUT`
    - `SERVICE_NAME`
    - `API_PREFIX`
 4. 增加 PostgreSQL 数据库配置。
@@ -83,14 +125,15 @@
    - `GET /health`
 9. 增加 CORS 配置。
 10. 增加 pytest 基础测试结构。
-11. 增加 `.env.test.example` 和 `.env.product.example`。
+11. 使用 PDM 管理依赖、虚拟环境和项目脚本。
+12. 增加 `.env.test.example` 和 `.env.product.example`。
 
 ### 交付物
 
 - 两个模板都可以启动 FastAPI 应用。
 - 健康检查接口可访问。
 - 数据库和 Redis 配置路径清晰。
-- pytest 可以执行基础测试。
+- 可以通过 `pdm run test` 执行基础测试。
 
 ---
 
@@ -321,6 +364,19 @@ GET /auth/me
 8. 实现 refresh token rotation。
 9. 实现 `REFRESH_TOKEN_REUSE_GRACE_SECONDS` 宽限期逻辑。
 10. 超出宽限期重复使用时吊销 session。
+11. 简单模板推荐的 refresh token 并发策略：
+   - 保持 refresh token rotation：旧 refresh token 成功刷新后立即标记为 `rotated`，返回新的 refresh token。
+   - grace window 内旧 refresh token 再次使用：返回 401，但不吊销 session，用于容忍正常并发请求或网络重试。
+   - grace window 后旧 refresh token 再次使用：视为疑似泄露或重放攻击，吊销 Redis session 与 DB session，用户需要重新登录。
+   - 不在基础模板中实现“并发刷新幂等返回同一份新 refresh token”。
+   - 不把新 refresh token 明文或可恢复响应默认缓存到 Redis，避免扩大 Redis 泄露后的风险面。
+12. 前端 / 客户端推荐配合方案：
+   - 实现 refresh single-flight：同一时间只允许一个 refresh 请求在飞。
+   - 如果已有 refresh 请求进行中，其他 API 请求等待同一个 refresh Promise，而不是再次发起 refresh。
+   - refresh 成功后统一更新本地 access token / refresh token，再重放等待中的业务请求。
+   - refresh 返回 401 时清理本地 token 并跳转登录页。
+   - 如果遇到 grace window 内旧 refresh token replay 返回的 401，客户端不应覆盖已经成功刷新得到的新 token。
+   - 多标签页场景建议用 BroadcastChannel / storage event / 共享锁同步刷新结果，避免多个标签页同时 refresh。
 
 ### 交付物
 
@@ -328,6 +384,8 @@ GET /auth/me
 - logout 后 token 立即被拒绝。
 - refresh token 不明文落 Redis。
 - 并发刷新场景可控。
+- 文档明确基础模板采用“grace window 内 401 不吊销、grace window 后吊销 session”的安全优先策略。
+- 文档明确前端通过 single-flight refresh 配合，避免依赖服务端缓存 refresh token 明文或可恢复响应。
 
 ---
 
@@ -370,6 +428,17 @@ GET /api/profile
 9. token 缺失、无效、过期、命中黑名单时返回 401。
 10. 权限不足返回 403。
 11. 记录鉴权失败、权限不足、黑名单命中日志。
+12. 简单模板推荐的策略组合能力：
+   - 保留 `require_scope("scope:name")`：必须拥有单个 scope。
+   - 保留 `require_scopes("a", "b")`：必须同时拥有全部 scopes。
+   - 新增 `require_any_scope("a", "b")`：拥有任意一个 scope 即可。
+   - 保留 `require_role("role-name")`：必须拥有单个 role。
+   - 新增 `require_any_role("admin", "operator")`：拥有任意一个 role 即可。
+13. 不在基础模板中引入复杂策略：
+   - 暂不提供 `require_policy(...)`。
+   - 暂不提供 `require_all_roles(...)` / `require_all_scopes(...)` 别名。
+   - 暂不提供 `deny_role(...)` / `deny_scope(...)` / deny-any 系列。
+   - 原因：保持模板简单、易读，覆盖常见 90% 后端鉴权场景即可。
 
 ### 交付物
 
@@ -377,6 +446,7 @@ GET /api/profile
 - `python-app` 只能用公钥验证 Token。
 - 业务接口可通过 Bearer Token 访问。
 - 注销后的 Token 在 `python-app` 中会被拒绝。
+- 鉴权依赖提供简单易懂的 scope/role 组合：单个必需、全部 scopes、任意 scope、单个 role、任意 role。
 
 ---
 
@@ -425,30 +495,33 @@ GET /api/profile
 ### 任务
 
 1. 为两个模板增加 `Dockerfile`。
-2. 为两个模板增加 `docker-compose.yml`。
-3. compose 中包含：
+2. Dockerfile 默认使用生产启动方式：Gunicorn + Uvicorn Worker。
+3. 为两个模板增加 `docker-compose.yml`。
+4. 默认 compose 使用开发启动方式：Uvicorn `--reload`。
+5. compose 中包含：
    - FastAPI 服务
    - PostgreSQL
    - Redis
    - Nginx
-4. 镜像 tag 不默认只用 `latest`。
-5. README 中说明推荐 tag：
+6. 镜像 tag 不默认只用 `latest`。
+7. README 中说明推荐 tag：
    - `service-name:test-<git-sha>`
    - `service-name:product-<version>`
    - `service-name:product-<git-sha>`
-6. Nginx 增加：
+8. Nginx 增加：
    - 反向代理 FastAPI
    - 健康检查入口
    - 请求体大小限制
    - 安全响应头
    - `X-Request-ID` 透传
-7. product 可选 HSTS。
-8. Nginx access log 不记录 Authorization header 或 Cookie 全文。
-9. Docker 容器日志输出到 stdout / stderr。
+9. product 可选 HSTS。
+10. Nginx access log 不记录 Authorization header 或 Cookie 全文。
+11. Docker 容器日志输出到 stdout / stderr。
 
 ### 交付物
 
-- 两个模板都可以通过 Docker Compose 启动。
+- 两个模板都可以通过 Docker Compose 以开发模式启动。
+- 生产镜像默认使用 Gunicorn + Uvicorn Worker 启动 FastAPI。
 - Nginx 可代理服务。
 - Nginx 可透传 Request ID。
 - README 说明应用镜像回滚方式。
@@ -465,7 +538,11 @@ GET /api/profile
 ### 任务
 
 1. 增加 GitHub Actions workflow。
-2. workflow 支持：
+2. workflow 使用 PDM 安装依赖和执行脚本：
+   - `pdm install`
+   - `pdm run lint`
+   - `pdm run test`
+3. workflow 支持：
    - 安装依赖
    - lint
    - test
@@ -474,29 +551,29 @@ GET /api/profile
    - docker push
    - deploy test
    - deploy product
-3. 使用 GitHub Environments：
+4. 使用 GitHub Environments：
    - `test`
    - `product`
-4. test secrets：
+5. test secrets：
    - `TEST_DATABASE_URL`
    - `TEST_REDIS_URL`
    - `TEST_JWT_PRIVATE_KEY`
    - `TEST_JWT_PUBLIC_KEY`
    - `TEST_CORS_ALLOW_ORIGINS`
    - `TEST_DOCKER_REGISTRY_TOKEN`
-5. product secrets：
+6. product secrets：
    - `PRODUCT_DATABASE_URL`
    - `PRODUCT_REDIS_URL`
    - `PRODUCT_JWT_PRIVATE_KEY`
    - `PRODUCT_JWT_PUBLIC_KEY`
    - `PRODUCT_CORS_ALLOW_ORIGINS`
    - `PRODUCT_DOCKER_REGISTRY_TOKEN`
-6. product 环境增加保护建议：
+7. product 环境增加保护建议：
    - 人工审批
    - 只允许 master / release tag 部署
    - 限制 deploy 权限
    - product secrets 只允许 product job 读取
-7. CI/CD 日志中不打印 `.env` 完整内容或 secrets 值。
+8. CI/CD 日志中不打印 `.env` 完整内容或 secrets 值。
 
 ### 交付物
 
@@ -572,16 +649,17 @@ GET /api/profile
 
 1. 项目定位。
 2. 环境变量。
-3. 本地启动。
-4. 登录 / 刷新 / 注销 / 当前用户接口。
-5. JWT 私钥、公钥配置方式。
-6. Redis key 说明。
-7. Refresh Token Rotation 说明。
-8. Alembic 说明。
-9. seed 说明。
-10. 日志与 Request ID 说明。
-11. Docker 说明。
-12. GitHub Secrets 说明。
+3. 本地启动：Uvicorn `--reload`。
+4. 生产启动：Gunicorn + Uvicorn Worker。
+5. 登录 / 刷新 / 注销 / 当前用户接口。
+6. JWT 私钥、公钥配置方式。
+7. Redis key 说明。
+8. Refresh Token Rotation 说明。
+9. Alembic 说明。
+10. seed 说明。
+11. 日志与 Request ID 说明。
+12. Docker 说明。
+13. GitHub Secrets 说明。
 
 #### `python-app` README
 
@@ -594,8 +672,10 @@ GET /api/profile
 5. Redis 黑名单说明。
 6. 权限校验说明。
 7. 日志与 Request ID 说明。
-8. Docker 说明。
-9. GitHub Secrets 说明。
+8. 本地启动：Uvicorn `--reload`。
+9. 生产启动：Gunicorn + Uvicorn Worker。
+10. Docker 说明。
+11. GitHub Secrets 说明。
 
 #### 安全原则
 
@@ -607,7 +687,8 @@ README 中必须明确：
 4. Refresh Token 不明文存 Redis。
 5. product 默认关闭公开 Swagger。
 6. product 数据库迁移优先向前兼容。
-7. 日志中不能记录 token、密码、密钥和 secrets。
+7. 开发环境使用 Uvicorn，生产环境使用 Gunicorn + Uvicorn Worker。
+8. 日志中不能记录 token、密码、密钥和 secrets。
 
 ### 交付物
 
@@ -656,17 +737,19 @@ README 中必须明确：
 
 1. 两个模板目录可生成。
 2. 两个模板 FastAPI 可启动。
-3. 两个模板支持基础日志和 `X-Request-ID`。
-4. `python-main` 支持：
+3. 使用 PDM 管理依赖、虚拟环境和项目脚本。
+4. 开发环境使用 Uvicorn `--reload`，生产镜像使用 Gunicorn + Uvicorn Worker。
+5. 两个模板支持基础日志和 `X-Request-ID`。
+6. `python-main` 支持：
    - `/auth/login`
    - `/auth/me`
    - RS256 JWT 签发
-5. `python-app` 支持：
+7. `python-app` 支持：
    - Bearer Token 验证
    - `/api/profile`
-6. Redis 支持 jti 黑名单读取。
-7. test 环境 Swagger 开启。
-8. pytest 覆盖登录、鉴权、黑名单和日志脱敏核心流程。
+8. Redis 支持 jti 黑名单读取。
+9. test 环境 Swagger 开启。
+10. pytest 覆盖登录、鉴权、黑名单和日志脱敏核心流程。
 
 后续再补：
 

@@ -2,7 +2,7 @@
 
 [中文文档](README.zh-CN.md)
 
-Tsu is a versioned frontend project template CLI for teams. It helps developers create standard projects with TypeScript, linting, CI, Docker, routing, state management, and release-friendly structure already in place.
+Tsu is a versioned project template CLI for teams. It helps developers create standard frontend and backend projects with linting, CI, Docker, deployment-friendly structure, and release-friendly metadata already in place.
 
 Use it when a team wants new projects to start from the same engineering baseline instead of rebuilding the same setup in every repository.
 
@@ -32,6 +32,24 @@ pnpm install
 pnpm dev
 ```
 
+Create a FastAPI authentication service:
+
+```bash
+tsu-cli init auth-service --template python-main
+cd auth-service
+pdm install
+pdm run dev
+```
+
+Create a FastAPI resource service that verifies tokens issued by `python-main`:
+
+```bash
+tsu-cli init backend-api --template python-app
+cd backend-api
+pdm install
+pdm run dev
+```
+
 ## Templates
 
 | Template | Recommended For | Built In |
@@ -41,6 +59,8 @@ pnpm dev
 | `react` | React web apps and dashboards | Vite, React Router, TypeScript, ESLint, Docker, CI |
 | `mfe` | Micro frontend workspaces | Host app, Vue sub apps, qiankun, shared packages, Docker, CI |
 | `monorepo` | Multi-package team repositories | pnpm workspace, Turbo, Changesets, TypeScript packages |
+| `python-main` | FastAPI authentication services | PDM, PostgreSQL, Redis, Alembic, RS256 JWT signing, Docker, Nginx, CI/CD environments |
+| `python-app` | FastAPI resource services | PDM, PostgreSQL, Redis blacklist checks, RS256 JWT verification, Docker, Nginx, CI/CD environments |
 
 List templates from the CLI:
 
@@ -79,7 +99,7 @@ Useful options:
 
 | Option | Description |
 | --- | --- |
-| `-t, --template <name>` | Template name: `default`, `vue3`, `react`, `mfe`, `monorepo` |
+| `-t, --template <name>` | Template name: `default`, `vue3`, `react`, `mfe`, `monorepo`, `python-main`, `python-app` |
 | `-v, --version <value>` | Template release version, for example `1.0.3` or `latest` |
 | `--repo <owner/repo>` | GitHub repository that hosts template release assets |
 | `--cwd <path>` | Directory where the project should be created |

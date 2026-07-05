@@ -1,6 +1,6 @@
 # Tsu
 
-Tsu 是一个面向前端团队的可版本化工程模板 CLI。它用于快速生成已经内置 TypeScript、Lint、CI、Docker、路由、状态管理和发布基础结构的标准前端工程。
+Tsu 是一个面向团队的可版本化工程模板 CLI。它用于快速生成已经内置 Lint、CI、Docker、部署结构和发布元数据的标准前端与后端工程。
 
 当团队希望新项目从同一套工程基线开始，而不是每次重复配置项目结构、构建、校验和部署流程时，可以使用 Tsu。
 
@@ -30,6 +30,24 @@ pnpm install
 pnpm dev
 ```
 
+创建 FastAPI 认证服务：
+
+```bash
+tsu-cli init auth-service --template python-main
+cd auth-service
+pdm install
+pdm run dev
+```
+
+创建验证 `python-main` 签发 Token 的 FastAPI 业务服务：
+
+```bash
+tsu-cli init backend-api --template python-app
+cd backend-api
+pdm install
+pdm run dev
+```
+
 ## 模板列表
 
 | 模板 | 适合场景 | 内置能力 |
@@ -39,6 +57,8 @@ pnpm dev
 | `react` | React Web App、仪表盘 | Vite、React Router、TypeScript、ESLint、Docker、CI |
 | `mfe` | 微前端工作区 | Host 应用、Vue 子应用、qiankun、共享包、Docker、CI |
 | `monorepo` | 多包团队仓库 | pnpm workspace、Turbo、Changesets、TypeScript packages |
+| `python-main` | FastAPI 认证服务 | PDM、PostgreSQL、Redis、Alembic、RS256 JWT 签发、Docker、Nginx、CI/CD Environments |
+| `python-app` | FastAPI 业务服务 | PDM、PostgreSQL、Redis 黑名单校验、RS256 JWT 验证、Docker、Nginx、CI/CD Environments |
 
 通过 CLI 查看模板：
 
@@ -77,7 +97,7 @@ tsu-cli init admin-console --template vue3
 
 | 参数 | 说明 |
 | --- | --- |
-| `-t, --template <name>` | 模板名称：`default`、`vue3`、`react`、`mfe`、`monorepo` |
+| `-t, --template <name>` | 模板名称：`default`、`vue3`、`react`、`mfe`、`monorepo`、`python-main`、`python-app` |
 | `-v, --version <value>` | 模板发布版本，例如 `1.0.3` 或 `latest` |
 | `--repo <owner/repo>` | 承载模板 release asset 的 GitHub 仓库 |
 | `--cwd <path>` | 项目创建目录 |

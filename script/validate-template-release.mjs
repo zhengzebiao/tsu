@@ -22,8 +22,11 @@ try {
 
   const templateNames = manifest.templates.map((template) => template.name);
 
-  if (!templateNames.includes("default") || !templateNames.includes("monorepo") || !templateNames.includes("vue3") || !templateNames.includes("mfe") || !templateNames.includes("react")) {
-    throw new Error("Release manifest does not include expected templates.");
+  const expectedTemplates = ["default", "monorepo", "vue3", "mfe", "react", "python-main", "python-app"];
+  const missingTemplates = expectedTemplates.filter((templateName) => !templateNames.includes(templateName));
+
+  if (missingTemplates.length > 0) {
+    throw new Error(`Release manifest does not include expected templates: ${missingTemplates.join(", ")}.`);
   }
 
   if (!manifest.templates.find((template) => template.name === "vue3")?.description) {
@@ -35,9 +38,74 @@ try {
   await access(join(bundleDir, "vue3", "package.json"));
   await access(join(bundleDir, "mfe", "package.json"));
   await access(join(bundleDir, "react", "package.json"));
+  await access(join(bundleDir, "python-main", "pyproject.toml"));
+  await access(join(bundleDir, "python-main", "app", "main.py"));
+  await access(join(bundleDir, "python-main", "alembic", "versions", "0001_initial_auth_schema.py"));
+  await access(join(bundleDir, "python-main", "app", "models", "permission.py"));
+  await access(join(bundleDir, "python-main", "app", "services", "session_service.py"));
+  await access(join(bundleDir, "python-main", "app", "seed", "__main__.py"));
+  await access(join(bundleDir, "python-main", ".github", "workflows", "ci.yml"));
+  await access(join(bundleDir, "python-main", "tests", "test_auth_api.py"));
+  await access(join(bundleDir, "python-main", "tests", "test_token_service.py"));
+  await access(join(bundleDir, "python-main", "tests", "test_refresh_token_service.py"));
+  await access(join(bundleDir, "python-main", "tests", "test_logging.py"));
+  await access(join(bundleDir, "python-main", "tests", "test_redis_state_services.py"));
+  await assertReadmeContains(join(bundleDir, "python-main", "README.md"), [
+    "## Auth API",
+    "POST /auth/login",
+    "## JWT Configuration",
+    "JWT_PRIVATE_KEY",
+    "## Redis Token State",
+    "REFRESH_TOKEN_REUSE_GRACE_SECONDS",
+    "revokes the session",
+    "## Database Migrations and Seed",
+    "alembic downgrade -1",
+    "alembic downgrade <revision_id>",
+    "seed is idempotent",
+    "Product does not auto-run seed",
+    "## FAQ"
+  ]);
+  await access(join(bundleDir, "python-app", "pyproject.toml"));
+  await access(join(bundleDir, "python-app", "app", "main.py"));
+  await access(join(bundleDir, "python-app", "alembic", "versions", "0001_initial_app_schema.py"));
+  await access(join(bundleDir, "python-app", "app", "models", "app_setting.py"));
+  await access(join(bundleDir, "python-app", "app", "models", "sample_profile.py"));
+  await access(join(bundleDir, "python-app", "app", "services", "session_service.py"));
+  await access(join(bundleDir, "python-app", "app", "seed", "__main__.py"));
+  await access(join(bundleDir, "python-app", ".github", "workflows", "ci.yml"));
+  await access(join(bundleDir, "python-app", "tests", "test_profile_api.py"));
+  await access(join(bundleDir, "python-app", "tests", "test_logging.py"));
+  await access(join(bundleDir, "python-app", "tests", "test_redis_state_services.py"));
+  await assertReadmeContains(join(bundleDir, "python-app", "README.md"), [
+    "## Protected API Usage",
+    "Authorization: Bearer <access-token>",
+    "## Auth Integration with python-main",
+    "JWT_PUBLIC_KEY",
+    "## Redis Blacklist",
+    "SESSION_PREFIX",
+    "sessions revoked by logout or refresh-token reuse",
+    "## Scopes and Permissions",
+    "require_any_scope",
+    "require_any_role",
+    "## Database Migrations and Seed",
+    "alembic downgrade -1",
+    "alembic downgrade <revision_id>",
+    "seed is idempotent",
+    "Product does not auto-run seed",
+    "## FAQ"
+  ]);
   process.stdout.write(`Validated release archive ${archivePath}\n`);
 } finally {
   await rm(tempDir, { force: true, recursive: true });
+}
+
+async function assertReadmeContains(filePath, requiredMarkers) {
+  const content = await readFile(filePath, "utf8");
+  const missingMarkers = requiredMarkers.filter((marker) => !content.includes(marker));
+
+  if (missingMarkers.length > 0) {
+    throw new Error(`README ${filePath} is missing required markers: ${missingMarkers.join(", ")}.`);
+  }
 }
 
 async function ensureArchive() {

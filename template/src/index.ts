@@ -1,4 +1,5 @@
 import { createMfeTemplateFiles } from "./mfe.js";
+import { createPythonAppTemplateFiles, createPythonMainTemplateFiles } from "./python.js";
 import { createReactTemplateFiles } from "./react.js";
 import { createVue3TemplateFiles } from "./vue3.js";
 
@@ -28,7 +29,7 @@ export interface CreateTemplateFilesOptions {
   templateName?: string;
 }
 
-export type TemplateName = "default" | "monorepo" | "vue3" | "mfe" | "react";
+export type TemplateName = "default" | "monorepo" | "vue3" | "mfe" | "react" | "python-main" | "python-app";
 
 export const templateDefinitions: TemplateDefinition[] = [
   {
@@ -75,6 +76,24 @@ export const templateDefinitions: TemplateDefinition[] = [
     node: ">=20",
     packageManagers: ["pnpm"],
     nextSteps: ["pnpm install", "pnpm dev"]
+  },
+  {
+    name: "python-main",
+    description: "FastAPI auth service with PostgreSQL, Redis, RS256 JWT, Alembic, Docker, nginx, and CI",
+    tags: ["python", "fastapi", "auth", "postgresql", "redis"],
+    recommendedFor: ["auth service", "jwt issuer", "backend api"],
+    node: "not required",
+    packageManagers: ["pdm"],
+    nextSteps: ["pdm install", "pdm run dev"]
+  },
+  {
+    name: "python-app",
+    description: "FastAPI resource service with PostgreSQL, Redis blacklist checks, RS256 JWT verification, Docker, nginx, and CI",
+    tags: ["python", "fastapi", "api", "postgresql", "redis"],
+    recommendedFor: ["resource service", "business api", "jwt verifier"],
+    node: "not required",
+    packageManagers: ["pdm"],
+    nextSteps: ["pdm install", "pdm run dev"]
   }
 ];
 export const templateNames = templateDefinitions.map((template) => template.name);
@@ -115,6 +134,14 @@ export function createTemplateSourceFiles(templateName?: string): TemplateFile[]
 
   if (resolvedTemplateName === "react") {
     return createReactTemplateFiles(templateProjectNameToken);
+  }
+
+  if (resolvedTemplateName === "python-main") {
+    return createPythonMainTemplateFiles(templateProjectNameToken);
+  }
+
+  if (resolvedTemplateName === "python-app") {
+    return createPythonAppTemplateFiles(templateProjectNameToken);
   }
 
   return createDefaultTemplateFiles(templateProjectNameToken);

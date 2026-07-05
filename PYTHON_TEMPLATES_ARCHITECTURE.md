@@ -44,6 +44,10 @@ python-app
 两个模板统一采用：
 
 - FastAPI
+- PDM
+- Uvicorn
+- Gunicorn
+- Uvicorn Worker
 - PostgreSQL
 - SQLAlchemy
 - Alembic
@@ -60,6 +64,71 @@ python-app
 ```text
 test
 product
+```
+
+### 2.1 依赖与脚本管理
+
+两个模板默认使用 **PDM** 管理 Python 依赖、虚拟环境和项目脚本。
+
+推荐生成：
+
+```text
+pyproject.toml
+```
+
+第一版可以不强制生成 `pdm.lock`，但 README 需要说明：依赖变更后建议执行 `pdm lock` 并提交锁文件，以提升 CI、Docker 构建和多人协作的一致性。
+
+`pyproject.toml` 建议使用标准 PEP 621 的 `[project]` 写法：
+
+```toml
+[project]
+name = "auth-service"
+version = "0.0.0"
+requires-python = ">=3.11"
+dependencies = [
+  "fastapi>=0.115.0",
+  "uvicorn[standard]>=0.34.0",
+  "gunicorn>=23.0.0",
+  "uvicorn-worker>=0.3.0",
+  "pydantic-settings>=2.7.0",
+  "sqlalchemy>=2.0.36",
+  "alembic>=1.14.0",
+  "psycopg[binary]>=3.2.3",
+  "redis>=5.2.1",
+  "pyjwt[crypto]>=2.10.1",
+  "passlib[bcrypt]>=1.7.4",
+  "email-validator>=2.2.0"
+]
+
+[dependency-groups]
+dev = [
+  "pytest>=8.3.4",
+  "httpx>=0.28.1",
+  "ruff>=0.8.4"
+]
+```
+
+统一脚本入口：
+
+```toml
+[tool.pdm.scripts]
+dev = "uvicorn app.main:app --reload --host 0.0.0.0 --port 8000"
+lint = "ruff check ."
+test = "pytest"
+migrate = "alembic upgrade head"
+alembic-current = "alembic current"
+seed = "python -m app.seed"
+```
+
+推荐常用命令：
+
+```bash
+pdm install
+pdm run dev
+pdm run lint
+pdm run test
+pdm run migrate
+pdm run seed
 ```
 
 ## 3. 认证与 Token 方案
@@ -676,6 +745,11 @@ product
 APP_ENV=test
 DEBUG=true
 LOG_LEVEL=debug
+LOG_FORMAT=json
+REQUEST_ID_HEADER=X-Request-ID
+WEB_CONCURRENCY=1
+GUNICORN_TIMEOUT=60
+GUNICORN_GRACEFUL_TIMEOUT=30
 
 SERVICE_NAME=auth-service
 API_PREFIX=/api
@@ -720,6 +794,11 @@ REDOC_ENABLED=true
 APP_ENV=product
 DEBUG=false
 LOG_LEVEL=info
+LOG_FORMAT=json
+REQUEST_ID_HEADER=X-Request-ID
+WEB_CONCURRENCY=4
+GUNICORN_TIMEOUT=60
+GUNICORN_GRACEFUL_TIMEOUT=30
 
 SERVICE_NAME=auth-service
 API_PREFIX=/api
@@ -764,6 +843,11 @@ REDOC_ENABLED=false
 APP_ENV=test
 DEBUG=true
 LOG_LEVEL=debug
+LOG_FORMAT=json
+REQUEST_ID_HEADER=X-Request-ID
+WEB_CONCURRENCY=1
+GUNICORN_TIMEOUT=60
+GUNICORN_GRACEFUL_TIMEOUT=30
 
 SERVICE_NAME=backend-api
 API_PREFIX=/api
@@ -795,6 +879,11 @@ REDOC_ENABLED=true
 APP_ENV=product
 DEBUG=false
 LOG_LEVEL=info
+LOG_FORMAT=json
+REQUEST_ID_HEADER=X-Request-ID
+WEB_CONCURRENCY=4
+GUNICORN_TIMEOUT=60
+GUNICORN_GRACEFUL_TIMEOUT=30
 
 SERVICE_NAME=backend-api
 API_PREFIX=/api
@@ -1078,7 +1167,53 @@ CI/CD 日志需要避免泄露 secrets。
 
 ## 13. Docker / Nginx / 回滚方案
 
-### 13.1 Docker 镜像版本化
+### 13.1 开发与生产 App Server
+
+模板区分开发环境和生产环境的 FastAPI 启动方式。
+
+开发环境使用 Uvicorn 直接启动，方便自动重载和本地调试：
+
+```bash
+uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+```
+
+生产环境使用 Gunicorn 管理 Uvicorn Worker：
+
+```bash
+gunicorn app.main:app \
+  -k uvicorn_worker.UvicornWorker \
+  --bind 0.0.0.0:8000 \
+  --workers ${WEB_CONCURRENCY:-4} \
+  --timeout ${GUNICORN_TIMEOUT:-60} \
+  --graceful-timeout ${GUNICORN_GRACEFUL_TIMEOUT:-30}
+```
+
+部署链路建议为：
+
+```text
+Nginx / Load Balancer
+  -> Gunicorn master
+    -> Uvicorn Worker x N
+      -> FastAPI app
+```
+
+推荐配置项：
+
+```env
+WEB_CONCURRENCY=4
+GUNICORN_TIMEOUT=60
+GUNICORN_GRACEFUL_TIMEOUT=30
+```
+
+原则：
+
+- 本地开发和默认开发 compose 使用 `uvicorn --reload`
+- Dockerfile 默认使用生产启动命令，即 Gunicorn + Uvicorn Worker
+- product 不启用 `--reload`
+- worker 数量通过 `WEB_CONCURRENCY` 配置
+- Nginx 仍负责反向代理、安全响应头、健康检查入口和可选 TLS 终止
+
+### 13.2 Docker 镜像版本化
 
 不要只用：
 
@@ -1103,7 +1238,7 @@ auth-service:product-a1b2c3d
 backend-api:product-v1.2.0
 ```
 
-### 13.2 回滚方式
+### 13.3 回滚方式
 
 应用回滚：
 
@@ -1120,7 +1255,7 @@ docker compose up -d auth-service
 - Alembic downgrade 不作为 product 默认回滚手段
 - product 数据库变更要使用向前兼容策略
 
-### 13.3 Nginx 职责
+### 13.4 Nginx 职责
 
 Nginx 用于：
 
@@ -1147,7 +1282,23 @@ add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" alway
 
 ## 14. GitHub 配置方案
 
-用到的配置都配置在 GitHub。
+用到的配置都配置在 GitHub。CI 中 Python 依赖安装和脚本执行统一使用 PDM。
+
+基础 CI 示例：
+
+```yaml
+- uses: actions/setup-python@v5
+  with:
+    python-version: "3.12"
+- run: pipx install pdm
+- run: pdm install
+- run: pdm run lint
+- run: pdm run test
+```
+
+如果模板后续生成并提交 `pdm.lock`，CI 可以增加锁文件校验，例如使用 PDM 的 frozen / lock check 流程，避免 CI 自动解析出不同依赖版本。
+
+
 
 建议使用 GitHub Environments：
 
@@ -1468,4 +1619,4 @@ product 默认推荐向前兼容迁移
 
 这两个模板最终可以定义为：
 
-> `python-main` 是认证中心，负责登录、签发 RS256 JWT、Refresh Token Rotation、Session 管理和 Redis 黑名单写入；`python-app` 是业务 API 服务，只负责用公钥验证 JWT、读取 Redis 黑名单和执行业务逻辑。Refresh Token、Session、Blacklist 存 Redis，Access Token 不存 Redis。运行环境固定为 test / product，两套环境的数据库、Redis、JWT key、issuer、audience 和 GitHub Secrets 完全隔离。生产回滚优先回滚 Docker 镜像，数据库迁移采用向前兼容策略，Alembic downgrade 主要用于开发和测试环境。
+> `python-main` 是认证中心，负责登录、签发 RS256 JWT、Refresh Token Rotation、Session 管理和 Redis 黑名单写入；`python-app` 是业务 API 服务，只负责用公钥验证 JWT、读取 Redis 黑名单和执行业务逻辑。Refresh Token、Session、Blacklist 存 Redis，Access Token 不存 Redis。运行环境固定为 test / product，两套环境的数据库、Redis、JWT key、issuer、audience 和 GitHub Secrets 完全隔离。开发环境使用 Uvicorn 直接启动并支持 `--reload`，生产环境使用 Gunicorn 管理 Uvicorn Worker，并由 Nginx / Load Balancer 反向代理。生产回滚优先回滚 Docker 镜像，数据库迁移采用向前兼容策略，Alembic downgrade 主要用于开发和测试环境。
