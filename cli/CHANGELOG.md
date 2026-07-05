@@ -1,5 +1,12 @@
 # @tsuz/cli
 
+## 0.2.6
+
+### Patch Changes
+
+- Updated dependencies
+  - @tsuz/template@0.2.0
+
 ## 0.2.5
 
 ### Patch Changes

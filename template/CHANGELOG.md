@@ -1,5 +1,11 @@
 # @tsuz/template
 
+## 0.2.0
+
+### Minor Changes
+
+- Add python-app any-scope and any-role authorization helpers.
+
 ## 0.1.2
 
 ### Patch Changes
