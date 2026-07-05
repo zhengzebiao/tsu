@@ -26,6 +26,8 @@ test("createCliMessage reports CLI usage", () => {
   assert.match(createCliMessage(), /tsu-cli list/);
   assert.match(createCliMessage(), /tsu-cli template list/);
   assert.match(createCliMessage(), /aliases: list, template list/);
+  assert.match(createCliMessage(), /mfe-main/);
+  assert.match(createCliMessage(), /mfe-app/);
 });
 
 test("createVersionMessage reports package version", () => {
@@ -649,6 +651,30 @@ test("doctorProject reports generated projects", async () => {
   }
 });
 
+test("doctorProject reports generated mfe-main projects", async () => {
+  const cwd = await mkdtemp(join(tmpdir(), "quick-start-"));
+
+  try {
+    const result = await initProject({ cwd, source: "local", projectName: "mfe-main-platform", templateName: "mfe-main" });
+    const doctor = await doctorProject({ cwd: result.targetDir });
+
+    assert.equal(doctor.status, "ok");
+    assert.equal(doctor.projectName, "mfe-main-platform");
+    assert.equal(doctor.templateName, "mfe-main");
+    assert.deepEqual(
+      doctor.checks.map((check) => [check.label, check.status]),
+      [
+        ["package.json", "pass"],
+        ["Tsu README marker", "pass"],
+        ["Template metadata", "pass"],
+        ["Template files", "pass"]
+      ]
+    );
+  } finally {
+    await rm(cwd, { force: true, recursive: true });
+  }
+});
+
 test("doctorProject reports non generated directories", async () => {
   const cwd = await mkdtemp(join(tmpdir(), "quick-start-"));
 
@@ -919,25 +945,63 @@ test("runCli initializes mfe-main projects", async () => {
     const projectRoot = join(cwd, "mfe-main-platform");
     const packageJson = await readFile(join(projectRoot, "package.json"), "utf8");
     const appPackageJson = await readFile(join(projectRoot, "apps", "main", "package.json"), "utf8");
+    const readme = await readFile(join(projectRoot, "README.md"), "utf8");
+    const main = await readFile(join(projectRoot, "apps", "main", "src", "main.tsx"), "utf8");
     const app = await readFile(join(projectRoot, "apps", "main", "src", "App.tsx"), "utf8");
     const styles = await readFile(join(projectRoot, "apps", "main", "src", "styles", "main.css"), "utf8");
+    const config = await readFile(join(projectRoot, "apps", "main", "src", "micro-apps", "config.ts"), "utf8");
+    const registry = await readFile(join(projectRoot, "apps", "main", "src", "micro-apps", "registry.ts"), "utf8");
+    const authStore = await readFile(join(projectRoot, "apps", "main", "src", "stores", "auth.store.ts"), "utf8");
+    const authService = await readFile(join(projectRoot, "apps", "main", "src", "services", "auth.service.ts"), "utf8");
 
     assert.match(packageJson, /"lint": "eslint \. --max-warnings 0 && turbo run lint"/);
+    assert.match(packageJson, /"test": "turbo run test"/);
     assert.match(packageJson, /"format": "prettier \. --write"/);
     assert.match(appPackageJson, /"tailwindcss"/);
     assert.match(appPackageJson, /"postcss"/);
     assert.match(appPackageJson, /"autoprefixer"/);
+    assert.match(appPackageJson, /"test": "vitest run"/);
+    assert.match(appPackageJson, /"vitest": "\^3\.0\.5"/);
+    assert.match(readme, /Phase 3 React qiankun host shell starter/);
+    assert.match(readme, /Demo credentials/);
+    assert.match(readme, /VITE_API_BASE_URL/);
+    assert.match(readme, /VITE_MFE_APP_ENTRY/);
     assert.match(await readFile(join(projectRoot, ".dockerignore"), "utf8"), /apps\/main\/dist/);
     assert.match(await readFile(join(projectRoot, "eslint.config.js"), "utf8"), /react-hooks/);
     assert.match(await readFile(join(projectRoot, "eslint.config.js"), "utf8"), /react-refresh/);
     assert.match(await readFile(join(projectRoot, "prettier.config.js"), "utf8"), /printWidth/);
+    assert.match(await readFile(join(projectRoot, "apps", "main", ".env.example"), "utf8"), /VITE_MFE_APP_ENTRY=\/\/localhost:7201/);
     assert.match(await readFile(join(projectRoot, "apps", "main", "tailwind.config.js"), "utf8"), /\.\/src\/\*\*\/\*\.\{ts,tsx\}/);
     assert.match(await readFile(join(projectRoot, "apps", "main", "postcss.config.js"), "utf8"), /tailwindcss/);
+    assert.match(await readFile(join(projectRoot, "apps", "main", "src", "vite-env.d.ts"), "utf8"), /VITE_API_BASE_URL/);
+    assert.match(await readFile(join(projectRoot, "apps", "main", "src", "types", "auth.ts"), "utf8"), /CurrentUser/);
+    assert.match(await readFile(join(projectRoot, "apps", "main", "src", "pages", "LoginPage.tsx"), "utf8"), /Username: admin \/ Password: password123/);
+    assert.match(await readFile(join(projectRoot, "apps", "main", "src", "components", "RequireAuth.tsx"), "utf8"), /Navigate to="\/login"/);
+    assert.match(await readFile(join(projectRoot, "apps", "main", "src", "providers", "AppProviders.tsx"), "utf8"), /QueryClientProvider/);
+    assert.match(await readFile(join(projectRoot, "apps", "main", "src", "providers", "query-client.ts"), "utf8"), /staleTime/);
+    assert.match(await readFile(join(projectRoot, "apps", "main", "src", "services", "auth.service.test.ts"), "utf8"), /returns a demo session/);
+    assert.match(await readFile(join(projectRoot, "apps", "main", "src", "micro-apps", "config.test.ts"), "utf8"), /matches active rules/);
     assert.match(styles, /@tailwind base/);
     assert.match(styles, /@tailwind components/);
     assert.match(styles, /@tailwind utilities/);
+    assert.match(main, /AppProviders/);
+    assert.match(main, /registerMicroFrontendApps/);
+    assert.match(app, /LoginPage/);
+    assert.match(app, /RequireAuth/);
     assert.match(app, /id="subapp-container"/);
-    assert.match(app, /qiankun will mount sub applications here in Phase 3/);
+    assert.match(app, /getAccessToken/);
+    assert.doesNotMatch(app, /qiankun will mount sub applications here in Phase 3/);
+    assert.match(config, /VITE_MFE_APP_ENTRY/);
+    assert.match(config, /VITE_API_BASE_URL/);
+    assert.match(config, /matchesActiveRule/);
+    assert.match(config, /#subapp-container/);
+    assert.match(config, /getCurrentUser/);
+    assert.match(registry, /registerMicroApps/);
+    assert.match(registry, /prefetch: false/);
+    assert.match(authStore, /authBridge/);
+    assert.match(authStore, /getAccessToken/);
+    assert.match(authStore, /getCurrentUser/);
+    assert.match(authService, /password123/);
   } finally {
     await rm(cwd, { force: true, recursive: true });
   }

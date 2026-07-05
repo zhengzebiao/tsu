@@ -158,7 +158,7 @@ export function createHelpMessage() {
     "  template versions      List template release versions",
     "",
     "Init options:",
-    "  -t, --template <name>  Template name: default, vue3, react, mfe, monorepo, python-main, python-app",
+    `  -t, --template <name>  Template name: ${templateNames.join(", ")}`,
     "  -v, --version <value>  Template version, for example 1.0.3 or latest",
     "      --repo <owner/repo> Template release repository",
     "      --cwd <path>       Directory to create the project in",
@@ -859,6 +859,18 @@ const templateExpectedFiles: Record<string, string[]> = {
   monorepo: ["package.json", "README.md", "pnpm-workspace.yaml", "turbo.json"],
   vue3: ["package.json", "README.md", "src/main.ts", "src/App.vue", "vite.config.ts"],
   mfe: ["package.json", "README.md", "apps/host/package.json", "apps/subapp/package.json", "packages/shared/src/index.ts"],
+  "mfe-main": [
+    "package.json",
+    "README.md",
+    "apps/main/package.json",
+    "apps/main/src/main.tsx",
+    "apps/main/src/App.tsx",
+    "apps/main/src/pages/LoginPage.tsx",
+    "apps/main/src/stores/auth.store.ts",
+    "apps/main/src/services/auth.service.ts",
+    "apps/main/src/micro-apps/registry.ts"
+  ],
+  "mfe-app": ["package.json", "README.md", "apps/app/package.json", "apps/app/src/main.tsx", "apps/app/src/bootstrap.tsx", "apps/app/src/qiankun.ts", "apps/app/src/App.tsx"],
   react: ["package.json", "README.md", "src/main.tsx", "src/App.tsx", "vite.config.ts"],
   "python-main": ["pyproject.toml", "README.md", "app/main.py", "app/api/auth.py", "app/core/config.py", "app/services/session_service.py", "alembic/versions/0001_initial_auth_schema.py"],
   "python-app": ["pyproject.toml", "README.md", "app/main.py", "app/api/example.py", "app/deps/auth.py", "app/services/session_service.py", "alembic/versions/0001_initial_app_schema.py"]

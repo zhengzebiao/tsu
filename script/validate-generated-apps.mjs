@@ -15,7 +15,7 @@ const appTemplates = [
     name: "mfe-main",
     projectName: "mfe-main-platform",
     useLocalPackages: false,
-    commands: [["lint"], ["build"]],
+    commands: [["lint"], ["test"], ["build"]],
     devSmoke: { command: ["dev"], url: "http://127.0.0.1:7200/" }
   },
   { name: "mfe-app", projectName: "mfe-business-app", useLocalPackages: false, commands: [["lint"], ["build"]] }

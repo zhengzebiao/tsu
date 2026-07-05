@@ -120,7 +120,9 @@ pnpm validate:generated-apps
 
 ---
 
-## Phase 3：主应用登录态与 qiankun 接入
+## Phase 3：主应用登录态与 qiankun 接入（已完成）
+
+**状态：已完成**
 
 ### 目标
 
@@ -128,28 +130,47 @@ pnpm validate:generated-apps
 
 ### 任务
 
-1. 增加登录页：
-   - `LoginPage.tsx`
-2. 增加 auth store：
-   - `auth.store.ts`
-3. 增加 auth service：
-   - `auth.service.ts`
-4. 增加 React Query 相关封装
-5. 增加 qiankun 注册：
-   - `micro-apps/registry.ts`
-6. 主应用向子应用传递：
-   - `apiBaseUrl`
-   - `getAccessToken`
-   - `getCurrentUser`
-   - `logout`
-7. 增加单元测试
+- [x] 增加登录页：
+  - [x] `apps/main/src/pages/LoginPage.tsx`
+- [x] 增加 auth store：
+  - [x] `apps/main/src/stores/auth.store.ts`
+- [x] 增加 auth service：
+  - [x] `apps/main/src/services/auth.service.ts`
+- [x] 增加 React Query 相关封装：
+  - [x] `apps/main/src/providers/query-client.ts`
+  - [x] `apps/main/src/providers/AppProviders.tsx`
+- [x] 增加 qiankun 注册：
+  - [x] `apps/main/src/micro-apps/config.ts`
+  - [x] `apps/main/src/micro-apps/registry.ts`
+- [x] 主应用向子应用传递：
+  - [x] `apiBaseUrl`
+  - [x] `getAccessToken`
+  - [x] `getCurrentUser`
+  - [x] `logout`
+- [x] 增加单元测试：
+  - [x] `apps/main/src/services/auth.service.test.ts`
+  - [x] `apps/main/src/micro-apps/config.test.ts`
+- [x] 补齐 CLI help 和 doctor 对 `mfe-main` / `mfe-app` 的基础覆盖
+- [x] 更新 `validate:generated-apps`，为 `mfe-main` 增加 `pnpm test`
 
 ### 验收标准
 
-- 登录流程可运行
-- 子应用注册逻辑可运行
-- 登录态可传递给子应用
-- 单测通过
+- [x] 登录流程可运行
+- [x] 子应用注册逻辑可运行
+- [x] 登录态可传递给子应用
+- [x] 单测通过
+
+### 已验证命令
+
+```sh
+pnpm --filter @tsuz/template build
+pnpm --filter @tsuz/template test
+pnpm --filter @tsuz/cli build
+pnpm --filter @tsuz/cli test
+pnpm validate:generated-apps
+```
+
+> 说明：本阶段已完成主应用登录态、qiankun 注册配置和 props 传递的模板生成与单测验证；真实子应用完整加载和浏览器 E2E 留到 Phase 5 / Phase 6。
 
 ---
 
