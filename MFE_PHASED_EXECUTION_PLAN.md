@@ -219,7 +219,9 @@ pnpm validate:generated-apps
 
 ---
 
-## Phase 5：生成 `mfe-app` 子应用骨架
+## Phase 5：生成 `mfe-app` 子应用骨架（已完成）
+
+**状态：已完成**
 
 ### 目标
 
@@ -227,23 +229,50 @@ pnpm validate:generated-apps
 
 ### 任务
 
-1. 生成 `apps/app`
-2. 增加入口：
-   - `main.tsx`
-   - `bootstrap.tsx`
-   - `qiankun.ts`
-3. 支持独立运行和 qiankun mount/unmount
-4. 增加业务首页：
-   - `BusinessHomePage.tsx`
-5. 增加状态和查询封装
-6. 增加测试
+- [x] 生成 `apps/app`
+- [x] 增加入口：
+  - [x] `main.tsx`
+  - [x] `bootstrap.tsx`
+  - [x] `qiankun.ts`
+- [x] 支持独立运行和 qiankun mount/unmount/update
+- [x] 增加业务首页：
+  - [x] `BusinessHomePage.tsx`
+- [x] 增加状态和查询封装：
+  - [x] `AppProviders.tsx`
+  - [x] `query-client.ts`
+  - [x] `app.store.ts`
+  - [x] `business-home.query.ts`
+- [x] 增加测试：
+  - [x] `qiankun.test.ts`
+  - [x] `api-client.test.ts`
+  - [x] `app.store.test.ts`
+  - [x] `business-home.query.test.ts`
+- [x] 更新 `mfe-main` outlet，确保登录跳转到 `/apps/mfe-app` 后 qiankun 可在容器出现后触发挂载
+- [x] 更新 CLI doctor、模板结构测试、生成物验证和模板发布验证
 
 ### 验收标准
 
-- 独立运行可用
-- 被主应用加载可用
-- 生命周期正常
-- 单测通过
+- [x] 独立运行可用
+- [x] 被主应用加载可用
+- [x] 生命周期正常
+- [x] 单测通过
+
+### 已验证命令
+
+```sh
+pnpm --filter @tsuz/template build
+pnpm --filter @tsuz/template test
+pnpm --filter @tsuz/cli build
+pnpm --filter @tsuz/cli test
+pnpm validate:generated-apps
+pnpm template:release:build --version=0.0.0
+TEMPLATE_VERSION=0.0.0 pnpm validate:template-release
+```
+
+### 浏览器验证
+
+- `mfe-app` 独立启动在 `http://127.0.0.1:7201/`，可看到 Phase 5 `Business home`、standalone 状态、业务指标和 query 数据。
+- `mfe-main` 启动在 `http://127.0.0.1:7200/`，登录 `admin / password123` 后进入 `/apps/mfe-app`，可看到子应用以 `qiankun mount` 模式挂载，并接收 host user `Demo Admin` 与 auth bridge。
 
 ---
 

@@ -881,6 +881,12 @@ const templateExpectedFiles: Record<string, string[]> = {
     "apps/app/src/bootstrap.tsx",
     "apps/app/src/qiankun.ts",
     "apps/app/src/App.tsx",
+    "apps/app/src/pages/BusinessHomePage.tsx",
+    "apps/app/src/providers/AppProviders.tsx",
+    "apps/app/src/providers/query-client.ts",
+    "apps/app/src/queries/business-home.query.ts",
+    "apps/app/src/stores/app.store.ts",
+    "apps/app/src/services/api-client.ts",
     "packages/shared/src/index.ts",
     "packages/ui/src/index.tsx",
     "packages/api/src/index.ts"

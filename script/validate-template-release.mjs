@@ -48,7 +48,15 @@ try {
   await access(join(bundleDir, "mfe-main", "packages", "api", "src", "index.ts"));
   await access(join(bundleDir, "mfe-app", "package.json"));
   await access(join(bundleDir, "mfe-app", "apps", "app", "package.json"));
+  await access(join(bundleDir, "mfe-app", "apps", "app", "src", "main.tsx"));
+  await access(join(bundleDir, "mfe-app", "apps", "app", "src", "bootstrap.tsx"));
   await access(join(bundleDir, "mfe-app", "apps", "app", "src", "qiankun.ts"));
+  await access(join(bundleDir, "mfe-app", "apps", "app", "src", "pages", "BusinessHomePage.tsx"));
+  await access(join(bundleDir, "mfe-app", "apps", "app", "src", "providers", "AppProviders.tsx"));
+  await access(join(bundleDir, "mfe-app", "apps", "app", "src", "providers", "query-client.ts"));
+  await access(join(bundleDir, "mfe-app", "apps", "app", "src", "stores", "app.store.ts"));
+  await access(join(bundleDir, "mfe-app", "apps", "app", "src", "queries", "business-home.query.ts"));
+  await access(join(bundleDir, "mfe-app", "apps", "app", "src", "services", "api-client.ts"));
   await access(join(bundleDir, "mfe-app", "packages", "shared", "package.json"));
   await access(join(bundleDir, "mfe-app", "packages", "shared", "src", "index.ts"));
   await access(join(bundleDir, "mfe-app", "packages", "ui", "package.json"));
