@@ -18,7 +18,7 @@ const appTemplates = [
     commands: [["lint"], ["test"], ["build"]],
     devSmoke: { command: ["dev"], url: "http://127.0.0.1:7200/" }
   },
-  { name: "mfe-app", projectName: "mfe-business-app", useLocalPackages: false, commands: [["lint"], ["build"]] }
+  { name: "mfe-app", projectName: "mfe-business-app", useLocalPackages: false, commands: [["lint"], ["test"], ["build"]] }
 ];
 const tempRoot = join(repoRoot, "tmp", "validate-generated-apps");
 

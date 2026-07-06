@@ -868,9 +868,23 @@ const templateExpectedFiles: Record<string, string[]> = {
     "apps/main/src/pages/LoginPage.tsx",
     "apps/main/src/stores/auth.store.ts",
     "apps/main/src/services/auth.service.ts",
-    "apps/main/src/micro-apps/registry.ts"
+    "apps/main/src/micro-apps/registry.ts",
+    "packages/shared/src/index.ts",
+    "packages/ui/src/index.tsx",
+    "packages/api/src/index.ts"
   ],
-  "mfe-app": ["package.json", "README.md", "apps/app/package.json", "apps/app/src/main.tsx", "apps/app/src/bootstrap.tsx", "apps/app/src/qiankun.ts", "apps/app/src/App.tsx"],
+  "mfe-app": [
+    "package.json",
+    "README.md",
+    "apps/app/package.json",
+    "apps/app/src/main.tsx",
+    "apps/app/src/bootstrap.tsx",
+    "apps/app/src/qiankun.ts",
+    "apps/app/src/App.tsx",
+    "packages/shared/src/index.ts",
+    "packages/ui/src/index.tsx",
+    "packages/api/src/index.ts"
+  ],
   react: ["package.json", "README.md", "src/main.tsx", "src/App.tsx", "vite.config.ts"],
   "python-main": ["pyproject.toml", "README.md", "app/main.py", "app/api/auth.py", "app/core/config.py", "app/services/session_service.py", "alembic/versions/0001_initial_auth_schema.py"],
   "python-app": ["pyproject.toml", "README.md", "app/main.py", "app/api/example.py", "app/deps/auth.py", "app/services/session_service.py", "alembic/versions/0001_initial_app_schema.py"]

@@ -675,6 +675,30 @@ test("doctorProject reports generated mfe-main projects", async () => {
   }
 });
 
+test("doctorProject reports generated mfe-app projects", async () => {
+  const cwd = await mkdtemp(join(tmpdir(), "quick-start-"));
+
+  try {
+    const result = await initProject({ cwd, source: "local", projectName: "mfe-business-app", templateName: "mfe-app" });
+    const doctor = await doctorProject({ cwd: result.targetDir });
+
+    assert.equal(doctor.status, "ok");
+    assert.equal(doctor.projectName, "mfe-business-app");
+    assert.equal(doctor.templateName, "mfe-app");
+    assert.deepEqual(
+      doctor.checks.map((check) => [check.label, check.status]),
+      [
+        ["package.json", "pass"],
+        ["Tsu README marker", "pass"],
+        ["Template metadata", "pass"],
+        ["Template files", "pass"]
+      ]
+    );
+  } finally {
+    await rm(cwd, { force: true, recursive: true });
+  }
+});
+
 test("doctorProject reports non generated directories", async () => {
   const cwd = await mkdtemp(join(tmpdir(), "quick-start-"));
 
@@ -944,7 +968,10 @@ test("runCli initializes mfe-main projects", async () => {
     assert.match(message, /pnpm dev/);
     const projectRoot = join(cwd, "mfe-main-platform");
     const packageJson = await readFile(join(projectRoot, "package.json"), "utf8");
+    const workspace = await readFile(join(projectRoot, "pnpm-workspace.yaml"), "utf8");
     const appPackageJson = await readFile(join(projectRoot, "apps", "main", "package.json"), "utf8");
+    const appTsConfig = await readFile(join(projectRoot, "apps", "main", "tsconfig.json"), "utf8");
+    const appViteConfig = await readFile(join(projectRoot, "apps", "main", "vite.config.ts"), "utf8");
     const readme = await readFile(join(projectRoot, "README.md"), "utf8");
     const main = await readFile(join(projectRoot, "apps", "main", "src", "main.tsx"), "utf8");
     const app = await readFile(join(projectRoot, "apps", "main", "src", "App.tsx"), "utf8");
@@ -953,16 +980,31 @@ test("runCli initializes mfe-main projects", async () => {
     const registry = await readFile(join(projectRoot, "apps", "main", "src", "micro-apps", "registry.ts"), "utf8");
     const authStore = await readFile(join(projectRoot, "apps", "main", "src", "stores", "auth.store.ts"), "utf8");
     const authService = await readFile(join(projectRoot, "apps", "main", "src", "services", "auth.service.ts"), "utf8");
+    const apiClient = await readFile(join(projectRoot, "apps", "main", "src", "services", "api-client.ts"), "utf8");
+    const shared = await readFile(join(projectRoot, "packages", "shared", "src", "index.ts"), "utf8");
+    const ui = await readFile(join(projectRoot, "packages", "ui", "src", "index.tsx"), "utf8");
+    const api = await readFile(join(projectRoot, "packages", "api", "src", "index.ts"), "utf8");
 
     assert.match(packageJson, /"lint": "eslint \. --max-warnings 0 && turbo run lint"/);
     assert.match(packageJson, /"test": "turbo run test"/);
     assert.match(packageJson, /"format": "prettier \. --write"/);
+    assert.match(workspace, /packages\/\*/);
+    assert.match(appPackageJson, /"@tsuz\/api": "workspace:\*"/);
+    assert.match(appPackageJson, /"@tsuz\/shared": "workspace:\*"/);
+    assert.match(appPackageJson, /"@tsuz\/ui": "workspace:\*"/);
     assert.match(appPackageJson, /"tailwindcss"/);
     assert.match(appPackageJson, /"postcss"/);
     assert.match(appPackageJson, /"autoprefixer"/);
     assert.match(appPackageJson, /"test": "vitest run"/);
     assert.match(appPackageJson, /"vitest": "\^3\.0\.5"/);
-    assert.match(readme, /Phase 3 React qiankun host shell starter/);
+    assert.match(appTsConfig, /@tsuz\/shared/);
+    assert.match(appTsConfig, /@tsuz\/ui/);
+    assert.match(appTsConfig, /@tsuz\/api/);
+    assert.match(appViteConfig, /@tsuz\/shared/);
+    assert.match(appViteConfig, /@tsuz\/ui/);
+    assert.match(appViteConfig, /@tsuz\/api/);
+    assert.match(readme, /Phase 4 React qiankun host shell starter/);
+    assert.match(readme, /Shared Workspace Packages/);
     assert.match(readme, /Demo credentials/);
     assert.match(readme, /VITE_API_BASE_URL/);
     assert.match(readme, /VITE_MFE_APP_ENTRY/);
@@ -974,7 +1016,7 @@ test("runCli initializes mfe-main projects", async () => {
     assert.match(await readFile(join(projectRoot, "apps", "main", "tailwind.config.js"), "utf8"), /\.\/src\/\*\*\/\*\.\{ts,tsx\}/);
     assert.match(await readFile(join(projectRoot, "apps", "main", "postcss.config.js"), "utf8"), /tailwindcss/);
     assert.match(await readFile(join(projectRoot, "apps", "main", "src", "vite-env.d.ts"), "utf8"), /VITE_API_BASE_URL/);
-    assert.match(await readFile(join(projectRoot, "apps", "main", "src", "types", "auth.ts"), "utf8"), /CurrentUser/);
+    await assert.rejects(() => readFile(join(projectRoot, "apps", "main", "src", "types", "auth.ts"), "utf8"));
     assert.match(await readFile(join(projectRoot, "apps", "main", "src", "pages", "LoginPage.tsx"), "utf8"), /Username: admin \/ Password: password123/);
     assert.match(await readFile(join(projectRoot, "apps", "main", "src", "components", "RequireAuth.tsx"), "utf8"), /Navigate to="\/login"/);
     assert.match(await readFile(join(projectRoot, "apps", "main", "src", "providers", "AppProviders.tsx"), "utf8"), /QueryClientProvider/);
@@ -988,20 +1030,80 @@ test("runCli initializes mfe-main projects", async () => {
     assert.match(main, /registerMicroFrontendApps/);
     assert.match(app, /LoginPage/);
     assert.match(app, /RequireAuth/);
+    assert.match(app, /@tsuz\/ui/);
     assert.match(app, /id="subapp-container"/);
     assert.match(app, /getAccessToken/);
     assert.doesNotMatch(app, /qiankun will mount sub applications here in Phase 3/);
+    assert.match(config, /@tsuz\/shared/);
     assert.match(config, /VITE_MFE_APP_ENTRY/);
     assert.match(config, /VITE_API_BASE_URL/);
-    assert.match(config, /matchesActiveRule/);
+    assert.match(config, /matchesActiveRoute/);
     assert.match(config, /#subapp-container/);
     assert.match(config, /getCurrentUser/);
     assert.match(registry, /registerMicroApps/);
     assert.match(registry, /prefetch: false/);
+    assert.match(authStore, /@tsuz\/shared/);
     assert.match(authStore, /authBridge/);
     assert.match(authStore, /getAccessToken/);
     assert.match(authStore, /getCurrentUser/);
+    assert.match(authService, /@tsuz\/shared/);
     assert.match(authService, /password123/);
+    assert.match(apiClient, /createApiClient/);
+    assert.match(shared, /export interface MicroAppProps/);
+    assert.match(ui, /export function Logo/);
+    assert.match(ui, /export function EmptyState/);
+    assert.match(api, /export function createApiClient/);
+  } finally {
+    await rm(cwd, { force: true, recursive: true });
+  }
+});
+
+test("runCli initializes mfe-app projects", async () => {
+  const cwd = await mkdtemp(join(tmpdir(), "quick-start-"));
+
+  try {
+    const message = await runCli(["init", "mfe-business-app", "--template", "mfe-app", "--local"], cwd);
+
+    assert.match(message, /^Created mfe-business-app from mfe-app@latest\nLocation: /);
+    assert.match(message, /pnpm install/);
+    assert.match(message, /pnpm dev/);
+    const projectRoot = join(cwd, "mfe-business-app");
+    const packageJson = await readFile(join(projectRoot, "package.json"), "utf8");
+    const workspace = await readFile(join(projectRoot, "pnpm-workspace.yaml"), "utf8");
+    const appPackageJson = await readFile(join(projectRoot, "apps", "app", "package.json"), "utf8");
+    const appTsConfig = await readFile(join(projectRoot, "apps", "app", "tsconfig.json"), "utf8");
+    const appViteConfig = await readFile(join(projectRoot, "apps", "app", "vite.config.ts"), "utf8");
+    const readme = await readFile(join(projectRoot, "README.md"), "utf8");
+    const app = await readFile(join(projectRoot, "apps", "app", "src", "App.tsx"), "utf8");
+    const bootstrap = await readFile(join(projectRoot, "apps", "app", "src", "bootstrap.tsx"), "utf8");
+    const qiankun = await readFile(join(projectRoot, "apps", "app", "src", "qiankun.ts"), "utf8");
+    const apiClient = await readFile(join(projectRoot, "apps", "app", "src", "services", "api-client.ts"), "utf8");
+    const shared = await readFile(join(projectRoot, "packages", "shared", "src", "index.ts"), "utf8");
+    const ui = await readFile(join(projectRoot, "packages", "ui", "src", "index.tsx"), "utf8");
+    const api = await readFile(join(projectRoot, "packages", "api", "src", "index.ts"), "utf8");
+
+    assert.match(packageJson, /"test": "turbo run test"/);
+    assert.match(workspace, /packages\/\*/);
+    assert.match(appPackageJson, /"@tsuz\/api": "workspace:\*"/);
+    assert.match(appPackageJson, /"@tsuz\/shared": "workspace:\*"/);
+    assert.match(appPackageJson, /"@tsuz\/ui": "workspace:\*"/);
+    assert.match(appTsConfig, /@tsuz\/shared/);
+    assert.match(appTsConfig, /@tsuz\/ui/);
+    assert.match(appTsConfig, /@tsuz\/api/);
+    assert.match(appViteConfig, /@tsuz\/shared/);
+    assert.match(appViteConfig, /@tsuz\/ui/);
+    assert.match(appViteConfig, /@tsuz\/api/);
+    assert.match(readme, /Phase 4 React qiankun sub application skeleton/);
+    assert.match(readme, /Shared Workspace Packages/);
+    assert.match(app, /@tsuz\/ui/);
+    assert.match(bootstrap, /createMfeApiClient/);
+    assert.match(qiankun, /@tsuz\/shared/);
+    assert.match(qiankun, /Partial<MicroAppProps>/);
+    assert.match(apiClient, /createApiClient/);
+    assert.match(shared, /export interface MicroAppProps/);
+    assert.match(ui, /export function Logo/);
+    assert.match(ui, /export function ErrorState/);
+    assert.match(api, /export function createApiClient/);
   } finally {
     await rm(cwd, { force: true, recursive: true });
   }

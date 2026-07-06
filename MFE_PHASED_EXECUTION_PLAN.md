@@ -174,7 +174,9 @@ pnpm validate:generated-apps
 
 ---
 
-## Phase 4：公共包 `packages/shared`、`packages/ui`、`packages/api`
+## Phase 4：公共包 `packages/shared`、`packages/ui`、`packages/api`（已完成）
+
+**状态：已完成**
 
 ### 目标
 
@@ -182,12 +184,16 @@ pnpm validate:generated-apps
 
 ### 任务
 
-1. 新增 `packages/shared`
-2. 新增 `packages/ui`
-3. 新增 `packages/api`
-4. 配置 workspace 依赖
-5. 配置 tsconfig path alias
-6. 配置 Vite alias
+- [x] 新增 `packages/shared`
+- [x] 新增 `packages/ui`
+- [x] 新增 `packages/api`
+- [x] 配置 workspace 依赖
+- [x] 配置 tsconfig path alias
+- [x] 配置 Vite alias
+- [x] 更新模板测试覆盖公共包文件、依赖和 alias
+- [x] 更新 CLI doctor / init 测试覆盖 `mfe-main` 与 `mfe-app`
+- [x] 更新生成物验证脚本，为 `mfe-app` 增加 `pnpm test`
+- [x] 更新模板发布验证脚本，检查公共包发布产物
 
 ### 包职责
 
@@ -197,9 +203,19 @@ pnpm validate:generated-apps
 
 ### 验收标准
 
-- 主应用和子应用都可引用公共包
-- 公共包不包含具体业务逻辑
-- 依赖关系清晰
+- [x] 主应用和子应用都可引用公共包
+- [x] 公共包不包含具体业务逻辑
+- [x] 依赖关系清晰
+
+### 已验证命令
+
+```sh
+pnpm --filter @tsuz/template build
+pnpm --filter @tsuz/template test
+pnpm --filter @tsuz/cli build
+pnpm --filter @tsuz/cli test
+pnpm validate:generated-apps
+```
 
 ---
 
