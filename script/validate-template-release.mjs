@@ -38,6 +38,11 @@ try {
   await access(join(bundleDir, "vue3", "package.json"));
   await access(join(bundleDir, "mfe", "package.json"));
   await access(join(bundleDir, "mfe-main", "package.json"));
+  await access(join(bundleDir, "mfe-main", ".dockerignore"));
+  await access(join(bundleDir, "mfe-main", ".env.deploy.example"));
+  await access(join(bundleDir, "mfe-main", "Dockerfile"));
+  await access(join(bundleDir, "mfe-main", "nginx", "nginx.conf"));
+  await access(join(bundleDir, "mfe-main", "docker-compose.yml"));
   await access(join(bundleDir, "mfe-main", "playwright.config.ts"));
   await access(join(bundleDir, "mfe-main", "e2e", "host-login.spec.ts"));
   await access(join(bundleDir, "mfe-main", "e2e", "host-load-subapp.spec.ts"));
@@ -52,6 +57,11 @@ try {
   await access(join(bundleDir, "mfe-main", "packages", "api", "package.json"));
   await access(join(bundleDir, "mfe-main", "packages", "api", "src", "index.ts"));
   await access(join(bundleDir, "mfe-app", "package.json"));
+  await access(join(bundleDir, "mfe-app", ".dockerignore"));
+  await access(join(bundleDir, "mfe-app", ".env.deploy.example"));
+  await access(join(bundleDir, "mfe-app", "Dockerfile"));
+  await access(join(bundleDir, "mfe-app", "nginx", "nginx.conf"));
+  await access(join(bundleDir, "mfe-app", "docker-compose.yml"));
   await access(join(bundleDir, "mfe-app", "playwright.config.ts"));
   await access(join(bundleDir, "mfe-app", "e2e", "standalone.spec.ts"));
   await access(join(bundleDir, "mfe-app", "apps", "app", "package.json"));
@@ -72,6 +82,24 @@ try {
   await access(join(bundleDir, "mfe-app", "packages", "ui", "src", "index.tsx"));
   await access(join(bundleDir, "mfe-app", "packages", "api", "package.json"));
   await access(join(bundleDir, "mfe-app", "packages", "api", "src", "index.ts"));
+  await assertFileContains(join(bundleDir, "mfe-main", "Dockerfile"), [
+    "FROM nginx:1.27-alpine",
+    "ARG VITE_API_BASE_URL=/api",
+    "ARG VITE_MFE_APP_ENTRY=//localhost:7201",
+    "ARG VITE_APP_ENV=production",
+    "COPY --from=build /app/apps/main/dist /usr/share/nginx/html"
+  ]);
+  await assertFileContains(join(bundleDir, "mfe-main", "nginx", "nginx.conf"), ["try_files $uri $uri/ /index.html", "Cache-Control \"public, immutable\""]);
+  await assertFileContains(join(bundleDir, "mfe-main", "docker-compose.yml"), ["${DOCKER_IMAGE_NAME:-", "${APP_VERSION:-local}", "${APP_PORT:-7200}:80", "VITE_APP_ENV: ${APP_ENV:-local}"]);
+  await assertFileContains(join(bundleDir, "mfe-app", "Dockerfile"), [
+    "FROM nginx:1.27-alpine",
+    "ARG VITE_API_BASE_URL=/api",
+    "ARG VITE_MFE_APP_ENTRY=//localhost:7201",
+    "ARG VITE_APP_ENV=production",
+    "COPY --from=build /app/apps/app/dist /usr/share/nginx/html"
+  ]);
+  await assertFileContains(join(bundleDir, "mfe-app", "nginx", "nginx.conf"), ["try_files $uri $uri/ /index.html", "Access-Control-Allow-Origin \"*\""]);
+  await assertFileContains(join(bundleDir, "mfe-app", "docker-compose.yml"), ["${DOCKER_IMAGE_NAME:-", "${APP_VERSION:-local}", "${APP_PORT:-7201}:80", "VITE_APP_ENV: ${APP_ENV:-local}"]);
   await access(join(bundleDir, "react", "package.json"));
   await access(join(bundleDir, "python-main", "pyproject.toml"));
   await access(join(bundleDir, "python-main", "app", "main.py"));
@@ -134,6 +162,15 @@ async function assertReadmeContains(filePath, requiredMarkers) {
 
   if (missingMarkers.length > 0) {
     throw new Error(`README ${filePath} is missing required markers: ${missingMarkers.join(", ")}.`);
+  }
+}
+
+async function assertFileContains(filePath, requiredMarkers) {
+  const content = await readFile(filePath, "utf8");
+  const missingMarkers = requiredMarkers.filter((marker) => !content.includes(marker));
+
+  if (missingMarkers.length > 0) {
+    throw new Error(`${filePath} is missing required markers: ${missingMarkers.join(", ")}.`);
   }
 }
 

@@ -862,6 +862,11 @@ const templateExpectedFiles: Record<string, string[]> = {
   "mfe-main": [
     "package.json",
     "README.md",
+    ".dockerignore",
+    ".env.deploy.example",
+    "Dockerfile",
+    "nginx/nginx.conf",
+    "docker-compose.yml",
     "playwright.config.ts",
     "e2e/host-login.spec.ts",
     "e2e/host-load-subapp.spec.ts",
@@ -881,6 +886,11 @@ const templateExpectedFiles: Record<string, string[]> = {
   "mfe-app": [
     "package.json",
     "README.md",
+    ".dockerignore",
+    ".env.deploy.example",
+    "Dockerfile",
+    "nginx/nginx.conf",
+    "docker-compose.yml",
     "playwright.config.ts",
     "e2e/standalone.spec.ts",
     "apps/app/package.json",

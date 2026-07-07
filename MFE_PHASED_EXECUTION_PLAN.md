@@ -324,7 +324,9 @@ TEMPLATE_VERSION=0.0.0 pnpm validate:template-release
 
 ---
 
-## Phase 7：Docker、nginx、compose
+## Phase 7：Docker、nginx、compose（已完成）
+
+**状态：已完成**
 
 ### 目标
 
@@ -332,26 +334,52 @@ TEMPLATE_VERSION=0.0.0 pnpm validate:template-release
 
 ### 任务
 
-1. 生成 `Dockerfile`
-2. 生成 `nginx/nginx.conf`
-3. 生成单一 `docker-compose.yml`
-4. Dockerfile 支持 build args：
-   - `VITE_API_BASE_URL`
-   - `VITE_MFE_APP_ENTRY`
-   - `VITE_APP_ENV`
-5. `docker-compose.yml` 使用环境变量：
-   - `DOCKER_IMAGE_NAME`
-   - `APP_VERSION`
-   - `CONTAINER_NAME`
-   - `APP_PORT`
-   - `APP_ENV`
+- [x] 生成 `Dockerfile`
+- [x] 生成 `nginx/nginx.conf`
+- [x] 生成单一 `docker-compose.yml`
+- [x] Dockerfile 支持 build args：
+  - [x] `VITE_API_BASE_URL`
+  - [x] `VITE_MFE_APP_ENTRY`
+  - [x] `VITE_APP_ENV`
+- [x] `docker-compose.yml` 使用环境变量：
+  - [x] `DOCKER_IMAGE_NAME`
+  - [x] `APP_VERSION`
+  - [x] `CONTAINER_NAME`
+  - [x] `APP_PORT`
+  - [x] `APP_ENV`
+- [x] 更新模板 README，说明 Docker/nginx/compose、build args 和 compose env vars。
+- [x] 更新模板测试、CLI doctor / init 测试、生成物验证和模板发布验证。
+- [x] 增加可选真实 Docker runtime 验证入口：`MFE_VALIDATE_DOCKER=true pnpm validate:generated-apps`。
 
 ### 验收标准
 
-- 镜像可构建
-- 容器可启动
-- nginx 可正常提供 SPA
-- compose 可正常编排
+- [x] 镜像可构建（已生成多阶段 Dockerfile，并由生成物 / release 验证覆盖关键构建声明）
+- [x] 容器可启动（已提供 `pnpm docker:run` 和可选 Docker runtime 验证入口）
+- [x] nginx 可正常提供 SPA（已覆盖 fallback、HTML no-cache、静态资源缓存；`mfe-app` 额外覆盖 qiankun CORS）
+- [x] compose 可正常编排（已生成单服务 compose，并覆盖 Phase 7 所需环境变量）
+
+### 已验证命令
+
+```sh
+pnpm --filter @tsuz/template build
+pnpm --filter @tsuz/template test
+pnpm --filter @tsuz/cli build
+pnpm --filter @tsuz/cli test
+pnpm validate:generated-apps
+pnpm template:release:build --version=0.0.0
+TEMPLATE_VERSION=0.0.0 pnpm validate:template-release
+git diff --check
+```
+
+### Docker runtime 验证说明
+
+Docker daemon 启动后已执行真实 runtime smoke checks：
+
+```sh
+MFE_VALIDATE_DOCKER=true pnpm validate:generated-apps
+```
+
+该命令已覆盖生成 `mfe-main` / `mfe-app` 后的 `docker build`、`docker run`、HTTP smoke、`docker compose config`、`docker compose up --build` 和清理流程。
 
 ---
 
