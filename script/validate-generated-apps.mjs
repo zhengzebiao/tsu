@@ -15,18 +15,19 @@ const appTemplates = [
     name: "mfe-main",
     projectName: "mfe-main-platform",
     useLocalPackages: false,
-    commands: [["lint"], ["test"], ["build"]],
+    commands: [["lint"], ["test"], ["build"], ["test:e2e"]],
     devSmoke: { command: ["dev"], url: "http://127.0.0.1:7200/" }
   },
   {
     name: "mfe-app",
     projectName: "mfe-business-app",
     useLocalPackages: false,
-    commands: [["lint"], ["test"], ["build"]],
+    commands: [["lint"], ["test"], ["build"], ["test:e2e"]],
     devSmoke: { command: ["dev"], url: "http://127.0.0.1:7201/" }
   }
 ];
 const tempRoot = join(repoRoot, "tmp", "validate-generated-apps");
+const generatedProjectRoots = new Map();
 
 await rm(tempRoot, { recursive: true, force: true });
 await mkdir(tempRoot, { recursive: true });
@@ -36,6 +37,7 @@ try {
     const projectRoot = join(tempRoot, template.projectName);
 
     await runNode(cliEntry, ["init", template.projectName, "--template", template.name, "--local", "--cwd", tempRoot]);
+    generatedProjectRoots.set(template.name, projectRoot);
     if (template.useLocalPackages) {
       await useLocalPackages(projectRoot);
     }
@@ -48,6 +50,8 @@ try {
     }
     process.stdout.write(`Validated generated ${template.name} app at ${projectRoot}\n`);
   }
+
+  await runMfeIntegrationE2e(generatedProjectRoots);
 } finally {
   await rm(tempRoot, { recursive: true, force: true });
 }
@@ -74,11 +78,13 @@ async function runNode(entry, args) {
   });
 }
 
-async function runPnpm(args, cwd) {
+async function runPnpm(args, cwd, envOverrides = {}) {
+  const env = createProcessEnv(envOverrides);
+
   if (process.env.npm_execpath) {
     await execFileAsync(process.execPath, [process.env.npm_execpath, ...args], {
       cwd,
-      env: process.env,
+      env,
       maxBuffer: 20 * 1024 * 1024
     });
     return;
@@ -86,13 +92,54 @@ async function runPnpm(args, cwd) {
 
   await execFileAsync(resolvePnpmCommand(), args, {
     cwd,
-    env: process.env,
+    env,
     maxBuffer: 20 * 1024 * 1024
   });
 }
 
 async function runDevSmoke(template, projectRoot) {
-  const child = spawnPnpm(template.devSmoke.command, projectRoot);
+  const server = await startDevServer(template.name, template.devSmoke.command, projectRoot, template.devSmoke.url);
+
+  try {
+    return;
+  } finally {
+    await stopProcess(server.child);
+  }
+}
+
+async function runMfeIntegrationE2e(projectRoots) {
+  const mainProjectRoot = projectRoots.get("mfe-main");
+  const appProjectRoot = projectRoots.get("mfe-app");
+
+  if (!mainProjectRoot || !appProjectRoot) {
+    return;
+  }
+
+  let appServer;
+  let mainServer;
+
+  try {
+    appServer = await startDevServer("mfe-app integration", ["dev"], appProjectRoot, "http://127.0.0.1:7201/");
+    mainServer = await startDevServer("mfe-main integration", ["dev"], mainProjectRoot, "http://127.0.0.1:7200/login", {
+      VITE_MFE_APP_ENTRY: "//127.0.0.1:7201"
+    });
+
+    await runPnpm(["exec", "playwright", "test", "e2e/host-load-subapp.spec.ts"], mainProjectRoot, {
+      MFE_INTEGRATION_E2E: "true"
+    });
+    process.stdout.write("Validated integrated mfe-main + mfe-app E2E flow\n");
+  } finally {
+    if (mainServer) {
+      await stopProcess(mainServer.child);
+    }
+    if (appServer) {
+      await stopProcess(appServer.child);
+    }
+  }
+}
+
+async function startDevServer(name, args, cwd, url, envOverrides = {}) {
+  const child = spawnPnpm(args, cwd, envOverrides);
   let output = "";
 
   child.stdout?.on("data", (chunk) => {
@@ -103,26 +150,28 @@ async function runDevSmoke(template, projectRoot) {
   });
 
   try {
-    await waitForHttp(template.devSmoke.url, 45_000);
+    await waitForHttp(url, 60_000);
+    return { child };
   } catch (error) {
-    throw new Error(`Dev smoke check failed for ${template.name}: ${error.message}\n${output}`);
-  } finally {
     await stopProcess(child);
+    throw new Error(`Dev server failed for ${name}: ${error.message}\n${output}`);
   }
 }
 
-function spawnPnpm(args, cwd) {
+function spawnPnpm(args, cwd, envOverrides = {}) {
+  const env = createProcessEnv(envOverrides);
+
   if (process.env.npm_execpath) {
     return spawn(process.execPath, [process.env.npm_execpath, ...args], {
       cwd,
-      env: process.env,
+      env,
       stdio: ["ignore", "pipe", "pipe"]
     });
   }
 
   return spawn(resolvePnpmCommand(), args, {
     cwd,
-    env: process.env,
+    env,
     stdio: ["ignore", "pipe", "pipe"]
   });
 }
@@ -170,6 +219,10 @@ async function stopProcess(child) {
       }
     })
   ]);
+}
+
+function createProcessEnv(envOverrides = {}) {
+  return { ...process.env, ...envOverrides };
 }
 
 function resolvePnpmCommand() {

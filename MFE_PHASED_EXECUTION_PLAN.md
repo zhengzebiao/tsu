@@ -276,7 +276,9 @@ TEMPLATE_VERSION=0.0.0 pnpm validate:template-release
 
 ---
 
-## Phase 6：测试体系
+## Phase 6：测试体系（已完成）
+
+**状态：已完成**
 
 ### 目标
 
@@ -284,21 +286,41 @@ TEMPLATE_VERSION=0.0.0 pnpm validate:template-release
 
 ### 任务
 
-1. 接入 Vitest
-2. 接入 Testing Library
-3. 接入 Playwright
-4. 主应用 E2E：
-   - 登录
-   - 加载子应用
-5. 子应用 E2E：
-   - 独立启动
-   - 页面渲染
+- [x] 接入 Vitest
+- [x] 接入 Testing Library
+- [x] 接入 Playwright
+- [x] 主应用 E2E：
+  - [x] 登录
+  - [x] 加载子应用
+- [x] 子应用 E2E：
+  - [x] 独立启动
+  - [x] 页面渲染
+- [x] 更新生成物验证脚本，自动执行 `pnpm test:e2e` 和跨模板 qiankun 集成 E2E
+- [x] 更新 CLI doctor、模板结构测试、生成物验证和模板发布验证
 
 ### 验收标准
 
-- `pnpm test` 通过
-- `pnpm test:e2e` 通过
-- CI 中可稳定运行
+- [x] `pnpm test` 通过
+- [x] `pnpm test:e2e` 通过
+- [x] CI 中可稳定运行（Playwright 单 worker、CI retry，并由验证脚本串行启动固定端口服务）
+
+### 已验证命令
+
+```sh
+pnpm --filter @tsuz/template build
+pnpm --filter @tsuz/template test
+pnpm --filter @tsuz/cli build
+pnpm --filter @tsuz/cli test
+pnpm validate:generated-apps
+pnpm template:release:build --version=0.0.0
+TEMPLATE_VERSION=0.0.0 pnpm validate:template-release
+```
+
+### 自动化 E2E 覆盖
+
+- `mfe-main` 生成 `playwright.config.ts`、`e2e/host-login.spec.ts` 和 `e2e/host-load-subapp.spec.ts`。
+- `mfe-app` 生成 `playwright.config.ts` 和 `e2e/standalone.spec.ts`。
+- `script/validate-generated-apps.mjs` 会生成两个 MFE 项目，分别执行 `pnpm test:e2e`，再同时启动 host/sub-app 并执行跨模板 qiankun 集成 E2E。
 
 ---
 

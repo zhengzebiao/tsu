@@ -21,9 +21,11 @@ export function createMfeAppTemplateFiles(packageName: string): TemplateFile[] {
           dev: `pnpm --filter ${appPackageName} dev`,
           build: "turbo run build",
           lint: "turbo run lint",
-          test: "turbo run test"
+          test: "turbo run test",
+          "test:e2e": "playwright test"
         },
         devDependencies: {
+          "@playwright/test": "^1.51.1",
           "@types/node": "^20.17.57",
           turbo: "^2.5.3",
           typescript: "^5.8.3"
@@ -83,6 +85,14 @@ export function createMfeAppTemplateFiles(packageName: string): TemplateFile[] {
       content: `node_modules/\ndist/\napps/*/dist/\npackages/*/dist/\n.turbo/\n*.local\n*.log\n`
     },
     {
+      path: "playwright.config.ts",
+      content: `import { defineConfig, devices } from "@playwright/test";\n\nexport default defineConfig({\n  testDir: "./e2e",\n  fullyParallel: false,\n  forbidOnly: Boolean(process.env.CI),\n  retries: process.env.CI ? 2 : 0,\n  workers: 1,\n  reporter: process.env.CI ? "github" : "list",\n  use: {\n    baseURL: "http://127.0.0.1:7201",\n    trace: "on-first-retry"\n  },\n  webServer: {\n    command: "pnpm dev",\n    url: "http://127.0.0.1:7201",\n    reuseExistingServer: !process.env.CI,\n    timeout: 60_000\n  },\n  projects: [\n    {\n      name: "chromium",\n      use: { ...devices["Desktop Chrome"] }\n    }\n  ]\n});\n`
+    },
+    {
+      path: "e2e/standalone.spec.ts",
+      content: `import { expect, test } from "@playwright/test";\n\ntest("renders the standalone business application", async ({ page }) => {\n  await page.goto("/");\n\n  await expect(page.getByRole("heading", { name: "Business home" })).toBeVisible();\n  await expect(page.getByText("Standalone mode")).toBeVisible();\n  await expect(page.getByText("Auth bridge: standalone")).toBeVisible();\n  await expect(page.getByText("API base URL: /api")).toBeVisible();\n  await expect(page.getByText("Open orders")).toBeVisible();\n\n  await page.getByRole("link", { name: "About" }).click();\n\n  await expect(page).toHaveURL(/\\/about$/);\n  await expect(page.getByText("Integration notes")).toBeVisible();\n});\n`
+    },
+    {
       path: "apps/app/package.json",
       content: packageJson({
         name: appPackageName,
@@ -109,9 +119,13 @@ export function createMfeAppTemplateFiles(packageName: string): TemplateFile[] {
           zustand: "^5.0.3"
         },
         devDependencies: {
+          "@testing-library/jest-dom": "^6.6.3",
+          "@testing-library/react": "^16.2.0",
+          "@testing-library/user-event": "^14.6.1",
           "@types/react": "^19.0.10",
           "@types/react-dom": "^19.0.4",
           "@vitejs/plugin-react": "^4.3.4",
+          jsdom: "^26.0.0",
           typescript: "^5.8.3",
           vite: "^6.2.0",
           "vite-plugin-qiankun": "^1.0.15",
@@ -125,7 +139,7 @@ export function createMfeAppTemplateFiles(packageName: string): TemplateFile[] {
     },
     {
       path: "apps/app/vite.config.ts",
-      content: `import { fileURLToPath, URL } from "node:url";\nimport { defineConfig } from "vite";\nimport react from "@vitejs/plugin-react";\nimport qiankun from "vite-plugin-qiankun";\n\nexport default defineConfig({\n  plugins: [react(), qiankun("mfe-app", { useDevMode: true })],\n  server: {\n    port: 7201,\n    strictPort: true,\n    headers: {\n      "Access-Control-Allow-Origin": "*"\n    }\n  },\n  resolve: {\n    alias: {\n      "@": fileURLToPath(new URL("./src", import.meta.url)),\n      "@tsuz/api": fileURLToPath(new URL("../../packages/api/src/index.ts", import.meta.url)),\n      "@tsuz/shared": fileURLToPath(new URL("../../packages/shared/src/index.ts", import.meta.url)),\n      "@tsuz/ui": fileURLToPath(new URL("../../packages/ui/src/index.tsx", import.meta.url))\n    },\n    dedupe: ["react", "react-dom"]\n  }\n});\n`
+      content: `import { fileURLToPath, URL } from "node:url";\nimport { defineConfig } from "vitest/config";\nimport react from "@vitejs/plugin-react";\nimport qiankun from "vite-plugin-qiankun";\n\nexport default defineConfig({\n  plugins: [react(), qiankun("mfe-app", { useDevMode: true })],\n  test: {\n    environment: "jsdom",\n    setupFiles: "./src/test/setup.ts"\n  },\n  server: {\n    port: 7201,\n    strictPort: true,\n    headers: {\n      "Access-Control-Allow-Origin": "*"\n    }\n  },\n  resolve: {\n    alias: {\n      "@": fileURLToPath(new URL("./src", import.meta.url)),\n      "@tsuz/api": fileURLToPath(new URL("../../packages/api/src/index.ts", import.meta.url)),\n      "@tsuz/shared": fileURLToPath(new URL("../../packages/shared/src/index.ts", import.meta.url)),\n      "@tsuz/ui": fileURLToPath(new URL("../../packages/ui/src/index.tsx", import.meta.url))\n    },\n    dedupe: ["react", "react-dom"]\n  }\n});\n`
     },
     {
       path: "apps/app/tsconfig.json",
@@ -142,6 +156,10 @@ export function createMfeAppTemplateFiles(packageName: string): TemplateFile[] {
         },
         include: ["vite.config.ts", "src/**/*.ts", "src/**/*.tsx"]
       })
+    },
+    {
+      path: "apps/app/src/test/setup.ts",
+      content: `import "@testing-library/jest-dom/vitest";\nimport { vi } from "vitest";\n\nObject.defineProperty(window, "matchMedia", {\n  writable: true,\n  value: vi.fn().mockImplementation((query: string) => ({\n    matches: false,\n    media: query,\n    onchange: null,\n    addListener: vi.fn(),\n    removeListener: vi.fn(),\n    addEventListener: vi.fn(),\n    removeEventListener: vi.fn(),\n    dispatchEvent: vi.fn()\n  }))\n});\n\nglobalThis.ResizeObserver = class ResizeObserver {\n  observe() {\n    return undefined;\n  }\n\n  unobserve() {\n    return undefined;\n  }\n\n  disconnect() {\n    return undefined;\n  }\n};\n`
     },
     {
       path: "apps/app/src/main.tsx",
@@ -161,7 +179,11 @@ export function createMfeAppTemplateFiles(packageName: string): TemplateFile[] {
     },
     {
       path: "apps/app/src/pages/BusinessHomePage.tsx",
-      content: `import { useQuery } from "@tanstack/react-query";\nimport { Alert, Card, Col, List, Row, Space, Statistic, Tag, Typography } from "antd";\nimport { EmptyState, ErrorState, PageContainer } from "@tsuz/ui";\nimport { businessHomeQueryKey, loadBusinessHomeSummary } from "../queries/business-home.query";\nimport { useAppStore } from "../stores/app.store";\n\nexport default function BusinessHomePage() {\n  const mode = useAppStore((state) => state.mode);\n  const appName = useAppStore((state) => state.appName);\n  const apiBaseUrl = useAppStore((state) => state.apiBaseUrl);\n  const hasAuthBridge = useAppStore((state) => state.hasAuthBridge);\n  const currentUser = useAppStore((state) => state.currentUser);\n  const query = useQuery({\n    queryKey: businessHomeQueryKey(apiBaseUrl, currentUser?.id ?? "guest"),\n    queryFn: () => loadBusinessHomeSummary({ apiBaseUrl, currentUser })\n  });\n  const summary = query.data;\n\n  return (\n    <PageContainer\n      title="Business home"\n      description="Phase 5 starter page with host props, app state, and React Query data wired together."\n      actions={<Tag color={mode === "qiankun" ? "purple" : "blue"}>{mode === "qiankun" ? "qiankun mount" : "standalone"}</Tag>}\n    >\n      <Space direction="vertical" size="large" className="full-width">\n        <Card>\n          <Space direction="vertical" size="middle" className="full-width">\n            <Typography.Paragraph>\n              Generated by Tsu from the <code>mfe-app</code> template. This sub application can run independently on port\n              7201 or receive auth and API props from the generated mfe-main host.\n            </Typography.Paragraph>\n            <Space wrap>\n              <Tag color="blue">React</Tag>\n              <Tag color="purple">qiankun</Tag>\n              <Tag color="green">Phase 5 lifecycle</Tag>\n              <Tag color={hasAuthBridge ? "success" : "default"}>Auth bridge: {hasAuthBridge ? "provided" : "standalone"}</Tag>\n            </Space>\n            <Typography.Text>Application: {appName}</Typography.Text>\n            <Typography.Text type="secondary">API base URL: {apiBaseUrl}</Typography.Text>\n            <Typography.Text type="secondary">Current user: {currentUser?.name ?? "Standalone visitor"}</Typography.Text>\n          </Space>\n        </Card>\n\n        {query.isError ? (\n          <ErrorState title="Unable to load business summary" description="Replace the demo query with a real backend request when ready." />\n        ) : null}\n\n        <Row gutter={[16, 16]}>\n          {(summary?.metrics ?? []).map((metric) => (\n            <Col xs={24} md={8} key={metric.label}>\n              <Card className="metric-card">\n                <Statistic title={metric.label} value={metric.value} suffix={metric.suffix} />\n                <Tag color={metric.color}>{metric.trend}</Tag>\n              </Card>\n            </Col>\n          ))}\n        </Row>\n\n        <Card title="Next business actions" loading={query.isLoading || query.isFetching}>\n          {summary ? (\n            <List bordered dataSource={summary.nextActions} renderItem={(item) => <List.Item>{item}</List.Item>} />\n          ) : (\n            <EmptyState title="Loading business summary" description="React Query is preparing deterministic starter data." />\n          )}\n        </Card>\n\n        <Alert\n          type="info"\n          showIcon\n          message="Template extension point"\n          description="Keep backend calls inside query modules and inject host auth through createMfeApiClient for production business features."\n        />\n      </Space>\n    </PageContainer>\n  );\n}\n`
+      content: `import { useQuery } from "@tanstack/react-query";\nimport { Alert, Card, Col, List, Row, Space, Statistic, Tag, Typography } from "antd";\nimport { EmptyState, ErrorState, PageContainer } from "@tsuz/ui";\nimport { businessHomeQueryKey, loadBusinessHomeSummary } from "../queries/business-home.query";\nimport { useAppStore } from "../stores/app.store";\n\nexport default function BusinessHomePage() {\n  const mode = useAppStore((state) => state.mode);\n  const appName = useAppStore((state) => state.appName);\n  const apiBaseUrl = useAppStore((state) => state.apiBaseUrl);\n  const hasAuthBridge = useAppStore((state) => state.hasAuthBridge);\n  const currentUser = useAppStore((state) => state.currentUser);\n  const query = useQuery({\n    queryKey: businessHomeQueryKey(apiBaseUrl, currentUser?.id ?? "guest"),\n    queryFn: () => loadBusinessHomeSummary({ apiBaseUrl, currentUser })\n  });\n  const summary = query.data;\n\n  return (\n    <PageContainer\n      title="Business home"\n      description="Phase 6 starter page with host props, app state, React Query data, and browser coverage wired together."\n      actions={<Tag color={mode === "qiankun" ? "purple" : "blue"}>{mode === "qiankun" ? "qiankun mount" : "standalone"}</Tag>}\n    >\n      <Space direction="vertical" size="large" className="full-width">\n        <Card>\n          <Space direction="vertical" size="middle" className="full-width">\n            <Typography.Paragraph>\n              Generated by Tsu from the <code>mfe-app</code> template. This sub application can run independently on port\n              7201 or receive auth and API props from the generated mfe-main host.\n            </Typography.Paragraph>\n            <Space wrap>\n              <Tag color="blue">React</Tag>\n              <Tag color="purple">qiankun</Tag>\n              <Tag color="green">Phase 6 tested</Tag>\n              <Tag color={hasAuthBridge ? "success" : "default"}>Auth bridge: {hasAuthBridge ? "provided" : "standalone"}</Tag>\n            </Space>\n            <Typography.Text>Application: {appName}</Typography.Text>\n            <Typography.Text type="secondary">API base URL: {apiBaseUrl}</Typography.Text>\n            <Typography.Text type="secondary">Current user: {currentUser?.name ?? "Standalone visitor"}</Typography.Text>\n          </Space>\n        </Card>\n\n        {query.isError ? (\n          <ErrorState title="Unable to load business summary" description="Replace the demo query with a real backend request when ready." />\n        ) : null}\n\n        <Row gutter={[16, 16]}>\n          {(summary?.metrics ?? []).map((metric) => (\n            <Col xs={24} md={8} key={metric.label}>\n              <Card className="metric-card">\n                <Statistic title={metric.label} value={metric.value} suffix={metric.suffix} />\n                <Tag color={metric.color}>{metric.trend}</Tag>\n              </Card>\n            </Col>\n          ))}\n        </Row>\n\n        <Card title="Next business actions" loading={query.isLoading || query.isFetching}>\n          {summary ? (\n            <List bordered dataSource={summary.nextActions} renderItem={(item) => <List.Item>{item}</List.Item>} />\n          ) : (\n            <EmptyState title="Loading business summary" description="React Query is preparing deterministic starter data." />\n          )}\n        </Card>\n\n        <Alert\n          type="info"\n          showIcon\n          message="Template extension point"\n          description="Keep backend calls inside query modules and inject host auth through createMfeApiClient for production business features."\n        />\n      </Space>\n    </PageContainer>\n  );\n}\n`
+    },
+    {
+      path: "apps/app/src/pages/BusinessHomePage.test.tsx",
+      content: `import { QueryClient, QueryClientProvider } from "@tanstack/react-query";\nimport { render, screen } from "@testing-library/react";\nimport { beforeEach, describe, expect, test } from "vitest";\nimport BusinessHomePage from "./BusinessHomePage";\nimport { useAppStore } from "../stores/app.store";\n\nbeforeEach(() => {\n  useAppStore.getState().resetHostProps();\n});\n\ndescribe("BusinessHomePage", () => {\n  test("renders standalone state and deterministic business data", async () => {\n    renderBusinessHomePage();\n\n    expect(screen.getByRole("heading", { name: "Business home" })).toBeInTheDocument();\n    expect(screen.getByText("standalone")).toBeInTheDocument();\n    expect(screen.getByText("Auth bridge: standalone")).toBeInTheDocument();\n    expect(screen.getByText("API base URL: /api")).toBeInTheDocument();\n    expect(await screen.findByText("Open orders")).toBeInTheDocument();\n    expect(await screen.findByText("Replace deterministic demo data with a domain API query.")).toBeInTheDocument();\n  });\n});\n\nfunction renderBusinessHomePage() {\n  const queryClient = new QueryClient({\n    defaultOptions: {\n      queries: { retry: false }\n    }\n  });\n\n  return render(\n    <QueryClientProvider client={queryClient}>\n      <BusinessHomePage />\n    </QueryClientProvider>\n  );\n}\n`
     },
     {
       path: "apps/app/src/providers/AppProviders.tsx",
@@ -218,7 +240,7 @@ function createMfeAppReadme(packageName: string) {
 
 Generated by Tsu from the \`mfe-app\` template.
 
-This is the Phase 5 React qiankun sub application starter. It runs independently, exposes concrete qiankun lifecycle functions, stores host props in a local Zustand wrapper, and includes React Query-ready business page structure backed by reusable workspace packages.
+This is the Phase 6 React qiankun sub application starter. It runs independently, exposes concrete qiankun lifecycle functions, stores host props in a local Zustand wrapper, includes React Query-ready business page structure, and ships Vitest, Testing Library, and Playwright coverage by default.
 
 ## Tech Stack
 
@@ -231,6 +253,8 @@ This is the Phase 5 React qiankun sub application starter. It runs independently
 - TanStack Query
 - Ant Design
 - Vitest
+- Testing Library
+- Playwright
 - pnpm workspace
 - Turbo
 
@@ -253,7 +277,8 @@ Start a generated \`mfe-main\` project on port 7200 and this project on port 720
 | --- | --- |
 | \`pnpm dev\` | Start the React sub application |
 | \`pnpm lint\` | Run TypeScript no-emit checks |
-| \`pnpm test\` | Run generated Vitest unit tests |
+| \`pnpm test\` | Run generated Vitest and Testing Library tests |
+| \`pnpm test:e2e\` | Run Playwright standalone E2E checks |
 | \`pnpm build\` | Build the workspace through Turbo |
 
 ## Project Structure
@@ -263,12 +288,14 @@ Start a generated \`mfe-main\` project on port 7200 and this project on port 720
 | \`apps/app/src/main.tsx\` | Standalone bootstrap and qiankun lifecycle exports |
 | \`apps/app/src/bootstrap.tsx\` | Shared render and destroy boundary with idempotent unmount behavior |
 | \`apps/app/src/qiankun.ts\` | bootstrap, mount, and unmount functions using shared props |
-| \`apps/app/src/pages/BusinessHomePage.tsx\` | Phase 5 starter business page using host props, state, and query data |
+| \`apps/app/src/pages/BusinessHomePage.tsx\` | Phase 6 starter business page using host props, state, and query data |
+| \`apps/app/src/pages/BusinessHomePage.test.tsx\` | Testing Library coverage for standalone business page rendering |
 | \`apps/app/src/providers/AppProviders.tsx\` | React Query and Router providers with qiankun-aware basename support |
 | \`apps/app/src/providers/query-client.ts\` | Shared TanStack Query client defaults |
 | \`apps/app/src/stores/app.store.ts\` | Zustand runtime state for standalone and qiankun-mounted modes |
 | \`apps/app/src/queries/business-home.query.ts\` | Deterministic starter query for business summary data |
 | \`apps/app/src/services/api-client.ts\` | Sub-app API client factory using optional host props |
+| \`e2e/standalone.spec.ts\` | Playwright standalone startup, rendering, and route smoke test |
 | \`packages/shared/src/index.ts\` | Shared auth, micro-app, route, and utility contracts |
 | \`packages/ui/src/index.tsx\` | Shared React UI primitives: Logo, PageContainer, EmptyState, ErrorState |
 | \`packages/api/src/index.ts\` | Generic fetch-based API client |
@@ -287,7 +314,9 @@ When mounted by a host, \`apps/app/src/qiankun.ts\` accepts \`Partial<MicroAppPr
 
 ## Testing
 
-The generated project includes lightweight Vitest coverage for lifecycle delegation, API client auth bridging, runtime store behavior, and the deterministic business-home query. Browser component and E2E coverage are intentionally left for the next phase.
+\`pnpm test\` runs lifecycle, API client, store, query, and Testing Library page coverage. \`pnpm test:e2e\` starts the sub application on port 7201 and verifies standalone rendering plus the \`/about\` route through Playwright.
+
+For host-mounted coverage, generate a matching \`mfe-main\` project and run the Tsu repository \`pnpm validate:generated-apps\` command, which starts both dev servers and executes the host integration Playwright spec.
 
 ## Phase Roadmap
 

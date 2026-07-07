@@ -22,11 +22,13 @@ export function createMfeMainTemplateFiles(packageName: string): TemplateFile[] 
           build: "turbo run build",
           lint: "eslint . --max-warnings 0 && turbo run lint",
           test: "turbo run test",
+          "test:e2e": "playwright test",
           format: "prettier . --write",
           "format:check": "prettier . --check"
         },
         devDependencies: {
           "@eslint/js": "^9.21.0",
+          "@playwright/test": "^1.51.1",
           "@types/node": "^20.17.57",
           eslint: "^9.21.0",
           "eslint-plugin-react-hooks": "^5.2.0",
@@ -97,7 +99,10 @@ export function createMfeMainTemplateFiles(packageName: string): TemplateFile[] 
     },
     {
       path: "eslint.config.js",
-      content: `import js from "@eslint/js";\nimport globals from "globals";\nimport tseslint from "typescript-eslint";\nimport reactHooks from "eslint-plugin-react-hooks";\nimport reactRefresh from "eslint-plugin-react-refresh";\n\nexport default tseslint.config(\n  {\n    ignores: ["**/dist", "**/node_modules", ".turbo", "coverage"]\n  },\n  js.configs.recommended,\n  ...tseslint.configs.recommended,\n  {\n    files: ["**/*.{ts,tsx}"],\n    languageOptions: {\n      ecmaVersion: "latest",\n      sourceType: "module",\n      globals: globals.browser\n    },\n    plugins: {\n      "react-hooks": reactHooks,\n      "react-refresh": reactRefresh\n    },\n    rules: {\n      ...reactHooks.configs.recommended.rules\n    }\n  },\n  {\n    files: ["apps/**/*.tsx", "packages/ui/**/*.tsx"],\n    rules: {\n      "react-refresh/only-export-components": ["warn", { allowConstantExport: true }]\n    }\n  }\n);\n`
+      content: `import js from "@eslint/js";\nimport globals from "globals";\nimport tseslint from "typescript-eslint";\nimport reactHooks from "eslint-plugin-react-hooks";\nimport reactRefresh from "eslint-plugin-react-refresh";\n\nexport default tseslint.config(\n  {\n    ignores: ["**/dist", "**/node_modules", ".turbo", "coverage"]\n  },\n  js.configs.recommended,\n  ...tseslint.configs.recommended,\n  {\n    files: ["**/*.{ts,tsx}"],\n    languageOptions: {\n      ecmaVersion: "latest",\n      sourceType: "module",\n      globals: {
+        ...globals.browser,
+        ...globals.node
+      }\n    },\n    plugins: {\n      "react-hooks": reactHooks,\n      "react-refresh": reactRefresh\n    },\n    rules: {\n      ...reactHooks.configs.recommended.rules\n    }\n  },\n  {\n    files: ["apps/**/*.tsx", "packages/ui/**/*.tsx"],\n    rules: {\n      "react-refresh/only-export-components": ["warn", { allowConstantExport: true }]\n    }\n  }\n);\n`
     },
     {
       path: "prettier.config.js",
@@ -106,6 +111,18 @@ export function createMfeMainTemplateFiles(packageName: string): TemplateFile[] 
     {
       path: ".prettierignore",
       content: `node_modules\ndist\napps/*/dist\npackages/*/dist\n.turbo\ncoverage\npnpm-lock.yaml\n`
+    },
+    {
+      path: "playwright.config.ts",
+      content: `import { defineConfig, devices } from "@playwright/test";\n\nconst isIntegrationE2e = process.env.MFE_INTEGRATION_E2E === "true";\n\nexport default defineConfig({\n  testDir: "./e2e",\n  fullyParallel: false,\n  forbidOnly: Boolean(process.env.CI),\n  retries: process.env.CI ? 2 : 0,\n  workers: 1,\n  reporter: process.env.CI ? "github" : "list",\n  use: {\n    baseURL: "http://127.0.0.1:7200",\n    trace: "on-first-retry"\n  },\n  webServer: isIntegrationE2e\n    ? undefined\n    : {\n        command: "pnpm dev",\n        url: "http://127.0.0.1:7200/login",\n        reuseExistingServer: !process.env.CI,\n        timeout: 60_000\n      },\n  projects: [\n    {\n      name: "chromium",\n      use: { ...devices["Desktop Chrome"] }\n    }\n  ]\n});\n`
+    },
+    {
+      path: "e2e/host-login.spec.ts",
+      content: `import { expect, test } from "@playwright/test";\n\ntest("logs in and shows the host micro-app outlet fallback", async ({ page }) => {\n  await page.goto("/login");\n\n  await expect(page.getByText("Demo credentials")).toBeVisible();\n  await expect(page.locator("#username")).toHaveValue("admin");\n  await expect(page.locator("#password")).toHaveValue("password123");\n\n  await page.getByRole("button", { name: "Sign in" }).click();\n\n  await expect(page).toHaveURL(/\\/apps\\/mfe-app$/);\n  await expect(page.getByRole("link", { name: "Host shell", exact: true })).toBeVisible();\n  await expect(page.getByText("Waiting for mfe-app")).toBeVisible();\n  await expect(page.getByText("Integration fallback")).toBeVisible();\n});\n`
+    },
+    {
+      path: "e2e/host-load-subapp.spec.ts",
+      content: `import { expect, test } from "@playwright/test";\n\ntest.skip(\n  process.env.MFE_INTEGRATION_E2E !== "true",\n  "Run this spec through validate-generated-apps after starting both generated MFE dev servers."\n);\n\ntest("loads the generated sub application through qiankun", async ({ page }) => {\n  await page.goto("/login");\n  await page.getByRole("button", { name: "Sign in" }).click();\n\n  await expect(page).toHaveURL(/\\/apps\\/mfe-app$/);\n  await expect(page.getByRole("heading", { name: "Business home" })).toBeVisible({ timeout: 15_000 });\n  await expect(page.getByText("Mounted by host")).toBeVisible();\n  await expect(page.getByText("qiankun mount")).toBeVisible();\n  await expect(page.getByText("Auth bridge: provided")).toBeVisible();\n  await expect(page.getByText("Current user: Demo Admin")).toBeVisible();\n\n  await page.getByRole("link", { name: "About" }).click();\n\n  await expect(page).toHaveURL(/\\/apps\\/mfe-app\\/about$/);\n  await expect(page.getByText("Integration notes")).toBeVisible();\n  await expect(page.getByText("Router basename: /apps/mfe-app")).toBeVisible();\n\n  await page.goto("/apps/mfe-app-legacy");\n\n  await expect(page.getByText("qiankun mount")).toHaveCount(0);\n  await expect(page.getByText("Business home")).toHaveCount(0);\n});\n`
     },
     {
       path: "apps/main/package.json",
@@ -134,11 +151,15 @@ export function createMfeMainTemplateFiles(packageName: string): TemplateFile[] 
           zustand: "^5.0.3"
         },
         devDependencies: {
+          "@testing-library/jest-dom": "^6.6.3",
+          "@testing-library/react": "^16.2.0",
+          "@testing-library/user-event": "^14.6.1",
           "@types/react": "^19.0.10",
           "@types/react-dom": "^19.0.4",
           "@vitejs/plugin-react": "^4.3.4",
           autoprefixer: "^10.4.20",
           postcss: "^8.5.3",
+          jsdom: "^26.0.0",
           tailwindcss: "^3.4.17",
           typescript: "^5.8.3",
           vite: "^6.2.0",
@@ -156,7 +177,7 @@ export function createMfeMainTemplateFiles(packageName: string): TemplateFile[] 
     },
     {
       path: "apps/main/vite.config.ts",
-      content: `import { fileURLToPath, URL } from "node:url";\nimport { defineConfig } from "vite";\nimport react from "@vitejs/plugin-react";\n\nexport default defineConfig({\n  plugins: [react()],\n  server: {\n    port: 7200,\n    strictPort: true\n  },\n  resolve: {\n    alias: {\n      "@": fileURLToPath(new URL("./src", import.meta.url)),\n      "@tsuz/api": fileURLToPath(new URL("../../packages/api/src/index.ts", import.meta.url)),\n      "@tsuz/shared": fileURLToPath(new URL("../../packages/shared/src/index.ts", import.meta.url)),\n      "@tsuz/ui": fileURLToPath(new URL("../../packages/ui/src/index.tsx", import.meta.url))\n    },\n    dedupe: ["react", "react-dom"]\n  }\n});\n`
+      content: `import { fileURLToPath, URL } from "node:url";\nimport { defineConfig } from "vitest/config";\nimport react from "@vitejs/plugin-react";\n\nexport default defineConfig({\n  plugins: [react()],\n  test: {\n    environment: "jsdom",\n    setupFiles: "./src/test/setup.ts"\n  },\n  server: {\n    port: 7200,\n    strictPort: true\n  },\n  resolve: {\n    alias: {\n      "@": fileURLToPath(new URL("./src", import.meta.url)),\n      "@tsuz/api": fileURLToPath(new URL("../../packages/api/src/index.ts", import.meta.url)),\n      "@tsuz/shared": fileURLToPath(new URL("../../packages/shared/src/index.ts", import.meta.url)),\n      "@tsuz/ui": fileURLToPath(new URL("../../packages/ui/src/index.tsx", import.meta.url))\n    },\n    dedupe: ["react", "react-dom"]\n  }\n});\n`
     },
     {
       path: "apps/main/tailwind.config.js",
@@ -183,12 +204,16 @@ export function createMfeMainTemplateFiles(packageName: string): TemplateFile[] 
       })
     },
     {
+      path: "apps/main/src/test/setup.ts",
+      content: `import "@testing-library/jest-dom/vitest";\nimport { vi } from "vitest";\n\nObject.defineProperty(window, "matchMedia", {\n  writable: true,\n  value: vi.fn().mockImplementation((query: string) => ({\n    matches: false,\n    media: query,\n    onchange: null,\n    addListener: vi.fn(),\n    removeListener: vi.fn(),\n    addEventListener: vi.fn(),\n    removeEventListener: vi.fn(),\n    dispatchEvent: vi.fn()\n  }))\n});\n\nglobalThis.ResizeObserver = class ResizeObserver {\n  observe() {\n    return undefined;\n  }\n\n  unobserve() {\n    return undefined;\n  }\n\n  disconnect() {\n    return undefined;\n  }\n};\n`
+    },
+    {
       path: "apps/main/src/main.tsx",
       content: `import { StrictMode } from "react";\nimport { createRoot } from "react-dom/client";\nimport App from "./App";\nimport { AppProviders } from "./providers/AppProviders";\nimport { registerMicroFrontendApps } from "./micro-apps/registry";\nimport "./styles/main.css";\n\nregisterMicroFrontendApps();\n\ncreateRoot(document.getElementById("root")!).render(\n  <StrictMode>\n    <AppProviders>\n      <App />\n    </AppProviders>\n  </StrictMode>\n);\n`
     },
     {
       path: "apps/main/src/App.tsx",
-      content: `import { useEffect, type ReactNode } from "react";\nimport { Avatar, Button, Card, Layout, List, Space, Tag, Typography } from "antd";\nimport { Link, Navigate, Route, Routes, useNavigate } from "react-router-dom";\nimport { EmptyState, ErrorState, Logo, PageContainer } from "@tsuz/ui";\nimport { MFE_APP_ROUTE } from "@tsuz/shared";\nimport RequireAuth from "./components/RequireAuth";\nimport LoginPage from "./pages/LoginPage";\nimport { useAuthStore } from "./stores/auth.store";\n\nconst { Header, Content } = Layout;\nconst projectName = "${packageName}";\n\nconst roadmapItems = [\n  "Phase 4: shared, ui, and api workspace packages",\n  "Phase 5: richer sub application lifecycle and business routes",\n  "Later phases: tests, Docker, CI, deploy, and documentation"\n];\n\nexport default function App() {\n  return (\n    <Routes>\n      <Route path="/login" element={<LoginPage />} />\n      <Route\n        path="/"\n        element={\n          <RequireAuth>\n            <AuthenticatedShell>\n              <HostHome />\n            </AuthenticatedShell>\n          </RequireAuth>\n        }\n      />\n      <Route\n        path="/apps/mfe-app/*"\n        element={\n          <RequireAuth>\n            <AuthenticatedShell>\n              <MicroAppOutlet />\n            </AuthenticatedShell>\n          </RequireAuth>\n        }\n      />\n      <Route path="*" element={<Navigate to="/" replace />} />\n    </Routes>\n  );\n}\n\ninterface AuthenticatedShellProps {\n  children: ReactNode;\n}\n\nfunction AuthenticatedShell({ children }: AuthenticatedShellProps) {\n  const navigate = useNavigate();\n  const user = useAuthStore((state) => state.user);\n  const logout = useAuthStore((state) => state.logout);\n\n  async function handleLogout() {\n    await logout();\n    navigate("/login", { replace: true });\n  }\n\n  return (\n    <Layout className="app-shell bg-slate-50 text-slate-800">\n      <Header className="app-header">\n        <Link className="brand-link" to="/" aria-label="Go to host shell home">\n          <Logo label={projectName} subtitle="qiankun host" />\n        </Link>\n        <nav className="app-nav">\n          <Link to="/">Host shell</Link>\n          <Link to={MFE_APP_ROUTE}>Business app</Link>\n        </nav>\n        <Space className="user-menu" size="middle">\n          <Avatar>{user?.name.slice(0, 1).toUpperCase() ?? "U"}</Avatar>\n          <Typography.Text className="user-name">{user?.name}</Typography.Text>\n          <Button ghost onClick={handleLogout}>\n            Logout\n          </Button>\n        </Space>\n      </Header>\n      <Content className="app-content">{children}</Content>\n    </Layout>\n  );\n}\n\nfunction HostHome() {\n  const user = useAuthStore((state) => state.user);\n\n  return (\n    <PageContainer\n      title="React qiankun host shell"\n      description="The host owns login state, workspace-level contracts, reusable UI primitives, and qiankun registration."\n    >\n      <Card>\n        <Space direction="vertical" size="large" className="full-width">\n          <Typography.Paragraph>\n            Generated by Tsu from the <code>mfe-main</code> template. This Phase 4 host shell includes\n            login state, demo auth service, React Query providers, shared workspace packages, and a qiankun registry that\n            can pass auth props to sub applications.\n          </Typography.Paragraph>\n          <Space wrap>\n            <Tag color="blue">React</Tag>\n            <Tag color="purple">qiankun</Tag>\n            <Tag color="green">Shared packages</Tag>\n          </Space>\n          <Card size="small" title="Current user">\n            <Typography.Text>{user?.name} ({user?.username})</Typography.Text>\n            <br />\n            <Typography.Text type="secondary">Roles: {user?.roles.join(", ")}</Typography.Text>\n          </Card>\n          <List bordered dataSource={roadmapItems} renderItem={(item) => <List.Item>{item}</List.Item>} />\n        </Space>\n      </Card>\n    </PageContainer>\n  );\n}\n\nfunction MicroAppOutlet() {\n  useEffect(() => {\n    window.dispatchEvent(new PopStateEvent("popstate"));\n  }, []);\n\n  return (\n    <PageContainer\n      title="Business sub application outlet"\n      description="qiankun registers the generated mfe-app here and receives shared auth/API props from the host."\n    >\n      <Card>\n        <Typography.Paragraph>\n          The host passes <code>apiBaseUrl</code>, <code>getAccessToken</code>, <code>getCurrentUser</code>, and\n          <code>logout</code> through the shared <code>MicroAppProps</code> contract.\n        </Typography.Paragraph>\n        <div id="subapp-container" className="subapp-container rounded-xl">\n          <EmptyState\n            title="Waiting for mfe-app"\n            description="Start an mfe-app project on port 7201 to mount it in this container."\n          />\n        </div>\n        <ErrorState\n          className="integration-note"\n          title="Integration fallback"\n          description="If the remote entry fails to load, check VITE_MFE_APP_ENTRY and the sub app dev server."\n        />\n      </Card>\n    </PageContainer>\n  );\n}\n`
+      content: `import { useEffect, type ReactNode } from "react";\nimport { Avatar, Button, Card, Layout, List, Space, Tag, Typography } from "antd";\nimport { Link, Navigate, Route, Routes, useNavigate } from "react-router-dom";\nimport { EmptyState, ErrorState, Logo, PageContainer } from "@tsuz/ui";\nimport { MFE_APP_ROUTE } from "@tsuz/shared";\nimport RequireAuth from "./components/RequireAuth";\nimport LoginPage from "./pages/LoginPage";\nimport { useAuthStore } from "./stores/auth.store";\n\nconst { Header, Content } = Layout;\nconst projectName = "${packageName}";\n\nconst roadmapItems = [\n  "Phase 4: shared, ui, and api workspace packages",\n  "Phase 5: richer sub application lifecycle and business routes",\n  "Phase 6: Testing Library and Playwright coverage",\n  "Later phases: Docker, CI, deploy, and documentation"\n];\n\nexport default function App() {\n  return (\n    <Routes>\n      <Route path="/login" element={<LoginPage />} />\n      <Route\n        path="/"\n        element={\n          <RequireAuth>\n            <AuthenticatedShell>\n              <HostHome />\n            </AuthenticatedShell>\n          </RequireAuth>\n        }\n      />\n      <Route\n        path="/apps/mfe-app/*"\n        element={\n          <RequireAuth>\n            <AuthenticatedShell>\n              <MicroAppOutlet />\n            </AuthenticatedShell>\n          </RequireAuth>\n        }\n      />\n      <Route path="*" element={<Navigate to="/" replace />} />\n    </Routes>\n  );\n}\n\ninterface AuthenticatedShellProps {\n  children: ReactNode;\n}\n\nfunction AuthenticatedShell({ children }: AuthenticatedShellProps) {\n  const navigate = useNavigate();\n  const user = useAuthStore((state) => state.user);\n  const logout = useAuthStore((state) => state.logout);\n\n  async function handleLogout() {\n    await logout();\n    navigate("/login", { replace: true });\n  }\n\n  return (\n    <Layout className="app-shell bg-slate-50 text-slate-800">\n      <Header className="app-header">\n        <Link className="brand-link" to="/" aria-label="Go to host shell home">\n          <Logo label={projectName} subtitle="qiankun host" />\n        </Link>\n        <nav className="app-nav">\n          <Link to="/">Host shell</Link>\n          <Link to={MFE_APP_ROUTE}>Business app</Link>\n        </nav>\n        <Space className="user-menu" size="middle">\n          <Avatar>{user?.name.slice(0, 1).toUpperCase() ?? "U"}</Avatar>\n          <Typography.Text className="user-name">{user?.name}</Typography.Text>\n          <Button ghost onClick={handleLogout}>\n            Logout\n          </Button>\n        </Space>\n      </Header>\n      <Content className="app-content">{children}</Content>\n    </Layout>\n  );\n}\n\nfunction HostHome() {\n  const user = useAuthStore((state) => state.user);\n\n  return (\n    <PageContainer\n      title="React qiankun host shell"\n      description="The host owns login state, workspace-level contracts, reusable UI primitives, and qiankun registration."\n    >\n      <Card>\n        <Space direction="vertical" size="large" className="full-width">\n          <Typography.Paragraph>\n            Generated by Tsu from the <code>mfe-main</code> template. This Phase 6 host shell includes\n            login state, demo auth service, React Query providers, shared workspace packages, tests, and a qiankun registry that\n            can pass auth props to sub applications.\n          </Typography.Paragraph>\n          <Space wrap>\n            <Tag color="blue">React</Tag>\n            <Tag color="purple">qiankun</Tag>\n            <Tag color="green">Shared packages</Tag>\n          </Space>\n          <Card size="small" title="Current user">\n            <Typography.Text>{user?.name} ({user?.username})</Typography.Text>\n            <br />\n            <Typography.Text type="secondary">Roles: {user?.roles.join(", ")}</Typography.Text>\n          </Card>\n          <List bordered dataSource={roadmapItems} renderItem={(item) => <List.Item>{item}</List.Item>} />\n        </Space>\n      </Card>\n    </PageContainer>\n  );\n}\n\nfunction MicroAppOutlet() {\n  useEffect(() => {\n    window.dispatchEvent(new PopStateEvent("popstate"));\n  }, []);\n\n  return (\n    <PageContainer\n      title="Business sub application outlet"\n      description="qiankun registers the generated mfe-app here and receives shared auth/API props from the host."\n    >\n      <Card>\n        <Typography.Paragraph>\n          The host passes <code>apiBaseUrl</code>, <code>getAccessToken</code>, <code>getCurrentUser</code>, and\n          <code>logout</code> through the shared <code>MicroAppProps</code> contract.\n        </Typography.Paragraph>\n        <div id="subapp-container" className="subapp-container rounded-xl">\n          <EmptyState\n            title="Waiting for mfe-app"\n            description="Start an mfe-app project on port 7201 to mount it in this container."\n          />\n        </div>\n        <ErrorState\n          className="integration-note"\n          title="Integration fallback"\n          description="If the remote entry fails to load, check VITE_MFE_APP_ENTRY and the sub app dev server."\n        />\n      </Card>\n    </PageContainer>\n  );\n}\n`
     },
     {
       path: "apps/main/src/components/RequireAuth.tsx",
@@ -209,6 +234,10 @@ export function createMfeMainTemplateFiles(packageName: string): TemplateFile[] 
     {
       path: "apps/main/src/pages/LoginPage.tsx",
       content: `import { Alert, Button, Card, Form, Input, Space, Typography } from "antd";\nimport { useLocation, useNavigate } from "react-router-dom";\nimport type { LoginCredentials } from "@tsuz/shared";\nimport { Logo } from "@tsuz/ui";\nimport { useAuthStore } from "../stores/auth.store";\n\ninterface RedirectState {\n  from?: {\n    pathname?: string;\n  };\n}\n\nexport default function LoginPage() {\n  const navigate = useNavigate();\n  const location = useLocation();\n  const login = useAuthStore((state) => state.login);\n  const status = useAuthStore((state) => state.status);\n  const error = useAuthStore((state) => state.error);\n  const redirectTo = getRedirectPath(location.state);\n\n  async function handleFinish(values: LoginCredentials) {\n    await login(values);\n    navigate(redirectTo, { replace: true });\n  }\n\n  return (\n    <main className="login-page">\n      <Card className="login-card" title={<Logo label="Sign in" subtitle="MFE host" />}>\n        <Space direction="vertical" size="large" className="full-width">\n          <Typography.Paragraph type="secondary">\n            Use the demo account to exercise auth state and qiankun props without a backend.\n          </Typography.Paragraph>\n          <Alert message="Demo credentials" description="Username: admin / Password: password123" type="info" showIcon />\n          {error ? <Alert message={error} type="error" showIcon /> : null}\n          <Form<LoginCredentials>\n            layout="vertical"\n            initialValues={{ username: "admin", password: "password123" }}\n            onFinish={handleFinish}\n          >\n            <Form.Item name="username" label="Username" rules={[{ required: true, message: "Username is required" }]}>\n              <Input autoComplete="username" />\n            </Form.Item>\n            <Form.Item name="password" label="Password" rules={[{ required: true, message: "Password is required" }]}>\n              <Input.Password autoComplete="current-password" />\n            </Form.Item>\n            <Button type="primary" htmlType="submit" loading={status === "authenticating"} block>\n              Sign in\n            </Button>\n          </Form>\n        </Space>\n      </Card>\n    </main>\n  );\n}\n\nfunction getRedirectPath(state: unknown) {\n  if (isRedirectState(state) && state.from?.pathname) {\n    return state.from.pathname;\n  }\n\n  return "/apps/mfe-app";\n}\n\nfunction isRedirectState(value: unknown): value is RedirectState {\n  return typeof value === "object" && value !== null && "from" in value;\n}\n`
+    },
+    {
+      path: "apps/main/src/pages/LoginPage.test.tsx",
+      content: `import { render, screen } from "@testing-library/react";\nimport userEvent from "@testing-library/user-event";\nimport { MemoryRouter } from "react-router-dom";\nimport { beforeEach, describe, expect, test } from "vitest";\nimport LoginPage from "./LoginPage";\nimport { useAuthStore } from "../stores/auth.store";\n\nbeforeEach(() => {\n  useAuthStore.setState({ status: "anonymous", user: undefined, accessToken: undefined, error: undefined });\n});\n\ndescribe("LoginPage", () => {\n  test("renders demo credentials and prefilled fields", async () => {\n    const user = userEvent.setup();\n\n    render(\n      <MemoryRouter>\n        <LoginPage />\n      </MemoryRouter>\n    );\n\n    expect(screen.getByText("Demo credentials")).toBeInTheDocument();\n    expect(screen.getByText("Username: admin / Password: password123")).toBeInTheDocument();\n    expect(screen.getByLabelText("Username")).toHaveValue("admin");\n    expect(screen.getByLabelText("Password")).toHaveValue("password123");\n    expect(screen.getByRole("button", { name: "Sign in" })).toBeEnabled();\n\n    await user.clear(screen.getByLabelText("Username"));\n    await user.type(screen.getByLabelText("Username"), "operator");\n\n    expect(screen.getByLabelText("Username")).toHaveValue("operator");\n  });\n});\n`
     },
     {
       path: "apps/main/src/providers/AppProviders.tsx",
@@ -253,7 +282,7 @@ function createMfeMainReadme(packageName: string) {
 
 Generated by Tsu from the \`mfe-main\` template.
 
-This is the Phase 4 React qiankun host shell starter. It generates a main application with demo login flow, auth state, React Query providers, reusable workspace packages, and qiankun micro-app registration that passes auth props to sub applications.
+This is the Phase 6 React qiankun host shell starter. It generates a main application with demo login flow, auth state, React Query providers, reusable workspace packages, qiankun micro-app registration, Testing Library coverage, and Playwright E2E checks for the host and generated sub-app integration.
 
 ## Tech Stack
 
@@ -267,6 +296,8 @@ This is the Phase 4 React qiankun host shell starter. It generates a main applic
 - Ant Design
 - Tailwind CSS
 - Vitest
+- Testing Library
+- Playwright
 - ESLint
 - Prettier
 - pnpm workspace
@@ -303,7 +334,8 @@ Copy \`apps/main/.env.example\` to \`apps/main/.env.local\` when you need local 
 | --- | --- |
 | \`pnpm dev\` | Start the React host shell |
 | \`pnpm lint\` | Run ESLint and TypeScript checks |
-| \`pnpm test\` | Run generated Vitest unit tests |
+| \`pnpm test\` | Run generated Vitest and Testing Library tests |
+| \`pnpm test:e2e\` | Run Playwright host E2E checks |
 | \`pnpm build\` | Build the workspace through Turbo |
 | \`pnpm format\` | Format generated source files |
 | \`pnpm format:check\` | Check formatting without writing files |
@@ -315,12 +347,15 @@ Copy \`apps/main/.env.example\` to \`apps/main/.env.local\` when you need local 
 | \`apps/main/src/main.tsx\` | React host bootstrap and qiankun registration startup |
 | \`apps/main/src/App.tsx\` | Authenticated host shell and micro-app outlet route |
 | \`apps/main/src/pages/LoginPage.tsx\` | Demo login page |
+| \`apps/main/src/pages/LoginPage.test.tsx\` | Testing Library coverage for the login surface |
 | \`apps/main/src/stores/auth.store.ts\` | Zustand auth state and host-to-sub-app auth bridge |
 | \`apps/main/src/services/auth.service.ts\` | Demo auth service; replace internals when connecting a real backend |
 | \`apps/main/src/services/api-client.ts\` | Host API client factory using the shared auth bridge |
 | \`apps/main/src/providers/AppProviders.tsx\` | React Query and Router providers |
 | \`apps/main/src/micro-apps/config.ts\` | Pure qiankun app config helpers and env-driven entry resolution |
 | \`apps/main/src/micro-apps/registry.ts\` | qiankun side-effect registration and start guard |
+| \`e2e/host-login.spec.ts\` | Playwright host login and fallback outlet smoke test |
+| \`e2e/host-load-subapp.spec.ts\` | Playwright integration spec for loading the generated \`mfe-app\` through qiankun |
 | \`packages/shared/src/index.ts\` | Shared auth, micro-app, route, and utility contracts |
 | \`packages/ui/src/index.tsx\` | Shared React UI primitives: Logo, PageContainer, EmptyState, ErrorState |
 | \`packages/api/src/index.ts\` | Generic fetch-based API client |
@@ -345,10 +380,16 @@ The host owns login state. The qiankun registry passes these props to sub applic
 
 Start a generated \`mfe-app\` project on port 7201, then visit http://localhost:7200/apps/mfe-app after logging in to mount it in \`#subapp-container\`.
 
+## Testing
+
+\`pnpm test\` runs Vitest unit tests and Testing Library component tests. \`pnpm test:e2e\` starts the host on port 7200 and runs the Playwright host login smoke test.
+
+The generated \`e2e/host-load-subapp.spec.ts\` covers the full host + sub-app qiankun flow. Run it after starting a generated \`mfe-app\` on port 7201 and the host with \`VITE_MFE_APP_ENTRY=//127.0.0.1:7201\`, or use the Tsu repository \`pnpm validate:generated-apps\` command to automate both servers and the integration spec.
+
 ## Phase Roadmap
 
-- Phase 5 enriches the sub application with business pages, state, queries, and lifecycle tests.
-- Later phases add E2E, Docker, CI, deploy, and documentation.
+- Phase 6 adds Testing Library and Playwright coverage for host and generated sub-app integration flows.
+- Later phases add Docker, CI, deploy, and documentation.
 `;
 }
 
