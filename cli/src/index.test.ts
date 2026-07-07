@@ -20,6 +20,27 @@ function restoreEnv(name: string, value: string | undefined) {
   process.env[name] = value;
 }
 
+function assertMfeCiWorkflow(content: string) {
+  assert.match(content, /name: CI/);
+  assert.match(content, /pull_request/);
+  assert.match(content, /push/);
+  assert.match(content, /main/);
+  assert.match(content, /master/);
+  assert.match(content, /actions\/checkout@v4/);
+  assert.match(content, /pnpm\/action-setup@v4/);
+  assert.match(content, /version: 8\.15\.9/);
+  assert.match(content, /actions\/setup-node@v4/);
+  assert.match(content, /node-version: 20/);
+  assert.match(content, /cache: pnpm/);
+  assert.match(content, /pnpm install --frozen-lockfile/);
+  assert.match(content, /pnpm lint/);
+  assert.match(content, /pnpm format:check/);
+  assert.match(content, /pnpm test/);
+  assert.match(content, /pnpm build/);
+  assert.match(content, /pnpm exec playwright install --with-deps chromium/);
+  assert.match(content, /pnpm test:e2e/);
+}
+
 test("createCliMessage reports CLI usage", () => {
   assert.equal(createCliMessage(), createHelpMessage());
   assert.match(createCliMessage(), /tsu-cli init \[project-name\]/);
@@ -991,6 +1012,7 @@ test("runCli initializes mfe-main projects", async () => {
     const dockerignore = await readFile(join(projectRoot, ".dockerignore"), "utf8");
     const appEnv = await readFile(join(projectRoot, "apps", "main", ".env.example"), "utf8");
     const viteEnv = await readFile(join(projectRoot, "apps", "main", "src", "vite-env.d.ts"), "utf8");
+    const workflow = await readFile(join(projectRoot, ".github", "workflows", "ci.yml"), "utf8");
 
     assert.match(packageJson, /"lint": "eslint \. --max-warnings 0 && turbo run lint"/);
     assert.match(packageJson, /"test": "turbo run test"/);
@@ -1000,7 +1022,9 @@ test("runCli initializes mfe-main projects", async () => {
     assert.match(packageJson, /"compose:up": "docker compose up --build"/);
     assert.match(packageJson, /"compose:down": "docker compose down"/);
     assert.match(packageJson, /"@playwright\/test"/);
-    assert.match(packageJson, /"format": "prettier \. --write"/);
+    assert.match(packageJson, /"format": "prettier --ignore-unknown --write/);
+    assert.match(packageJson, /"format:check": "prettier --ignore-unknown --check/);
+    assertMfeCiWorkflow(workflow);
     assert.match(workspace, /packages\/\*/);
     assert.match(appPackageJson, /"@tsuz\/api": "workspace:\*"/);
     assert.match(appPackageJson, /"@tsuz\/shared": "workspace:\*"/);
@@ -1023,7 +1047,8 @@ test("runCli initializes mfe-main projects", async () => {
     assert.match(appViteConfig, /vitest\/config/);
     assert.match(appViteConfig, /environment: "jsdom"/);
     assert.match(appViteConfig, /setupFiles: "\.\/src\/test\/setup\.ts"/);
-    assert.match(readme, /Phase 7 React qiankun host shell starter/);
+    assert.match(readme, /Phase 8 React qiankun host shell starter/);
+    assert.match(readme, /GitHub Actions CI/);
     assert.match(readme, /Docker and nginx/);
     assert.match(readme, /Docker Compose/);
     assert.match(readme, /VITE_APP_ENV/);
@@ -1147,14 +1172,20 @@ test("runCli initializes mfe-app projects", async () => {
     const deployEnv = await readFile(join(projectRoot, ".env.deploy.example"), "utf8");
     const dockerignore = await readFile(join(projectRoot, ".dockerignore"), "utf8");
     const appEnv = await readFile(join(projectRoot, "apps", "app", ".env.example"), "utf8");
+    const prettierConfig = await readFile(join(projectRoot, "prettier.config.js"), "utf8");
+    const workflow = await readFile(join(projectRoot, ".github", "workflows", "ci.yml"), "utf8");
 
     assert.match(packageJson, /"test": "turbo run test"/);
     assert.match(packageJson, /"test:e2e": "playwright test"/);
+    assert.match(packageJson, /"format": "prettier --ignore-unknown --write/);
+    assert.match(packageJson, /"format:check": "prettier --ignore-unknown --check/);
     assert.match(packageJson, /"docker:build": "docker build -t mfe-business-app:\$\{APP_VERSION:-local\} \./);
     assert.match(packageJson, /"docker:run": "docker run --rm -p 7201:80 mfe-business-app:\$\{APP_VERSION:-local\}"/);
     assert.match(packageJson, /"compose:up": "docker compose up --build"/);
     assert.match(packageJson, /"compose:down": "docker compose down"/);
     assert.match(packageJson, /"@playwright\/test"/);
+    assert.match(packageJson, /"prettier"/);
+    assertMfeCiWorkflow(workflow);
     assert.match(workspace, /packages\/\*/);
     assert.match(appPackageJson, /"@tsuz\/api": "workspace:\*"/);
     assert.match(appPackageJson, /"@tsuz\/shared": "workspace:\*"/);
@@ -1176,7 +1207,9 @@ test("runCli initializes mfe-app projects", async () => {
     assert.match(appViteConfig, /environment: "jsdom"/);
     assert.match(appViteConfig, /setupFiles: "\.\/src\/test\/setup\.ts"/);
     assert.match(appViteConfig, /vite-plugin-qiankun/);
-    assert.match(readme, /Phase 7 React qiankun sub application starter/);
+    assert.match(readme, /Phase 8 React qiankun sub application starter/);
+    assert.match(readme, /GitHub Actions CI/);
+    assert.match(readme, /pnpm format:check/);
     assert.match(readme, /Docker and nginx/);
     assert.match(readme, /Docker Compose/);
     assert.match(readme, /VITE_APP_ENV/);
@@ -1211,6 +1244,7 @@ test("runCli initializes mfe-app projects", async () => {
     assert.match(deployEnv, /VITE_MFE_APP_ENTRY=\/\/localhost:7201/);
     assert.match(dockerignore, /apps\/\*\/dist/);
     assert.match(dockerignore, /!\.env\.deploy\.example/);
+    assert.match(prettierConfig, /printWidth/);
     assert.match(appEnv, /VITE_APP_ENV=local/);
     assert.match(apiClient, /resolveDefaultApiBaseUrl/);
     assert.match(apiClient, /import\.meta\.env\.VITE_API_BASE_URL/);

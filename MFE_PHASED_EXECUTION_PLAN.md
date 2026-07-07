@@ -383,7 +383,9 @@ MFE_VALIDATE_DOCKER=true pnpm validate:generated-apps
 
 ---
 
-## Phase 8：CI 工作流
+## Phase 8：CI 工作流（已完成）
+
+**状态：已完成**
 
 ### 目标
 
@@ -391,23 +393,42 @@ MFE_VALIDATE_DOCKER=true pnpm validate:generated-apps
 
 ### 任务
 
-1. 新增 `.github/workflows/ci.yml`
-2. 触发：
-   - PR
-   - push 到 `main` / `master`
-3. 执行：
-   - install
-   - lint
-   - format check
-   - test
-   - build
-   - E2E
+- [x] 新增 `.github/workflows/ci.yml`
+- [x] 触发：
+  - [x] PR
+  - [x] push 到 `main` / `master`
+- [x] 执行：
+  - [x] install
+  - [x] lint
+  - [x] format check
+  - [x] test
+  - [x] build
+  - [x] E2E
+- [x] 为 `mfe-app` 补齐 Prettier 与 `format:check`，确保两个 MFE 模板使用一致 CI 命令。
+- [x] 更新模板测试、CLI doctor / init 测试、生成物验证和模板发布验证，覆盖 CI workflow 文件和关键命令。
+- [x] 更新模板 README 与验证技能，说明 Phase 8 CI 质量门禁。
 
 ### 验收标准
 
-- PR 自动跑 CI
-- 主分支推送自动跑 CI
-- CI 失败时能准确阻断合并
+- [x] PR 自动跑 CI
+- [x] 主分支推送自动跑 CI
+- [x] CI 失败时能准确阻断合并
+
+### 已验证命令
+
+```sh
+pnpm --filter @tsuz/template build
+pnpm --filter @tsuz/template test
+pnpm --filter @tsuz/cli build
+pnpm --filter @tsuz/cli test
+pnpm validate:generated-apps
+pnpm template:release:build --version=0.0.0
+TEMPLATE_VERSION=0.0.0 pnpm validate:template-release
+```
+
+### CI 覆盖说明
+
+生成的 `mfe-main` / `mfe-app` 项目现在包含 `.github/workflows/ci.yml`，在 pull request 和 push 到 `main` / `master` 时执行 `pnpm install --frozen-lockfile`、`pnpm lint`、`pnpm format:check`、`pnpm test`、`pnpm build`、`pnpm exec playwright install --with-deps chromium` 和 `pnpm test:e2e`。
 
 ---
 

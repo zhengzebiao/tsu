@@ -15,7 +15,7 @@ const appTemplates = [
     name: "mfe-main",
     projectName: "mfe-main-platform",
     useLocalPackages: false,
-    commands: [["lint"], ["test"], ["build"], ["test:e2e"]],
+    commands: [["lint"], ["format:check"], ["test"], ["build"], ["test:e2e"]],
     devSmoke: { command: ["dev"], url: "http://127.0.0.1:7200/" },
     deployment: {
       appDirectory: "apps/main",
@@ -30,7 +30,7 @@ const appTemplates = [
     name: "mfe-app",
     projectName: "mfe-business-app",
     useLocalPackages: false,
-    commands: [["lint"], ["test"], ["build"], ["test:e2e"]],
+    commands: [["lint"], ["format:check"], ["test"], ["build"], ["test:e2e"]],
     devSmoke: { command: ["dev"], url: "http://127.0.0.1:7201/" },
     deployment: {
       appDirectory: "apps/app",
@@ -137,6 +137,7 @@ async function validateMfeDeploymentFiles(template, projectRoot) {
   const compose = await readRequiredFile(projectRoot, "docker-compose.yml");
   const deployEnv = await readRequiredFile(projectRoot, ".env.deploy.example");
   const dockerignore = await readRequiredFile(projectRoot, ".dockerignore");
+  const ciWorkflow = await readRequiredFile(projectRoot, ".github/workflows/ci.yml");
   const readme = await readRequiredFile(projectRoot, "README.md");
   const packageJson = await readRequiredFile(projectRoot, "package.json");
   const appEnv = await readRequiredFile(projectRoot, `${deployment.appDirectory}/.env.example`);
@@ -178,13 +179,39 @@ async function validateMfeDeploymentFiles(template, projectRoot) {
   assertIncludes(dockerignore, "!.env.deploy.example", ".dockerignore");
   assertIncludes(packageJson, '"docker:build"', "package.json");
   assertIncludes(packageJson, '"compose:up"', "package.json");
+  assertIncludes(packageJson, '"format:check"', "package.json");
+  assertIncludes(ciWorkflow, "name: CI", ".github/workflows/ci.yml");
+  assertIncludes(ciWorkflow, "pull_request:", ".github/workflows/ci.yml");
+  assertIncludes(ciWorkflow, "push:", ".github/workflows/ci.yml");
+  assertIncludes(ciWorkflow, "- main", ".github/workflows/ci.yml");
+  assertIncludes(ciWorkflow, "- master", ".github/workflows/ci.yml");
+  assertIncludes(ciWorkflow, "actions/checkout@v4", ".github/workflows/ci.yml");
+  assertIncludes(ciWorkflow, "pnpm/action-setup@v4", ".github/workflows/ci.yml");
+  assertIncludes(ciWorkflow, "version: 8.15.9", ".github/workflows/ci.yml");
+  assertIncludes(ciWorkflow, "actions/setup-node@v4", ".github/workflows/ci.yml");
+  assertIncludes(ciWorkflow, "node-version: 20", ".github/workflows/ci.yml");
+  assertIncludes(ciWorkflow, "cache: pnpm", ".github/workflows/ci.yml");
+  assertIncludes(ciWorkflow, "pnpm install --frozen-lockfile", ".github/workflows/ci.yml");
+  assertIncludes(ciWorkflow, "pnpm lint", ".github/workflows/ci.yml");
+  assertIncludes(ciWorkflow, "pnpm format:check", ".github/workflows/ci.yml");
+  assertIncludes(ciWorkflow, "pnpm test", ".github/workflows/ci.yml");
+  assertIncludes(ciWorkflow, "pnpm build", ".github/workflows/ci.yml");
+  assertIncludes(ciWorkflow, "pnpm exec playwright install --with-deps chromium", ".github/workflows/ci.yml");
+  assertIncludes(ciWorkflow, "pnpm test:e2e", ".github/workflows/ci.yml");
+  if (template.name === "mfe-app") {
+    const prettierConfig = await readRequiredFile(projectRoot, "prettier.config.js");
+    const prettierIgnore = await readRequiredFile(projectRoot, ".prettierignore");
+    assertIncludes(packageJson, '"prettier"', "package.json");
+    assertIncludes(prettierConfig, "printWidth", "prettier.config.js");
+    assertIncludes(prettierIgnore, "apps/*/dist", ".prettierignore");
+  }
   assertIncludes(appEnv, "VITE_APP_ENV=local", `${deployment.appDirectory}/.env.example`);
   assertIncludes(viteEnv, "VITE_APP_ENV", `${deployment.appDirectory}/src/vite-env.d.ts`);
   assertIncludes(readme, "Docker and nginx", "README.md");
   assertIncludes(readme, "Docker Compose", "README.md");
   assertIncludes(readme, "VITE_APP_ENV", "README.md");
 
-  process.stdout.write(`Validated generated ${template.name} Docker/nginx/compose files\n`);
+  process.stdout.write(`Validated generated ${template.name} Docker/nginx/compose and CI workflow files\n`);
 }
 
 async function runDockerDeploymentValidation(template, projectRoot) {
@@ -318,7 +345,7 @@ async function readRequiredFile(projectRoot, relativePath) {
   try {
     return await readFile(join(projectRoot, relativePath), "utf8");
   } catch (error) {
-    throw new Error(`Missing generated deployment file ${relativePath}: ${error.message}`);
+    throw new Error(`Missing generated file ${relativePath}: ${error.message}`);
   }
 }
 

@@ -40,6 +40,7 @@ try {
   await access(join(bundleDir, "mfe-main", "package.json"));
   await access(join(bundleDir, "mfe-main", ".dockerignore"));
   await access(join(bundleDir, "mfe-main", ".env.deploy.example"));
+  await access(join(bundleDir, "mfe-main", ".github", "workflows", "ci.yml"));
   await access(join(bundleDir, "mfe-main", "Dockerfile"));
   await access(join(bundleDir, "mfe-main", "nginx", "nginx.conf"));
   await access(join(bundleDir, "mfe-main", "docker-compose.yml"));
@@ -59,6 +60,9 @@ try {
   await access(join(bundleDir, "mfe-app", "package.json"));
   await access(join(bundleDir, "mfe-app", ".dockerignore"));
   await access(join(bundleDir, "mfe-app", ".env.deploy.example"));
+  await access(join(bundleDir, "mfe-app", ".github", "workflows", "ci.yml"));
+  await access(join(bundleDir, "mfe-app", "prettier.config.js"));
+  await access(join(bundleDir, "mfe-app", ".prettierignore"));
   await access(join(bundleDir, "mfe-app", "Dockerfile"));
   await access(join(bundleDir, "mfe-app", "nginx", "nginx.conf"));
   await access(join(bundleDir, "mfe-app", "docker-compose.yml"));
@@ -91,6 +95,7 @@ try {
   ]);
   await assertFileContains(join(bundleDir, "mfe-main", "nginx", "nginx.conf"), ["try_files $uri $uri/ /index.html", "Cache-Control \"public, immutable\""]);
   await assertFileContains(join(bundleDir, "mfe-main", "docker-compose.yml"), ["${DOCKER_IMAGE_NAME:-", "${APP_VERSION:-local}", "${APP_PORT:-7200}:80", "VITE_APP_ENV: ${APP_ENV:-local}"]);
+  await assertFileContains(join(bundleDir, "mfe-main", ".github", "workflows", "ci.yml"), ciWorkflowMarkers());
   await assertFileContains(join(bundleDir, "mfe-app", "Dockerfile"), [
     "FROM nginx:1.27-alpine",
     "ARG VITE_API_BASE_URL=/api",
@@ -100,6 +105,10 @@ try {
   ]);
   await assertFileContains(join(bundleDir, "mfe-app", "nginx", "nginx.conf"), ["try_files $uri $uri/ /index.html", "Access-Control-Allow-Origin \"*\""]);
   await assertFileContains(join(bundleDir, "mfe-app", "docker-compose.yml"), ["${DOCKER_IMAGE_NAME:-", "${APP_VERSION:-local}", "${APP_PORT:-7201}:80", "VITE_APP_ENV: ${APP_ENV:-local}"]);
+  await assertFileContains(join(bundleDir, "mfe-app", ".github", "workflows", "ci.yml"), ciWorkflowMarkers());
+  await assertFileContains(join(bundleDir, "mfe-app", "package.json"), ["\"format:check\"", "\"prettier\""]);
+  await assertFileContains(join(bundleDir, "mfe-app", "prettier.config.js"), ["printWidth"]);
+  await assertFileContains(join(bundleDir, "mfe-app", ".prettierignore"), ["apps/*/dist"]);
   await access(join(bundleDir, "react", "package.json"));
   await access(join(bundleDir, "python-main", "pyproject.toml"));
   await access(join(bundleDir, "python-main", "app", "main.py"));
@@ -154,6 +163,29 @@ try {
   process.stdout.write(`Validated release archive ${archivePath}\n`);
 } finally {
   await rm(tempDir, { force: true, recursive: true });
+}
+
+function ciWorkflowMarkers() {
+  return [
+    "name: CI",
+    "pull_request:",
+    "push:",
+    "- main",
+    "- master",
+    "actions/checkout@v4",
+    "pnpm/action-setup@v4",
+    "version: 8.15.9",
+    "actions/setup-node@v4",
+    "node-version: 20",
+    "cache: pnpm",
+    "pnpm install --frozen-lockfile",
+    "pnpm lint",
+    "pnpm format:check",
+    "pnpm test",
+    "pnpm build",
+    "pnpm exec playwright install --with-deps chromium",
+    "pnpm test:e2e"
+  ];
 }
 
 async function assertReadmeContains(filePath, requiredMarkers) {
