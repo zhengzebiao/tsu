@@ -51,6 +51,7 @@ export async function validateGeneratedApps(options = {}) {
   const cliEntry = options.cliEntry ?? defaultCliEntry;
   const validateDockerRuntime = options.validateDockerRuntime ?? process.env.MFE_VALIDATE_DOCKER === "true";
   const runIntegrationE2e = options.runIntegrationE2e ?? true;
+  const installPlaywrightBrowsers = options.installPlaywrightBrowsers ?? process.env.CI === "true";
   const cleanup = options.cleanup ?? true;
   const generateProject = options.generateProject ?? generateLocalProject;
   const generatedProjectRoots = new Map();
@@ -70,6 +71,9 @@ export async function validateGeneratedApps(options = {}) {
       }
 
       await runPnpm(["install"], projectRoot);
+      if (installPlaywrightBrowsers && template.commands.some((command) => command.includes("test:e2e"))) {
+        await runPnpm(["exec", "playwright", "install", "--with-deps", "chromium"], projectRoot);
+      }
       for (const command of template.commands) {
         await runPnpm(command, projectRoot);
       }
