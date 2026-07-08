@@ -255,12 +255,22 @@ export async function validateMfeDeploymentFiles(template, projectRoot) {
   assertIncludes(viteEnv, "VITE_APP_ENV", `${deployment.appDirectory}/src/vite-env.d.ts`);
   assertIncludes(readme, "Docker and nginx", "README.md");
   assertIncludes(readme, "Docker Compose", "README.md");
+  assertIncludes(readme, "Local development", "README.md");
+  assertIncludes(readme, "Local quality gates", "README.md");
   assertIncludes(readme, "GitHub Actions Deploy", "README.md");
+  assertIncludes(readme, "GitHub Environments", "README.md");
   assertIncludes(readme, "test-v*.*.*", "README.md");
   assertIncludes(readme, "product-v*.*.*", "README.md");
+  assertIncludes(readme, "test-v1.0.1", "README.md");
+  assertIncludes(readme, "product-v1.0.1", "README.md");
   assertIncludes(readme, "workflow_dispatch", "README.md");
   assertIncludes(readme, "image_tag", "README.md");
+  assertIncludes(readme, "rollback", "README.md");
+  assertIncludes(readme, "deploy.yml automatically uploads docker-compose.yml", "README.md");
+  assertIncludes(readme, "DOCKER_REGISTRY_TOKEN", "README.md");
+  assertIncludes(readme, "SSH_PRIVATE_KEY", "README.md");
   assertIncludes(readme, "docker compose up -d --no-build", "README.md");
+  assertIncludes(readme, "VITE_API_BASE_URL is a build-time variable", "README.md");
   assertIncludes(readme, "VITE_APP_ENV", "README.md");
 
   process.stdout.write(`Validated generated ${template.name} Docker/nginx/compose and CI/deploy workflow files\n`);

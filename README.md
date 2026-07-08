@@ -58,8 +58,8 @@ pdm run dev
 | `vue3` | Admin consoles, dashboards, web apps | Vite, Vue Router, Pinia dashboard store, Vitest, TypeScript, ESLint, Docker, CI |
 | `react` | React web apps and dashboards | Vite, React Router, TypeScript, ESLint, Docker, CI |
 | `mfe` | Micro frontend workspaces | Host app, Vue sub apps, qiankun, shared packages, Docker, CI |
-| `mfe-main` | React micro frontend host shells | React, Vite, qiankun host placeholder, Zustand, TanStack Query, Ant Design, Turbo |
-| `mfe-app` | React micro frontend business apps | React, Vite, qiankun lifecycle placeholders, Zustand, TanStack Query, Ant Design, Turbo |
+| `mfe-main` | React micro frontend host shells | React, Vite, qiankun host shell, auth state, CI, Docker/nginx/compose, tag deploy, rollback |
+| `mfe-app` | React micro frontend business apps | React, Vite, qiankun lifecycles, host props, CI, Docker/nginx/compose, tag deploy, rollback |
 | `monorepo` | Multi-package team repositories | pnpm workspace, Turbo, Changesets, TypeScript packages |
 | `python-main` | FastAPI authentication services | PDM, PostgreSQL, Redis, Alembic, RS256 JWT signing, Docker, Nginx, CI/CD environments |
 | `python-app` | FastAPI resource services | PDM, PostgreSQL, Redis blacklist checks, RS256 JWT verification, Docker, Nginx, CI/CD environments |
@@ -222,7 +222,7 @@ pnpm build
 pnpm dev
 ```
 
-The generated project README includes template-specific scripts, structure notes, and deployment hints.
+The generated project README includes template-specific scripts, structure notes, and deployment hints. The `mfe-main` and `mfe-app` READMEs are written as end-to-end runbooks: local development, quality gates, GitHub Environments, `test-v*.*.*` / `product-v*.*.*` tag deployment, manual rollback through `workflow_dispatch`, `VITE_API_BASE_URL` as a build-time variable, and the fact that `deploy.yml` automatically uploads `docker-compose.yml` for the remote server.
 
 ## Package Roles
 

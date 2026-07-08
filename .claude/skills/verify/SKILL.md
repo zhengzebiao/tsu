@@ -1,6 +1,6 @@
 # Verify generated MFE templates
 
-Use this recipe when changes affect `template/src/mfe-main.ts`, `template/src/mfe-app.ts`, MFE generated-app behavior, MFE Docker/nginx/compose deployment assets, generated MFE CI workflow assets, or generated MFE deploy workflow assets.
+Use this recipe when changes affect `template/src/mfe-main.ts`, `template/src/mfe-app.ts`, MFE generated-app behavior, MFE Docker/nginx/compose deployment assets, generated MFE CI workflow assets, generated MFE deploy workflow assets, or generated MFE README documentation markers.
 
 1. Build and test the local generators:
    ```sh
@@ -13,20 +13,20 @@ Use this recipe when changes affect `template/src/mfe-main.ts`, `template/src/mf
    ```sh
    pnpm validate:generated-apps
    ```
-   This command generates fresh local-template `mfe-main` and `mfe-app` projects, installs dependencies, runs `lint`, `format:check`, `test`, `build`, and `test:e2e` in each generated project, verifies generated Docker/nginx/compose deployment files plus `.github/workflows/ci.yml` and `.github/workflows/deploy.yml`, then starts both dev servers and executes the host integration Playwright spec.
+   This command generates fresh local-template `mfe-main` and `mfe-app` projects, installs dependencies, runs `lint`, `format:check`, `test`, `build`, and `test:e2e` in each generated project, verifies generated Docker/nginx/compose deployment files plus `.github/workflows/ci.yml` and `.github/workflows/deploy.yml`, checks Phase 11 README documentation markers, then starts both dev servers and executes the host integration Playwright spec.
 3. Validate the template release bundle when release assets are affected:
    ```sh
    pnpm template:release:build --version=0.0.0
    TEMPLATE_VERSION=0.0.0 pnpm validate:template-release
    ```
-   This command validates the release archive manifest and bundle contents, initializes `mfe-main` and `mfe-app` from the release archive path, then runs the same generated-project install / lint / format / test / build / E2E / deploy-asset checks against those release-sourced projects.
+   This command validates the release archive manifest and bundle contents, initializes `mfe-main` and `mfe-app` from the release archive path, then runs the same generated-project install / lint / format / test / build / E2E / deploy-asset / README-marker checks against those release-sourced projects.
 4. Optionally run real Docker runtime validation when Docker daemon is available:
    ```sh
    MFE_VALIDATE_DOCKER=true pnpm validate:generated-apps
    ```
    This adds `docker build`, `docker run`, `docker compose config`, `docker compose up --build`, HTTP smoke checks, and cleanup for generated `mfe-main` and `mfe-app` projects.
 
-Generated project coverage expected from Phase 10:
+Generated project coverage expected from Phase 11:
 
 - `mfe-main`: Vitest unit coverage, Testing Library login-page coverage, Playwright host login E2E, `e2e/host-load-subapp.spec.ts` for host + sub-app integration, Dockerfile build args, nginx SPA fallback/cache rules, single-service `docker-compose.yml` deployment variables, `.github/workflows/ci.yml` for lint / format check / test / build / E2E, and `.github/workflows/deploy.yml` for `test-v*.*.*` / `product-v*.*.*` tag deploys, Docker image build/push, compose upload, SSH deployment, and `workflow_dispatch` rollback by `image_tag`.
 - `mfe-app`: Vitest lifecycle/API/store/query coverage, Testing Library business-home coverage, Playwright standalone startup/rendering E2E, Dockerfile build args, nginx SPA fallback/cache rules with qiankun-safe CORS headers, single-service `docker-compose.yml` deployment variables, Prettier format check, `.github/workflows/ci.yml` for lint / format check / test / build / E2E, and `.github/workflows/deploy.yml` for `test-v*.*.*` / `product-v*.*.*` tag deploys, Docker image build/push, compose upload, SSH deployment, and `workflow_dispatch` rollback by `image_tag`.
@@ -62,4 +62,5 @@ Notes:
 - `mfe-app` dev mode uses `vite-plugin-qiankun`; without it qiankun may fail with `Cannot use import statement outside a module`.
 - `VITE_*` Docker build args are Vite build-time variables; changing them requires rebuilding the image.
 - Phase 10 release validation uses the built template archive as the source for generated MFE projects; it still avoids real SSH deployment, registry pushes, and GitHub Release publishing.
+- Phase 11 README markers cover local development, GitHub Environments, `test-v*.*.*` / `product-v*.*.*` tag releases, `workflow_dispatch` rollback, `VITE_API_BASE_URL` as a build-time variable, and automatic `docker-compose.yml` upload by `deploy.yml`.
 - Stop background dev servers and containers after manual verification.

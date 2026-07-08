@@ -337,16 +337,22 @@ function deployWorkflowMarkers() {
 
 function deployReadmeMarkers() {
   return [
+    "Local development",
+    "Local quality gates",
     "GitHub Actions Deploy",
     "test-v*.*.*",
     "product-v*.*.*",
+    "test-v1.0.1",
+    "product-v1.0.1",
     "workflow_dispatch",
     "image_tag",
+    "rollback",
     "GitHub Environments",
     "DOCKER_REGISTRY_TOKEN",
     "SSH_PRIVATE_KEY",
+    "deploy.yml automatically uploads docker-compose.yml",
     "docker compose up -d --no-build",
-    "build-time variables"
+    "VITE_API_BASE_URL is a build-time variable"
   ];
 }
 

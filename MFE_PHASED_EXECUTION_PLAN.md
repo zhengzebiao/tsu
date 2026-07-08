@@ -538,27 +538,45 @@ git diff --check
 
 ---
 
-## Phase 11：文档完善
+## Phase 11：文档完善（已完成）
+
+**状态：已完成**
 
 ### 目标
 
-让用户拿到模板后可以直接上手。
+让用户拿到模板后可以直接上手，并能根据生成项目 README 完成本地开发、质量验证、test/product tag 发布和回滚。
 
 ### 任务
 
-1. 更新模板 README
-2. 写清楚本地开发
-3. 写清楚 GitHub Environment 配置
-4. 写清楚 tag 发布流程
-5. 写清楚回滚流程
-6. 写清楚 `VITE_API_BASE_URL` 是构建期变量
-7. 写清楚 `deploy.yml` 自动上传 `docker-compose.yml`
+- [x] 更新 `mfe-main` / `mfe-app` 模板 README，移除 Phase 9 旧表述并补齐 production-ready 使用路径。
+- [x] 写清楚本地开发：项目生成、`pnpm install`、`pnpm dev`、host/sub-app 固定端口、host + sub-app 联调和 demo 登录账号。
+- [x] 写清楚本地质量门禁：`lint`、`format:check`、`test`、`test:e2e`、`build`。
+- [x] 写清楚 GitHub Environment 配置：`test` / `product` environments、variables、secrets 和 product protection rules。
+- [x] 写清楚 tag 发布流程：`test-v*.*.*` 发布 test，`product-v*.*.*` 发布 product，且不使用 `latest`。
+- [x] 写清楚回滚流程：通过 `workflow_dispatch` 选择环境和历史 `image_tag`，跳过 rebuild 并部署 registry 中已存在的镜像。
+- [x] 写清楚 `VITE_API_BASE_URL`、`VITE_MFE_APP_ENTRY`、`VITE_APP_ENV` 是构建期变量，变更后需要新 image tag。
+- [x] 写清楚 `deploy.yml` 自动上传 `docker-compose.yml` 和远端 `.env`，服务器不需要手工维护 compose 文件。
+- [x] 更新 README marker 断言与 release archive 验证，确保 Phase 11 文档内容出现在本地生成项目和 release 生成项目中。
+- [x] 更新仓库级文档：`README.md`、`README.zh-CN.md`、`CLI_USAGE.md`、release verification 文档和 verify skill。
 
 ### 验收标准
 
-- README 能指导用户完成从生成到部署的全部流程
-- test / product 的发布说明清晰
-- 回滚说明清晰
+- [x] README 能指导用户完成从生成到部署的全部流程
+- [x] test / product 的发布说明清晰
+- [x] 回滚说明清晰
+
+### 已验证命令
+
+```sh
+pnpm --filter @tsuz/template build
+pnpm --filter @tsuz/template test
+pnpm --filter @tsuz/cli build
+pnpm --filter @tsuz/cli test
+pnpm validate:generated-apps
+pnpm template:release:build --version=0.0.0
+TEMPLATE_VERSION=0.0.0 pnpm validate:template-release
+git diff --check
+```
 
 ---
 
