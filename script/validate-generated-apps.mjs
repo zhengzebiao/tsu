@@ -138,6 +138,7 @@ async function validateMfeDeploymentFiles(template, projectRoot) {
   const deployEnv = await readRequiredFile(projectRoot, ".env.deploy.example");
   const dockerignore = await readRequiredFile(projectRoot, ".dockerignore");
   const ciWorkflow = await readRequiredFile(projectRoot, ".github/workflows/ci.yml");
+  const deployWorkflow = await readRequiredFile(projectRoot, ".github/workflows/deploy.yml");
   const readme = await readRequiredFile(projectRoot, "README.md");
   const packageJson = await readRequiredFile(projectRoot, "package.json");
   const appEnv = await readRequiredFile(projectRoot, `${deployment.appDirectory}/.env.example`);
@@ -180,6 +181,7 @@ async function validateMfeDeploymentFiles(template, projectRoot) {
   assertIncludes(packageJson, '"docker:build"', "package.json");
   assertIncludes(packageJson, '"compose:up"', "package.json");
   assertIncludes(packageJson, '"format:check"', "package.json");
+  assertIncludes(packageJson, ".github/workflows/deploy.yml", "package.json");
   assertIncludes(ciWorkflow, "name: CI", ".github/workflows/ci.yml");
   assertIncludes(ciWorkflow, "pull_request:", ".github/workflows/ci.yml");
   assertIncludes(ciWorkflow, "push:", ".github/workflows/ci.yml");
@@ -198,6 +200,30 @@ async function validateMfeDeploymentFiles(template, projectRoot) {
   assertIncludes(ciWorkflow, "pnpm build", ".github/workflows/ci.yml");
   assertIncludes(ciWorkflow, "pnpm exec playwright install --with-deps chromium", ".github/workflows/ci.yml");
   assertIncludes(ciWorkflow, "pnpm test:e2e", ".github/workflows/ci.yml");
+
+  assertIncludes(deployWorkflow, "name: Deploy", ".github/workflows/deploy.yml");
+  assertIncludes(deployWorkflow, "test-v*.*.*", ".github/workflows/deploy.yml");
+  assertIncludes(deployWorkflow, "product-v*.*.*", ".github/workflows/deploy.yml");
+  assertIncludes(deployWorkflow, "workflow_dispatch", ".github/workflows/deploy.yml");
+  assertIncludes(deployWorkflow, "environment", ".github/workflows/deploy.yml");
+  assertIncludes(deployWorkflow, "image_tag", ".github/workflows/deploy.yml");
+  assertIncludes(deployWorkflow, "version", ".github/workflows/deploy.yml");
+  assertIncludes(deployWorkflow, "should_build", ".github/workflows/deploy.yml");
+  assertIncludes(deployWorkflow, "packages: write", ".github/workflows/deploy.yml");
+  assertIncludes(deployWorkflow, "docker build", ".github/workflows/deploy.yml");
+  assertIncludes(deployWorkflow, "docker push", ".github/workflows/deploy.yml");
+  assertIncludes(deployWorkflow, "DOCKER_REGISTRY_TOKEN", ".github/workflows/deploy.yml");
+  assertIncludes(deployWorkflow, "SSH_PRIVATE_KEY", ".github/workflows/deploy.yml");
+  assertIncludes(deployWorkflow, "VITE_API_BASE_URL", ".github/workflows/deploy.yml");
+  assertIncludes(deployWorkflow, "VITE_MFE_APP_ENTRY", ".github/workflows/deploy.yml");
+  assertIncludes(deployWorkflow, "VITE_APP_ENV", ".github/workflows/deploy.yml");
+  assertIncludes(deployWorkflow, "docker-compose.yml", ".github/workflows/deploy.yml");
+  assertIncludes(deployWorkflow, "scp", ".github/workflows/deploy.yml");
+  assertIncludes(deployWorkflow, "ssh", ".github/workflows/deploy.yml");
+  assertIncludes(deployWorkflow, "docker compose --env-file .env -f docker-compose.yml pull app", ".github/workflows/deploy.yml");
+  assertIncludes(deployWorkflow, "docker compose --env-file .env -f docker-compose.yml up -d --no-build app", ".github/workflows/deploy.yml");
+  assertIncludes(deployWorkflow, "Refusing to deploy a latest tag", ".github/workflows/deploy.yml");
+
   if (template.name === "mfe-app") {
     const prettierConfig = await readRequiredFile(projectRoot, "prettier.config.js");
     const prettierIgnore = await readRequiredFile(projectRoot, ".prettierignore");
@@ -209,9 +235,15 @@ async function validateMfeDeploymentFiles(template, projectRoot) {
   assertIncludes(viteEnv, "VITE_APP_ENV", `${deployment.appDirectory}/src/vite-env.d.ts`);
   assertIncludes(readme, "Docker and nginx", "README.md");
   assertIncludes(readme, "Docker Compose", "README.md");
+  assertIncludes(readme, "GitHub Actions Deploy", "README.md");
+  assertIncludes(readme, "test-v*.*.*", "README.md");
+  assertIncludes(readme, "product-v*.*.*", "README.md");
+  assertIncludes(readme, "workflow_dispatch", "README.md");
+  assertIncludes(readme, "image_tag", "README.md");
+  assertIncludes(readme, "docker compose up -d --no-build", "README.md");
   assertIncludes(readme, "VITE_APP_ENV", "README.md");
 
-  process.stdout.write(`Validated generated ${template.name} Docker/nginx/compose and CI workflow files\n`);
+  process.stdout.write(`Validated generated ${template.name} Docker/nginx/compose and CI/deploy workflow files\n`);
 }
 
 async function runDockerDeploymentValidation(template, projectRoot) {

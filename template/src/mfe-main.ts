@@ -1,6 +1,7 @@
 import { createMfeCiWorkflow } from "./mfe-react-ci.js";
 import {
   createMfeDeployEnvExample,
+  createMfeDeployWorkflow,
   createMfeDockerCompose,
   createMfeDockerfile,
   createMfeDockerignore,
@@ -38,8 +39,8 @@ export function createMfeMainTemplateFiles(packageName: string): TemplateFile[] 
           lint: "eslint . --max-warnings 0 && turbo run lint",
           test: "turbo run test",
           "test:e2e": "playwright test",
-          format: "prettier --ignore-unknown --write package.json pnpm-workspace.yaml .github/workflows/ci.yml prettier.config.js",
-          "format:check": "prettier --ignore-unknown --check package.json pnpm-workspace.yaml .github/workflows/ci.yml prettier.config.js",
+          format: "prettier --ignore-unknown --write package.json pnpm-workspace.yaml .github/workflows/ci.yml .github/workflows/deploy.yml prettier.config.js",
+          "format:check": "prettier --ignore-unknown --check package.json pnpm-workspace.yaml .github/workflows/ci.yml .github/workflows/deploy.yml prettier.config.js",
           "docker:build": `docker build -t ${packageName}:\${APP_VERSION:-local} .`,
           "docker:run": `docker run --rm -p 7200:80 ${packageName}:\${APP_VERSION:-local}`,
           "compose:up": "docker compose up --build",
@@ -119,6 +120,10 @@ export function createMfeMainTemplateFiles(packageName: string): TemplateFile[] 
     {
       path: ".github/workflows/ci.yml",
       content: createMfeCiWorkflow()
+    },
+    {
+      path: ".github/workflows/deploy.yml",
+      content: createMfeDeployWorkflow(deployOptions)
     },
     {
       path: "eslint.config.js",
@@ -252,7 +257,7 @@ export function createMfeMainTemplateFiles(packageName: string): TemplateFile[] 
     },
     {
       path: "apps/main/src/App.tsx",
-      content: `import { useEffect, type ReactNode } from "react";\nimport { Avatar, Button, Card, Layout, List, Space, Tag, Typography } from "antd";\nimport { Link, Navigate, Route, Routes, useNavigate } from "react-router-dom";\nimport { EmptyState, ErrorState, Logo, PageContainer } from "@tsuz/ui";\nimport { MFE_APP_ROUTE } from "@tsuz/shared";\nimport RequireAuth from "./components/RequireAuth";\nimport LoginPage from "./pages/LoginPage";\nimport { useAuthStore } from "./stores/auth.store";\n\nconst { Header, Content } = Layout;\nconst projectName = "${packageName}";\n\nconst roadmapItems = [\n  "Phase 4: shared, ui, and api workspace packages",\n  "Phase 5: richer sub application lifecycle and business routes",\n  "Phase 6: Testing Library and Playwright coverage",\n  "Phase 7: Docker, nginx, and compose deployment",\n  "Phase 8: GitHub Actions CI quality gate",\n  "Later phases: deploy and documentation"\n];\n\nexport default function App() {\n  return (\n    <Routes>\n      <Route path="/login" element={<LoginPage />} />\n      <Route\n        path="/"\n        element={\n          <RequireAuth>\n            <AuthenticatedShell>\n              <HostHome />\n            </AuthenticatedShell>\n          </RequireAuth>\n        }\n      />\n      <Route\n        path="/apps/mfe-app/*"\n        element={\n          <RequireAuth>\n            <AuthenticatedShell>\n              <MicroAppOutlet />\n            </AuthenticatedShell>\n          </RequireAuth>\n        }\n      />\n      <Route path="*" element={<Navigate to="/" replace />} />\n    </Routes>\n  );\n}\n\ninterface AuthenticatedShellProps {\n  children: ReactNode;\n}\n\nfunction AuthenticatedShell({ children }: AuthenticatedShellProps) {\n  const navigate = useNavigate();\n  const user = useAuthStore((state) => state.user);\n  const logout = useAuthStore((state) => state.logout);\n\n  async function handleLogout() {\n    await logout();\n    navigate("/login", { replace: true });\n  }\n\n  return (\n    <Layout className="app-shell bg-slate-50 text-slate-800">\n      <Header className="app-header">\n        <Link className="brand-link" to="/" aria-label="Go to host shell home">\n          <Logo label={projectName} subtitle="qiankun host" />\n        </Link>\n        <nav className="app-nav">\n          <Link to="/">Host shell</Link>\n          <Link to={MFE_APP_ROUTE}>Business app</Link>\n        </nav>\n        <Space className="user-menu" size="middle">\n          <Avatar>{user?.name.slice(0, 1).toUpperCase() ?? "U"}</Avatar>\n          <Typography.Text className="user-name">{user?.name}</Typography.Text>\n          <Button ghost onClick={handleLogout}>\n            Logout\n          </Button>\n        </Space>\n      </Header>\n      <Content className="app-content">{children}</Content>\n    </Layout>\n  );\n}\n\nfunction HostHome() {\n  const user = useAuthStore((state) => state.user);\n\n  return (\n    <PageContainer\n      title="React qiankun host shell"\n      description="The host owns login state, workspace-level contracts, reusable UI primitives, and qiankun registration."\n    >\n      <Card>\n        <Space direction="vertical" size="large" className="full-width">\n          <Typography.Paragraph>\n            Generated by Tsu from the <code>mfe-main</code> template. This Phase 8 host shell includes\n            login state, demo auth service, React Query providers, shared workspace packages, tests, Docker/nginx assets, GitHub Actions CI,\n            and a qiankun registry that can pass auth props to sub applications.\n          </Typography.Paragraph>\n          <Space wrap>\n            <Tag color="blue">React</Tag>\n            <Tag color="purple">qiankun</Tag>\n            <Tag color="green">Shared packages</Tag>\n          </Space>\n          <Card size="small" title="Current user">\n            <Typography.Text>{user?.name} ({user?.username})</Typography.Text>\n            <br />\n            <Typography.Text type="secondary">Roles: {user?.roles.join(", ")}</Typography.Text>\n          </Card>\n          <List bordered dataSource={roadmapItems} renderItem={(item) => <List.Item>{item}</List.Item>} />\n        </Space>\n      </Card>\n    </PageContainer>\n  );\n}\n\nfunction MicroAppOutlet() {\n  useEffect(() => {\n    window.dispatchEvent(new PopStateEvent("popstate"));\n  }, []);\n\n  return (\n    <PageContainer\n      title="Business sub application outlet"\n      description="qiankun registers the generated mfe-app here and receives shared auth/API props from the host."\n    >\n      <Card>\n        <Typography.Paragraph>\n          The host passes <code>apiBaseUrl</code>, <code>getAccessToken</code>, <code>getCurrentUser</code>, and\n          <code>logout</code> through the shared <code>MicroAppProps</code> contract.\n        </Typography.Paragraph>\n        <div id="subapp-container" className="subapp-container rounded-xl">\n          <EmptyState\n            title="Waiting for mfe-app"\n            description="Start an mfe-app project on port 7201 to mount it in this container."\n          />\n        </div>\n        <ErrorState\n          className="integration-note"\n          title="Integration fallback"\n          description="If the remote entry fails to load, check VITE_MFE_APP_ENTRY and the sub app dev server."\n        />\n      </Card>\n    </PageContainer>\n  );\n}\n`
+      content: `import { useEffect, type ReactNode } from "react";\nimport { Avatar, Button, Card, Layout, List, Space, Tag, Typography } from "antd";\nimport { Link, Navigate, Route, Routes, useNavigate } from "react-router-dom";\nimport { EmptyState, ErrorState, Logo, PageContainer } from "@tsuz/ui";\nimport { MFE_APP_ROUTE } from "@tsuz/shared";\nimport RequireAuth from "./components/RequireAuth";\nimport LoginPage from "./pages/LoginPage";\nimport { useAuthStore } from "./stores/auth.store";\n\nconst { Header, Content } = Layout;\nconst projectName = "${packageName}";\n\nconst roadmapItems = [\n  "Phase 4: shared, ui, and api workspace packages",\n  "Phase 5: richer sub application lifecycle and business routes",\n  "Phase 6: Testing Library and Playwright coverage",\n  "Phase 7: Docker, nginx, and compose deployment",\n  "Phase 8: GitHub Actions CI quality gate",\n  "Phase 9: tag deploy and rollback workflow",\n  "Later phases: release verification and documentation"\n];\n\nexport default function App() {\n  return (\n    <Routes>\n      <Route path="/login" element={<LoginPage />} />\n      <Route\n        path="/"\n        element={\n          <RequireAuth>\n            <AuthenticatedShell>\n              <HostHome />\n            </AuthenticatedShell>\n          </RequireAuth>\n        }\n      />\n      <Route\n        path="/apps/mfe-app/*"\n        element={\n          <RequireAuth>\n            <AuthenticatedShell>\n              <MicroAppOutlet />\n            </AuthenticatedShell>\n          </RequireAuth>\n        }\n      />\n      <Route path="*" element={<Navigate to="/" replace />} />\n    </Routes>\n  );\n}\n\ninterface AuthenticatedShellProps {\n  children: ReactNode;\n}\n\nfunction AuthenticatedShell({ children }: AuthenticatedShellProps) {\n  const navigate = useNavigate();\n  const user = useAuthStore((state) => state.user);\n  const logout = useAuthStore((state) => state.logout);\n\n  async function handleLogout() {\n    await logout();\n    navigate("/login", { replace: true });\n  }\n\n  return (\n    <Layout className="app-shell bg-slate-50 text-slate-800">\n      <Header className="app-header">\n        <Link className="brand-link" to="/" aria-label="Go to host shell home">\n          <Logo label={projectName} subtitle="qiankun host" />\n        </Link>\n        <nav className="app-nav">\n          <Link to="/">Host shell</Link>\n          <Link to={MFE_APP_ROUTE}>Business app</Link>\n        </nav>\n        <Space className="user-menu" size="middle">\n          <Avatar>{user?.name.slice(0, 1).toUpperCase() ?? "U"}</Avatar>\n          <Typography.Text className="user-name">{user?.name}</Typography.Text>\n          <Button ghost onClick={handleLogout}>\n            Logout\n          </Button>\n        </Space>\n      </Header>\n      <Content className="app-content">{children}</Content>\n    </Layout>\n  );\n}\n\nfunction HostHome() {\n  const user = useAuthStore((state) => state.user);\n\n  return (\n    <PageContainer\n      title="React qiankun host shell"\n      description="The host owns login state, workspace-level contracts, reusable UI primitives, and qiankun registration."\n    >\n      <Card>\n        <Space direction="vertical" size="large" className="full-width">\n          <Typography.Paragraph>\n            Generated by Tsu from the <code>mfe-main</code> template. This Phase 9 host shell includes\n            login state, demo auth service, React Query providers, shared workspace packages, tests, Docker/nginx assets, GitHub Actions CI,\n            tag deploy and rollback automation, and a qiankun registry that can pass auth props to sub applications.\n          </Typography.Paragraph>\n          <Space wrap>\n            <Tag color="blue">React</Tag>\n            <Tag color="purple">qiankun</Tag>\n            <Tag color="green">Shared packages</Tag>\n          </Space>\n          <Card size="small" title="Current user">\n            <Typography.Text>{user?.name} ({user?.username})</Typography.Text>\n            <br />\n            <Typography.Text type="secondary">Roles: {user?.roles.join(", ")}</Typography.Text>\n          </Card>\n          <List bordered dataSource={roadmapItems} renderItem={(item) => <List.Item>{item}</List.Item>} />\n        </Space>\n      </Card>\n    </PageContainer>\n  );\n}\n\nfunction MicroAppOutlet() {\n  useEffect(() => {\n    window.dispatchEvent(new PopStateEvent("popstate"));\n  }, []);\n\n  return (\n    <PageContainer\n      title="Business sub application outlet"\n      description="qiankun registers the generated mfe-app here and receives shared auth/API props from the host."\n    >\n      <Card>\n        <Typography.Paragraph>\n          The host passes <code>apiBaseUrl</code>, <code>getAccessToken</code>, <code>getCurrentUser</code>, and\n          <code>logout</code> through the shared <code>MicroAppProps</code> contract.\n        </Typography.Paragraph>\n        <div id="subapp-container" className="subapp-container rounded-xl">\n          <EmptyState\n            title="Waiting for mfe-app"\n            description="Start an mfe-app project on port 7201 to mount it in this container."\n          />\n        </div>\n        <ErrorState\n          className="integration-note"\n          title="Integration fallback"\n          description="If the remote entry fails to load, check VITE_MFE_APP_ENTRY and the sub app dev server."\n        />\n      </Card>\n    </PageContainer>\n  );\n}\n`
     },
     {
       path: "apps/main/src/components/RequireAuth.tsx",
@@ -321,7 +326,7 @@ function createMfeMainReadme(packageName: string) {
 
 Generated by Tsu from the \`mfe-main\` template.
 
-This is the Phase 8 React qiankun host shell starter. It generates a main application with demo login flow, auth state, React Query providers, reusable workspace packages, qiankun micro-app registration, Testing Library and Playwright coverage, Docker/nginx/compose deployment assets, and a GitHub Actions CI workflow.
+This is the Phase 9 React qiankun host shell starter. It generates a main application with demo login flow, auth state, React Query providers, reusable workspace packages, qiankun micro-app registration, Testing Library and Playwright coverage, Docker/nginx/compose deployment assets, GitHub Actions CI, and a GitHub Actions Deploy workflow for tag releases and rollback.
 
 ## Tech Stack
 
@@ -409,6 +414,7 @@ Copy \`apps/main/.env.example\` to \`apps/main/.env.local\` when you need local 
 | \`docker-compose.yml\` | Single-service compose orchestration for this host app |
 | \`.env.deploy.example\` | Deployment variables consumed by docker compose |
 | \`.github/workflows/ci.yml\` | PR and main/master push quality gate for lint, format, test, build, and E2E |
+| \`.github/workflows/deploy.yml\` | Tag release and rollback workflow for Docker image deployment |
 | \`packages/shared/src/index.ts\` | Shared auth, micro-app, route, and utility contracts |
 | \`packages/ui/src/index.tsx\` | Shared React UI primitives: Logo, PageContainer, EmptyState, ErrorState |
 | \`packages/api/src/index.ts\` | Generic fetch-based API client |
@@ -445,6 +451,26 @@ The generated \`e2e/host-load-subapp.spec.ts\` covers the full host + sub-app qi
 
 The default host E2E job covers login and the fallback micro-app outlet. The full host + sub-app integration spec remains available through \`MFE_INTEGRATION_E2E=true\` and is orchestrated by the Tsu repository \`pnpm validate:generated-apps\` command.
 
+## GitHub Actions Deploy
+
+\`.github/workflows/deploy.yml\` is separate from CI. It deploys immutable Docker image tags when you push \`test-v*.*.*\` or \`product-v*.*.*\`, and it supports manual \`workflow_dispatch\` rollback by selecting an environment and entering a historical \`image_tag\`.
+
+Create GitHub Environments named \`test\` and \`product\`. Configure these Environment variables: \`DOCKER_REGISTRY\`, \`DOCKER_IMAGE_NAME\`, \`DOCKER_REGISTRY_USERNAME\`, \`DEPLOY_HOST\`, \`DEPLOY_PORT\`, \`DEPLOY_USER\`, \`DEPLOY_PATH\`, \`CONTAINER_NAME\`, \`APP_PORT\`, \`APP_ENV\`, \`VITE_API_BASE_URL\`, and \`VITE_MFE_APP_ENTRY\`. Configure these Environment secrets: \`DOCKER_REGISTRY_TOKEN\`, \`SSH_PRIVATE_KEY\`, and optionally \`SSH_KNOWN_HOSTS\`.
+
+Tag deployment parses \`environment\`, \`image_tag\`, and \`version\`, builds the Docker image with \`VITE_API_BASE_URL\`, \`VITE_MFE_APP_ENTRY\`, and \`VITE_APP_ENV\` build args, pushes \`DOCKER_IMAGE_NAME:image_tag\`, uploads \`docker-compose.yml\` plus a generated remote \`.env\`, then runs \`docker compose pull\` and \`docker compose up -d --no-build\` over SSH.
+
+\`VITE_*\` values are build-time variables. A rollback deploys the old image exactly as it was built, so changing API or sub-app entry values requires a new tag build.
+
+\`\`\`bash
+git tag test-v1.0.1
+git push origin test-v1.0.1
+
+git tag product-v1.0.1
+git push origin product-v1.0.1
+\`\`\`
+
+To rollback, open Actions → Deploy → Run workflow, choose \`test\` or \`product\`, and enter a historical immutable \`image_tag\` such as \`product-v1.0.0\`.
+
 ## Docker and nginx
 
 \`Dockerfile\` builds the workspace with Node 20 and serves \`apps/main/dist\` with nginx. The build supports these Vite build args:
@@ -480,7 +506,8 @@ pnpm compose:down
 
 - Phase 7 adds Docker, nginx, and compose deployment assets.
 - Phase 8 adds GitHub Actions CI for install, lint, format check, test, build, and E2E.
-- Later phases add deploy workflow, release, rollback, and extended documentation.
+- Phase 9 adds tag-driven GitHub Actions Deploy, image push, compose upload, SSH deployment, and rollback.
+- Later phases add release validation and extended documentation.
 `;
 }
 

@@ -432,7 +432,9 @@ TEMPLATE_VERSION=0.0.0 pnpm validate:template-release
 
 ---
 
-## Phase 9：Deploy 工作流
+## Phase 9：Deploy 工作流（已完成）
+
+**状态：已完成**
 
 ### 目标
 
@@ -440,26 +442,45 @@ TEMPLATE_VERSION=0.0.0 pnpm validate:template-release
 
 ### 任务
 
-1. 新增 `.github/workflows/deploy.yml`
-2. 支持 tag：
-   - `test-v*.*.*`
-   - `product-v*.*.*`
-3. 根据 tag 解析：
-   - `environment`
-   - `image_tag`
-   - `version`
-4. 使用 GitHub Environment 变量
-5. 构建并推送 Docker 镜像
-6. 自动上传 `docker-compose.yml`
-7. SSH 部署到服务器
-8. 支持 `workflow_dispatch` 回滚历史镜像
+- [x] 新增 `.github/workflows/deploy.yml`
+- [x] 支持 tag：
+  - [x] `test-v*.*.*`
+  - [x] `product-v*.*.*`
+- [x] 根据 tag 或 `workflow_dispatch` 输入解析：
+  - [x] `environment`
+  - [x] `image_tag`
+  - [x] `version`
+  - [x] `should_build`
+- [x] 使用 GitHub Environment 变量和 secrets 注入 registry、SSH、compose 和 Vite build-time 配置。
+- [x] tag 发布时构建并推送不可变 Docker 镜像，不使用 `latest`。
+- [x] 自动上传 `docker-compose.yml` 和远端 `.env`。
+- [x] SSH 部署到服务器并执行 `docker compose pull` 与 `docker compose up -d --no-build`。
+- [x] 支持 `workflow_dispatch` 通过历史 `image_tag` 回滚，并跳过重新构建镜像。
+- [x] 更新模板 README、CLI doctor / init 测试、模板结构测试、生成物验证、模板发布验证和验证技能。
 
 ### 验收标准
 
-- `git tag test-v1.0.1` 可以发布测试环境
-- `git tag product-v1.0.1` 可以发布正式环境
-- 回滚可指定历史 `image_tag`
-- 服务器不需要手工维护 compose 文件
+- [x] `git tag test-v1.0.1` 可触发测试环境发布 workflow。
+- [x] `git tag product-v1.0.1` 可触发正式环境发布 workflow。
+- [x] 回滚可通过 `workflow_dispatch` 指定历史 `image_tag`。
+- [x] 服务器不需要手工维护 compose 文件，workflow 会上传模板生成的单一 `docker-compose.yml`。
+
+### 已验证命令
+
+```sh
+pnpm --filter @tsuz/template build
+pnpm --filter @tsuz/template test
+pnpm --filter @tsuz/cli build
+pnpm --filter @tsuz/cli test
+pnpm validate:generated-apps
+pnpm template:release:build --version=0.0.0
+TEMPLATE_VERSION=0.0.0 pnpm validate:template-release
+git diff --check
+```
+
+### Deploy 覆盖说明
+
+生成的 `mfe-main` / `mfe-app` 项目现在包含独立于 CI 的 `.github/workflows/deploy.yml`。该 workflow 在推送 `test-v*.*.*` / `product-v*.*.*` tag 时解析发布环境、镜像 tag 和版本，使用 GitHub Environment 变量构建并推送 Docker 镜像，自动上传 `docker-compose.yml` 与远端 `.env`，再通过 SSH 执行 `docker compose pull` 和 `docker compose up -d --no-build`；手动 `workflow_dispatch` 可指定历史 `image_tag` 回滚且不重新构建镜像。
 
 ---
 

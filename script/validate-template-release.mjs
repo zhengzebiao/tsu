@@ -41,6 +41,7 @@ try {
   await access(join(bundleDir, "mfe-main", ".dockerignore"));
   await access(join(bundleDir, "mfe-main", ".env.deploy.example"));
   await access(join(bundleDir, "mfe-main", ".github", "workflows", "ci.yml"));
+  await access(join(bundleDir, "mfe-main", ".github", "workflows", "deploy.yml"));
   await access(join(bundleDir, "mfe-main", "Dockerfile"));
   await access(join(bundleDir, "mfe-main", "nginx", "nginx.conf"));
   await access(join(bundleDir, "mfe-main", "docker-compose.yml"));
@@ -61,6 +62,7 @@ try {
   await access(join(bundleDir, "mfe-app", ".dockerignore"));
   await access(join(bundleDir, "mfe-app", ".env.deploy.example"));
   await access(join(bundleDir, "mfe-app", ".github", "workflows", "ci.yml"));
+  await access(join(bundleDir, "mfe-app", ".github", "workflows", "deploy.yml"));
   await access(join(bundleDir, "mfe-app", "prettier.config.js"));
   await access(join(bundleDir, "mfe-app", ".prettierignore"));
   await access(join(bundleDir, "mfe-app", "Dockerfile"));
@@ -96,6 +98,9 @@ try {
   await assertFileContains(join(bundleDir, "mfe-main", "nginx", "nginx.conf"), ["try_files $uri $uri/ /index.html", "Cache-Control \"public, immutable\""]);
   await assertFileContains(join(bundleDir, "mfe-main", "docker-compose.yml"), ["${DOCKER_IMAGE_NAME:-", "${APP_VERSION:-local}", "${APP_PORT:-7200}:80", "VITE_APP_ENV: ${APP_ENV:-local}"]);
   await assertFileContains(join(bundleDir, "mfe-main", ".github", "workflows", "ci.yml"), ciWorkflowMarkers());
+  await assertFileContains(join(bundleDir, "mfe-main", "package.json"), ["\"format:check\"", ".github/workflows/deploy.yml"]);
+  await assertFileContains(join(bundleDir, "mfe-main", ".github", "workflows", "deploy.yml"), deployWorkflowMarkers());
+  await assertReadmeContains(join(bundleDir, "mfe-main", "README.md"), deployReadmeMarkers());
   await assertFileContains(join(bundleDir, "mfe-app", "Dockerfile"), [
     "FROM nginx:1.27-alpine",
     "ARG VITE_API_BASE_URL=/api",
@@ -106,7 +111,9 @@ try {
   await assertFileContains(join(bundleDir, "mfe-app", "nginx", "nginx.conf"), ["try_files $uri $uri/ /index.html", "Access-Control-Allow-Origin \"*\""]);
   await assertFileContains(join(bundleDir, "mfe-app", "docker-compose.yml"), ["${DOCKER_IMAGE_NAME:-", "${APP_VERSION:-local}", "${APP_PORT:-7201}:80", "VITE_APP_ENV: ${APP_ENV:-local}"]);
   await assertFileContains(join(bundleDir, "mfe-app", ".github", "workflows", "ci.yml"), ciWorkflowMarkers());
-  await assertFileContains(join(bundleDir, "mfe-app", "package.json"), ["\"format:check\"", "\"prettier\""]);
+  await assertFileContains(join(bundleDir, "mfe-app", ".github", "workflows", "deploy.yml"), deployWorkflowMarkers());
+  await assertReadmeContains(join(bundleDir, "mfe-app", "README.md"), deployReadmeMarkers());
+  await assertFileContains(join(bundleDir, "mfe-app", "package.json"), ["\"format:check\"", "\"prettier\"", ".github/workflows/deploy.yml"]);
   await assertFileContains(join(bundleDir, "mfe-app", "prettier.config.js"), ["printWidth"]);
   await assertFileContains(join(bundleDir, "mfe-app", ".prettierignore"), ["apps/*/dist"]);
   await access(join(bundleDir, "react", "package.json"));
@@ -185,6 +192,48 @@ function ciWorkflowMarkers() {
     "pnpm build",
     "pnpm exec playwright install --with-deps chromium",
     "pnpm test:e2e"
+  ];
+}
+
+function deployWorkflowMarkers() {
+  return [
+    "name: Deploy",
+    "test-v*.*.*",
+    "product-v*.*.*",
+    "workflow_dispatch:",
+    "environment:",
+    "image_tag",
+    "version",
+    "should_build",
+    "packages: write",
+    "docker build",
+    "docker push",
+    "DOCKER_REGISTRY_TOKEN",
+    "SSH_PRIVATE_KEY",
+    "VITE_API_BASE_URL",
+    "VITE_MFE_APP_ENTRY",
+    "VITE_APP_ENV",
+    "docker-compose.yml",
+    "scp",
+    "ssh",
+    "docker compose --env-file .env -f docker-compose.yml pull app",
+    "docker compose --env-file .env -f docker-compose.yml up -d --no-build app",
+    "Refusing to deploy a latest tag"
+  ];
+}
+
+function deployReadmeMarkers() {
+  return [
+    "GitHub Actions Deploy",
+    "test-v*.*.*",
+    "product-v*.*.*",
+    "workflow_dispatch",
+    "image_tag",
+    "GitHub Environments",
+    "DOCKER_REGISTRY_TOKEN",
+    "SSH_PRIVATE_KEY",
+    "docker compose up -d --no-build",
+    "build-time variables"
   ];
 }
 

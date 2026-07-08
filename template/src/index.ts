@@ -72,8 +72,8 @@ export const templateDefinitions: TemplateDefinition[] = [
   },
   {
     name: "mfe-main",
-    description: "React qiankun host shell starter with Docker, nginx, and CI",
-    tags: ["mfe", "qiankun", "react", "host", "vite", "docker", "nginx", "ci", "github-actions"],
+    description: "React qiankun host shell starter with Docker, nginx, CI, and deploy workflow",
+    tags: ["mfe", "qiankun", "react", "host", "vite", "docker", "nginx", "ci", "deploy", "release", "github-actions"],
     recommendedFor: ["micro frontend host", "auth shell", "app container"],
     node: ">=20",
     packageManagers: ["pnpm"],
@@ -81,8 +81,8 @@ export const templateDefinitions: TemplateDefinition[] = [
   },
   {
     name: "mfe-app",
-    description: "React qiankun sub application starter with Docker, nginx, and CI",
-    tags: ["mfe", "qiankun", "react", "sub app", "vite", "docker", "nginx", "ci", "github-actions"],
+    description: "React qiankun sub application starter with Docker, nginx, CI, and deploy workflow",
+    tags: ["mfe", "qiankun", "react", "sub app", "vite", "docker", "nginx", "ci", "deploy", "release", "github-actions"],
     recommendedFor: ["micro frontend sub app", "business app", "remote module"],
     node: ">=20",
     packageManagers: ["pnpm"],
