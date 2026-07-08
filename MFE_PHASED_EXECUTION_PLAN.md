@@ -484,28 +484,57 @@ git diff --check
 
 ---
 
-## Phase 10：发布验证
+## Phase 10：发布验证（已完成）
+
+**状态：已完成**
 
 ### 目标
 
-确保模板生成后真实可用。
+确保模板生成后真实可用，并确保发布产物中的 MFE 模板也能通过同一套生成物验证门禁。
 
 ### 任务
 
-1. 更新 [script/validate-generated-apps.mjs](script/validate-generated-apps.mjs)
-2. 增加 `mfe-main`、`mfe-app`
-3. 对生成项目执行：
-   - `pnpm install`
-   - `pnpm lint`
-   - `pnpm test`
-   - `pnpm build`
+- [x] 抽出 [script/generated-app-validation.mjs](script/generated-app-validation.mjs)，复用本地生成物验证逻辑。
+- [x] 保持 [script/validate-generated-apps.mjs](script/validate-generated-apps.mjs) 作为本地模板生成验证入口。
+- [x] `mfe-main`、`mfe-app` 本地生成项目执行：
+  - [x] `pnpm install`
+  - [x] `pnpm lint`
+  - [x] `pnpm format:check`
+  - [x] `pnpm test`
+  - [x] `pnpm build`
+  - [x] `pnpm test:e2e`
+- [x] 本地生成项目验证 Docker/nginx/compose、CI workflow、deploy workflow 和 README 关键发布说明。
+- [x] 本地生成项目执行 dev server smoke，并执行 `mfe-main` + `mfe-app` 集成 Playwright E2E。
+- [x] 强化 [script/validate-template-release.mjs](script/validate-template-release.mjs)，从真实 release archive 解包并校验 manifest、bundle 文件和关键 markers。
+- [x] 使用 release archive 初始化 `mfe-main` / `mfe-app` 项目，并执行同一套 install / lint / format / test / build / E2E / deploy-asset 验证。
+- [x] 更新 template release preflight 和验证技能，说明发布前生成物验证与 release archive 验证流程。
+- [x] 保留 `MFE_VALIDATE_DOCKER=true` 作为可选真实 Docker runtime 验证入口。
 
 ### 验收标准
 
-- 生成项目可安装
-- 可构建
-- 可测试
-- 可部署
+- [x] 本地生成项目可安装。
+- [x] 本地生成项目可构建。
+- [x] 本地生成项目可测试。
+- [x] 本地生成项目具备可部署的 Docker/nginx/compose、CI、Deploy 文件。
+- [x] release archive 中的 `mfe-main` / `mfe-app` 可初始化并通过生成物验证门禁。
+- [x] 发布验证不执行真实 SSH、registry push 或 GitHub Release publish。
+
+### 已验证命令
+
+```sh
+pnpm --filter @tsuz/template build
+pnpm --filter @tsuz/template test
+pnpm --filter @tsuz/cli build
+pnpm --filter @tsuz/cli test
+pnpm validate:generated-apps
+pnpm template:release:build --version=0.0.0
+TEMPLATE_VERSION=0.0.0 pnpm validate:template-release
+git diff --check
+```
+
+### 发布验证覆盖说明
+
+`pnpm validate:generated-apps` 继续覆盖本地模板生成项目；`TEMPLATE_VERSION=0.0.0 pnpm validate:template-release` 现在会校验真实 release archive / manifest / bundle，并从 release archive 初始化 `mfe-main` 与 `mfe-app` 项目，再运行生成物 install、lint、format check、test、build、E2E、dev smoke、Docker/nginx/compose/CI/deploy 文件检查和 host + sub-app 集成 E2E。真实 Docker runtime 仍通过 `MFE_VALIDATE_DOCKER=true` 显式开启。
 
 ---
 
@@ -592,7 +621,7 @@ git diff --check
 
 ### Phase 10
 
-- 生成物验证通过
+- 本地生成物与 release archive 生成物验证通过
 
 ### Phase 11
 

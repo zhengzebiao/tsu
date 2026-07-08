@@ -1,9 +1,11 @@
-import { access, cp, mkdtemp, readFile, rm } from "node:fs/promises";
+import { access, mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
+import { initProject } from "../cli/dist/index.js";
+import { mfeAppTemplates, validateGeneratedApps } from "./generated-app-validation.mjs";
 
 const execFileAsync = promisify(execFile);
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
@@ -16,23 +18,22 @@ const tempDir = await mkdtemp(join(tmpdir(), "tsu-release-"));
 try {
   await ensureArchive();
   await execFileAsync("tar", ["-tzf", archiveName], { cwd: releaseDir, maxBuffer: 10 * 1024 * 1024 });
+  await execFileAsync("tar", ["-xzf", archiveName, "-C", tempDir], { cwd: releaseDir, maxBuffer: 10 * 1024 * 1024 });
+
   const bundleDir = join(tempDir, `tsu-templates-v${version}`);
-  await cp(join(releaseDir, `tsu-templates-v${version}`), bundleDir, { recursive: true });
   const manifest = JSON.parse(await readFile(join(bundleDir, "manifest.json"), "utf8"));
 
-  const templateNames = manifest.templates.map((template) => template.name);
+  validateManifest(manifest);
 
-  const expectedTemplates = ["default", "monorepo", "vue3", "mfe", "mfe-main", "mfe-app", "react", "python-main", "python-app"];
-  const missingTemplates = expectedTemplates.filter((templateName) => !templateNames.includes(templateName));
+  await validateBundleFiles(bundleDir);
+  await validateReleaseGeneratedMfeApps(bundleDir);
 
-  if (missingTemplates.length > 0) {
-    throw new Error(`Release manifest does not include expected templates: ${missingTemplates.join(", ")}.`);
-  }
+  process.stdout.write(`Validated release archive ${archivePath}\n`);
+} finally {
+  await rm(tempDir, { force: true, recursive: true });
+}
 
-  if (!manifest.templates.find((template) => template.name === "vue3")?.description) {
-    throw new Error("Release manifest does not include template details.");
-  }
-
+async function validateBundleFiles(bundleDir) {
   await access(join(bundleDir, "default", "package.json"));
   await access(join(bundleDir, "monorepo", "package.json"));
   await access(join(bundleDir, "vue3", "package.json"));
@@ -167,9 +168,121 @@ try {
     "Product does not auto-run seed",
     "## FAQ"
   ]);
-  process.stdout.write(`Validated release archive ${archivePath}\n`);
-} finally {
-  await rm(tempDir, { force: true, recursive: true });
+}
+
+function validateManifest(manifest) {
+  if (manifest.version !== version) {
+    throw new Error(`Release manifest version ${manifest.version} does not match expected ${version}.`);
+  }
+
+  if (manifest.asset && manifest.asset !== archiveName) {
+    throw new Error(`Release manifest asset ${manifest.asset} does not match expected ${archiveName}.`);
+  }
+
+  const templateNames = manifest.templates.map((template) => (typeof template === "string" ? template : template.name));
+  const expectedTemplates = ["default", "monorepo", "vue3", "mfe", "mfe-main", "mfe-app", "react", "python-main", "python-app"];
+  const missingTemplates = expectedTemplates.filter((templateName) => !templateNames.includes(templateName));
+
+  if (missingTemplates.length > 0) {
+    throw new Error(`Release manifest does not include expected templates: ${missingTemplates.join(", ")}.`);
+  }
+
+  for (const templateName of ["mfe-main", "mfe-app"]) {
+    const definition = manifest.templates.find((template) => (typeof template === "string" ? template : template.name) === templateName);
+
+    if (!definition || typeof definition === "string" || !definition.description) {
+      throw new Error(`Release manifest does not include metadata for ${templateName}.`);
+    }
+  }
+
+  if (!manifest.templates.find((template) => (typeof template === "string" ? template === "vue3" : template.name === "vue3" && template.description))) {
+    throw new Error("Release manifest does not include template details.");
+  }
+}
+
+async function validateReleaseGeneratedMfeApps(bundleDir) {
+  await validateGeneratedApps({
+    templates: mfeAppTemplates,
+    tempRoot: join(tempDir, "release-generated-apps"),
+    generateProject: (template, context) => generateReleaseProject(template, context),
+    runIntegrationE2e: true
+  });
+  process.stdout.write(`Validated release bundle generated MFE projects from ${bundleDir}\n`);
+}
+
+async function generateReleaseProject(template, { projectRoot, tempRoot }) {
+  await withReleaseArchiveFetch(async () => {
+    await initProject({
+      cwd: tempRoot,
+      projectName: template.projectName,
+      templateName: template.name,
+      version,
+      source: "remote",
+      repository: "local/tsu",
+      cache: false,
+      refresh: true,
+      force: true
+    });
+  });
+
+  const metadata = JSON.parse(await readFile(join(projectRoot, ".tsu", "template.json"), "utf8"));
+
+  if (metadata.template.name !== template.name) {
+    throw new Error(`Generated metadata records ${metadata.template.name}, expected ${template.name}.`);
+  }
+
+  if (metadata.template.version !== version) {
+    throw new Error(`Generated metadata records version ${metadata.template.version}, expected ${version}.`);
+  }
+
+  if (metadata.template.source !== "remote") {
+    throw new Error(`Generated metadata records source ${metadata.template.source}, expected remote.`);
+  }
+
+  if (metadata.template.repository !== "local/tsu") {
+    throw new Error(`Generated metadata records repository ${metadata.template.repository}, expected local/tsu.`);
+  }
+}
+
+async function withReleaseArchiveFetch(action) {
+  const originalFetch = globalThis.fetch;
+
+  globalThis.fetch = async (input, init) => {
+    const url = getFetchUrl(input);
+
+    if (url.endsWith(`/${archiveName}`)) {
+      return new Response(await readFile(archivePath), {
+        status: 200,
+        headers: {
+          "content-type": "application/gzip"
+        }
+      });
+    }
+
+    if (!originalFetch) {
+      throw new Error(`Unexpected fetch during release validation: ${url}`);
+    }
+
+    return originalFetch(input, init);
+  };
+
+  try {
+    return await action();
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+}
+
+function getFetchUrl(input) {
+  if (typeof input === "string") {
+    return input;
+  }
+
+  if (input instanceof URL) {
+    return input.href;
+  }
+
+  return input?.url ?? "";
 }
 
 function ciWorkflowMarkers() {
