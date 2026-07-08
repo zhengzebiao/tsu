@@ -72,7 +72,7 @@ export async function validateGeneratedApps(options = {}) {
 
       await runPnpm(["install"], projectRoot);
       if (installPlaywrightBrowsers && template.commands.some((command) => command.includes("test:e2e"))) {
-        await runPnpm(["exec", "playwright", "install", "--with-deps", "chromium"], projectRoot);
+        await runPnpm(["exec", "playwright", "install", "chromium"], projectRoot);
       }
       for (const command of template.commands) {
         await runPnpm(command, projectRoot);
