@@ -1,5 +1,11 @@
 # @tsuz/template
 
+## 0.3.0
+
+### Minor Changes
+
+- Publish the React MFE template suite with generated `mfe-main` and `mfe-app` templates, shared package scaffolding, CI/deploy workflows, release archive validation, and complete generated README guidance.
+
 ## 0.2.0
 
 ### Minor Changes

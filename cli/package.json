@@ -1,6 +1,6 @@
 {
   "name": "@tsuz/cli",
-  "version": "0.2.6",
+  "version": "0.3.0",
   "type": "module",
   "bin": {
     "tsu-cli": "./dist/index.js"
