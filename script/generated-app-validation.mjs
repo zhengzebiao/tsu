@@ -94,13 +94,17 @@ export async function validateGeneratedApps(options = {}) {
     }
   } finally {
     if (cleanup) {
-      await rm(tempRoot, { recursive: true, force: true });
+      await removeWithRetries(tempRoot);
     }
   }
 }
 
 export async function generateLocalProject(template, { cliEntry, tempRoot }) {
   await runNode(cliEntry, ["init", template.projectName, "--template", template.name, "--local", "--cwd", tempRoot]);
+}
+
+export async function removeWithRetries(path) {
+  await rm(path, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 });
 }
 
 export async function useLocalPackages(projectRoot) {

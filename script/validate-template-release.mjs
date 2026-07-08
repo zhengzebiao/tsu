@@ -1,11 +1,11 @@
-import { access, mkdtemp, readFile, rm } from "node:fs/promises";
+import { access, mkdtemp, readFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { initProject } from "../cli/dist/index.js";
-import { mfeAppTemplates, validateGeneratedApps } from "./generated-app-validation.mjs";
+import { mfeAppTemplates, removeWithRetries, validateGeneratedApps } from "./generated-app-validation.mjs";
 
 const execFileAsync = promisify(execFile);
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
@@ -30,7 +30,7 @@ try {
 
   process.stdout.write(`Validated release archive ${archivePath}\n`);
 } finally {
-  await rm(tempDir, { force: true, recursive: true });
+  await removeWithRetries(tempDir);
 }
 
 async function validateBundleFiles(bundleDir) {
