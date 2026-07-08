@@ -12,7 +12,9 @@ if (!version) {
 const normalizedVersion = version.replace(/^v/, "");
 const requiredPaths = [
   join(repoRoot, "script", "build-template-release.mjs"),
+  join(repoRoot, "script", "generated-app-validation.mjs"),
   join(repoRoot, "script", "publish-template-release.mjs"),
+  join(repoRoot, "script", "validate-generated-apps.mjs"),
   join(repoRoot, "script", "validate-template-release.mjs"),
   join(repoRoot, ".github", "workflows", "template-release.yml"),
   join(repoRoot, "cli", "src", "index.ts"),
@@ -26,6 +28,7 @@ for (const path of requiredPaths) {
 process.stdout.write(`Preflight ok for template-v${normalizedVersion}\n`);
 process.stdout.write(`Expected asset: tsu-templates-v${normalizedVersion}.tar.gz\n`);
 process.stdout.write(`Expected tag: template-v${normalizedVersion}\n`);
-process.stdout.write(`Next: pnpm template:release:build --version=${normalizedVersion}\n`);
+process.stdout.write("Next: pnpm validate:generated-apps\n");
+process.stdout.write(`Then: pnpm template:release:build --version=${normalizedVersion}\n`);
 process.stdout.write(`Then: TEMPLATE_VERSION=${normalizedVersion} pnpm validate:template-release\n`);
 process.stdout.write(`Then: pnpm template:release:publish --version=${normalizedVersion}\n`);

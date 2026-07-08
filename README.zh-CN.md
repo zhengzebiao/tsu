@@ -56,6 +56,8 @@ pdm run dev
 | `vue3` | 中后台、仪表盘、Web App | Vite、Vue Router、Pinia dashboard store、Vitest、TypeScript、ESLint、Docker、CI |
 | `react` | React Web App、仪表盘 | Vite、React Router、TypeScript、ESLint、Docker、CI |
 | `mfe` | 微前端工作区 | Host 应用、Vue 子应用、qiankun、共享包、Docker、CI |
+| `mfe-main` | React 微前端主应用 / 基座 | React、Vite、qiankun host、登录态、CI、Docker/nginx/compose、tag 发布、回滚 |
+| `mfe-app` | React 微前端子应用 / 业务应用 | React、Vite、qiankun 生命周期、host props、CI、Docker/nginx/compose、tag 发布、回滚 |
 | `monorepo` | 多包团队仓库 | pnpm workspace、Turbo、Changesets、TypeScript packages |
 | `python-main` | FastAPI 认证服务 | PDM、PostgreSQL、Redis、Alembic、RS256 JWT 签发、Docker、Nginx、CI/CD Environments |
 | `python-app` | FastAPI 业务服务 | PDM、PostgreSQL、Redis 黑名单校验、RS256 JWT 验证、Docker、Nginx、CI/CD Environments |
@@ -97,7 +99,7 @@ tsu-cli init admin-console --template vue3
 
 | 参数 | 说明 |
 | --- | --- |
-| `-t, --template <name>` | 模板名称：`default`、`vue3`、`react`、`mfe`、`monorepo`、`python-main`、`python-app` |
+| `-t, --template <name>` | 模板名称：`default`、`vue3`、`react`、`mfe`、`mfe-main`、`mfe-app`、`monorepo`、`python-main`、`python-app` |
 | `-v, --version <value>` | 模板发布版本，例如 `1.0.3` 或 `latest` |
 | `--repo <owner/repo>` | 承载模板 release asset 的 GitHub 仓库 |
 | `--cwd <path>` | 项目创建目录 |
@@ -218,7 +220,7 @@ pnpm build
 pnpm dev
 ```
 
-生成项目内的 README 会包含该模板对应的脚本说明、目录结构说明和部署提示。
+生成项目内的 README 会包含该模板对应的脚本说明、目录结构说明和部署提示。`mfe-main` 与 `mfe-app` 的 README 已按端到端 runbook 编写，覆盖本地开发、质量门禁、GitHub Environments、`test-v*.*.*` / `product-v*.*.*` tag 发布、通过 `workflow_dispatch` 手动回滚、`VITE_API_BASE_URL` 是构建期变量，以及 `deploy.yml` 会自动上传远端服务器使用的 `docker-compose.yml`。
 
 ## 包定位
 

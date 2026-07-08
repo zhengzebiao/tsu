@@ -41,7 +41,11 @@ demo-app/
 | `vue3` | `tsu-cli init web-app --template vue3` | Vue 3 + Vite + Router + Pinia 前端项目模板 |
 | `react` | `tsu-cli init react-app --template react` | React + Vite + TypeScript + Router 前端项目模板 |
 | `mfe` | `tsu-cli init mfe-app --template mfe` | Vue 3 + Vite + qiankun 微前端主子应用模板 |
+| `mfe-main` | `tsu-cli init mfe-main-platform --template mfe-main` | React + Vite + qiankun 主应用 / 基座，内置登录态、CI、Docker/nginx/compose、tag 发布和回滚文档 |
+| `mfe-app` | `tsu-cli init mfe-business-app --template mfe-app` | React + Vite + qiankun 子应用 / 业务应用，支持独立运行和 host 挂载，内置 CI、Docker/nginx/compose、tag 发布和回滚文档 |
 | `monorepo` | `tsu-cli init platform --template monorepo` | 符合当前 PRD 的 pnpm + Turborepo + Changesets 多包仓库模板 |
+| `python-main` | `tsu-cli init auth-service --template python-main` | FastAPI 认证服务模板，内置 PostgreSQL、Redis、Alembic、JWT、Docker、Nginx 和 CI/CD Environments |
+| `python-app` | `tsu-cli init business-service --template python-app` | FastAPI 业务服务模板，内置受保护 API、PostgreSQL、Redis 黑名单、Docker、Nginx 和 CI/CD Environments |
 
 默认情况下，CLI 会尝试从 GitHub Release asset 拉取模板；如果提供了 `--local`，则使用本地模板生成。
 
@@ -229,7 +233,7 @@ tsu-cli template info --help
 | 参数 | 示例 | 说明 |
 | --- | --- | --- |
 | `<projectName>` | `tsu-cli init demo-app` | 项目目录名，默认 `quick-start-app` |
-| `--template` / `-t` | `tsu-cli init platform --template monorepo` | 指定模板名，目前支持 `default`、`vue3`、`react`、`mfe`、`monorepo` |
+| `--template` / `-t` | `tsu-cli init platform --template monorepo` | 指定模板名，目前支持 `default`、`vue3`、`react`、`mfe`、`mfe-main`、`mfe-app`、`monorepo`、`python-main`、`python-app` |
 | `--version` / `-v` | `tsu-cli init platform --template monorepo --version 1.2.3` | 指定模板 Release 版本；明确指定版本时会直接下载对应的 GitHub Release asset |
 | `--repo` | `tsu-cli init platform --repo owner/repo` | 指定 GitHub 仓库，默认读取 `TSU_TEMPLATE_REPOSITORY`、`GITHUB_REPOSITORY`，否则使用 `zhengzebiao/tsu` |
 | `--local` | `tsu-cli init demo-app --local` | 强制使用本地模板，适合离线或开发调试 |
@@ -288,7 +292,11 @@ node cli/dist/index.js init demo-app --template default --cwd ./tmp
 node cli/dist/index.js init web-app --template vue3 --cwd ./tmp
 node cli/dist/index.js init react-app --template react --cwd ./tmp
 node cli/dist/index.js init mfe-app --template mfe --cwd ./tmp
+node cli/dist/index.js init mfe-main-platform --template mfe-main --cwd ./tmp
+node cli/dist/index.js init mfe-business-app --template mfe-app --cwd ./tmp
 node cli/dist/index.js init platform --template monorepo --cwd ./tmp
+node cli/dist/index.js init auth-service --template python-main --cwd ./tmp
+node cli/dist/index.js init business-service --template python-app --cwd ./tmp
 ```
 
 ## 验证生成后的 monorepo
@@ -304,6 +312,21 @@ pnpm install
 pnpm build
 pnpm lint
 pnpm test
+```
+
+## 验证生成后的 MFE 模板
+
+```bash
+pnpm validate:generated-apps
+```
+
+该命令会生成 `mfe-main` 和 `mfe-app` 项目，安装依赖，执行 `lint`、`format:check`、`test`、`build`、`test:e2e`，检查 Docker/nginx/compose、CI、Deploy 和 README 文档 markers，并运行 host + sub-app 集成 E2E。生成项目 README 会指导本地开发、GitHub Environment 配置、`test-v*.*.*` / `product-v*.*.*` tag 发布、`workflow_dispatch` 回滚、`VITE_API_BASE_URL` 构建期变量，以及 `deploy.yml` 自动上传 `docker-compose.yml`。
+
+如果要验证模板 release archive 中的 MFE 生成物：
+
+```bash
+pnpm template:release:build --version=1.0.0
+TEMPLATE_VERSION=1.0.0 pnpm validate:template-release
 ```
 
 ## npm 发布包
@@ -519,9 +542,13 @@ CLI 使用远程模板：
 tsu-cli init web-app --template vue3
 tsu-cli init react-app --template react --version 1.0.4
 tsu-cli init mfe-app --template mfe --version 1.0.4
+tsu-cli init mfe-main-platform --template mfe-main --version 1.0.4
+tsu-cli init mfe-business-app --template mfe-app --version 1.0.4
 tsu-cli init platform --template monorepo
 TSU_TEMPLATE_REPOSITORY=owner/repo tsu-cli init web-app --template vue3
 TSU_TEMPLATE_REPOSITORY=owner/repo tsu-cli init react-app --template react --version 1.0.4
+TSU_TEMPLATE_REPOSITORY=owner/repo tsu-cli init mfe-main-platform --template mfe-main --version 1.0.4
+TSU_TEMPLATE_REPOSITORY=owner/repo tsu-cli init mfe-business-app --template mfe-app --version 1.0.4
 TSU_TEMPLATE_REPOSITORY=owner/repo tsu-cli init platform --template monorepo --version 1.0.0
 ```
 

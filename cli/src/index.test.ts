@@ -20,12 +20,60 @@ function restoreEnv(name: string, value: string | undefined) {
   process.env[name] = value;
 }
 
+function assertMfeCiWorkflow(content: string) {
+  assert.match(content, /name: CI/);
+  assert.match(content, /pull_request/);
+  assert.match(content, /push/);
+  assert.match(content, /main/);
+  assert.match(content, /master/);
+  assert.match(content, /actions\/checkout@v4/);
+  assert.match(content, /pnpm\/action-setup@v4/);
+  assert.match(content, /version: 8\.15\.9/);
+  assert.match(content, /actions\/setup-node@v4/);
+  assert.match(content, /node-version: 20/);
+  assert.match(content, /cache: pnpm/);
+  assert.match(content, /pnpm install --frozen-lockfile/);
+  assert.match(content, /pnpm lint/);
+  assert.match(content, /pnpm format:check/);
+  assert.match(content, /pnpm test/);
+  assert.match(content, /pnpm build/);
+  assert.match(content, /pnpm exec playwright install --with-deps chromium/);
+  assert.match(content, /pnpm test:e2e/);
+}
+
+function assertMfeDeployWorkflow(content: string) {
+  assert.match(content, /name: Deploy/);
+  assert.match(content, /test-v\*\.\*\.\*/);
+  assert.match(content, /product-v\*\.\*\.\*/);
+  assert.match(content, /workflow_dispatch/);
+  assert.match(content, /environment/);
+  assert.match(content, /image_tag/);
+  assert.match(content, /version/);
+  assert.match(content, /should_build/);
+  assert.match(content, /packages: write/);
+  assert.match(content, /docker build/);
+  assert.match(content, /docker push/);
+  assert.match(content, /DOCKER_REGISTRY_TOKEN/);
+  assert.match(content, /SSH_PRIVATE_KEY/);
+  assert.match(content, /VITE_API_BASE_URL/);
+  assert.match(content, /VITE_MFE_APP_ENTRY/);
+  assert.match(content, /VITE_APP_ENV/);
+  assert.match(content, /docker-compose\.yml/);
+  assert.match(content, /scp/);
+  assert.match(content, /ssh/);
+  assert.match(content, /docker compose --env-file \.env -f docker-compose\.yml pull app/);
+  assert.match(content, /docker compose --env-file \.env -f docker-compose\.yml up -d --no-build app/);
+  assert.match(content, /Refusing to deploy a latest tag/);
+}
+
 test("createCliMessage reports CLI usage", () => {
   assert.equal(createCliMessage(), createHelpMessage());
   assert.match(createCliMessage(), /tsu-cli init \[project-name\]/);
   assert.match(createCliMessage(), /tsu-cli list/);
   assert.match(createCliMessage(), /tsu-cli template list/);
   assert.match(createCliMessage(), /aliases: list, template list/);
+  assert.match(createCliMessage(), /mfe-main/);
+  assert.match(createCliMessage(), /mfe-app/);
 });
 
 test("createVersionMessage reports package version", () => {
@@ -41,6 +89,8 @@ test("createTemplateListMessage reports available templates", () => {
   assert.match(message, /vue3\s+Vue 3 app.*admin, dashboard, web app/);
   assert.match(message, /react\s+React app.*react app, dashboard, web app/);
   assert.match(message, /mfe\s+Micro frontend workspace.*micro frontend, multi app/);
+  assert.match(message, /mfe-main\s+React qiankun host shell starter.*micro frontend host, auth shell, app container/);
+  assert.match(message, /mfe-app\s+React qiankun sub application starter.*micro frontend sub app, business app, remote module/);
   assert.match(message, /monorepo\s+Multi-package workspace.*workspace, packages, team standard/);
   assert.match(message, /python-main\s+FastAPI auth service.*auth service, jwt issuer, backend api/);
   assert.match(message, /python-app\s+FastAPI resource service.*resource service, business api, jwt verifier/);
@@ -109,6 +159,24 @@ test("createTemplateInfoMessage reports template details", () => {
   assert.match(message, /Node: >=20/);
   assert.match(message, /Package managers: pnpm/);
   assert.match(message, /pnpm install/);
+});
+
+test("createTemplateInfoMessage reports MFE template details", () => {
+  const mainMessage = createTemplateInfoMessage("mfe-main");
+  const appMessage = createTemplateInfoMessage("mfe-app");
+
+  assert.match(mainMessage, /Template: mfe-main/);
+  assert.match(mainMessage, /Description: React qiankun host shell starter/);
+  assert.match(mainMessage, /Tags: mfe, qiankun, react, host, vite/);
+  assert.match(mainMessage, /Recommended for: micro frontend host, auth shell, app container/);
+  assert.match(mainMessage, /pnpm install/);
+  assert.match(mainMessage, /pnpm dev/);
+  assert.match(appMessage, /Template: mfe-app/);
+  assert.match(appMessage, /Description: React qiankun sub application starter/);
+  assert.match(appMessage, /Tags: mfe, qiankun, react, sub app, vite/);
+  assert.match(appMessage, /Recommended for: micro frontend sub app, business app, remote module/);
+  assert.match(appMessage, /pnpm install/);
+  assert.match(appMessage, /pnpm dev/);
 });
 
 test("createRemoteTemplateInfoMessage reports versioned template details", () => {
@@ -629,6 +697,54 @@ test("doctorProject reports generated projects", async () => {
   }
 });
 
+test("doctorProject reports generated mfe-main projects", async () => {
+  const cwd = await mkdtemp(join(tmpdir(), "quick-start-"));
+
+  try {
+    const result = await initProject({ cwd, source: "local", projectName: "mfe-main-platform", templateName: "mfe-main" });
+    const doctor = await doctorProject({ cwd: result.targetDir });
+
+    assert.equal(doctor.status, "ok");
+    assert.equal(doctor.projectName, "mfe-main-platform");
+    assert.equal(doctor.templateName, "mfe-main");
+    assert.deepEqual(
+      doctor.checks.map((check) => [check.label, check.status]),
+      [
+        ["package.json", "pass"],
+        ["Tsu README marker", "pass"],
+        ["Template metadata", "pass"],
+        ["Template files", "pass"]
+      ]
+    );
+  } finally {
+    await rm(cwd, { force: true, recursive: true });
+  }
+});
+
+test("doctorProject reports generated mfe-app projects", async () => {
+  const cwd = await mkdtemp(join(tmpdir(), "quick-start-"));
+
+  try {
+    const result = await initProject({ cwd, source: "local", projectName: "mfe-business-app", templateName: "mfe-app" });
+    const doctor = await doctorProject({ cwd: result.targetDir });
+
+    assert.equal(doctor.status, "ok");
+    assert.equal(doctor.projectName, "mfe-business-app");
+    assert.equal(doctor.templateName, "mfe-app");
+    assert.deepEqual(
+      doctor.checks.map((check) => [check.label, check.status]),
+      [
+        ["package.json", "pass"],
+        ["Tsu README marker", "pass"],
+        ["Template metadata", "pass"],
+        ["Template files", "pass"]
+      ]
+    );
+  } finally {
+    await rm(cwd, { force: true, recursive: true });
+  }
+});
+
 test("doctorProject reports non generated directories", async () => {
   const cwd = await mkdtemp(join(tmpdir(), "quick-start-"));
 
@@ -882,6 +998,342 @@ test("runCli initializes react projects", async () => {
     assert.match(dashboardHook, /@tsuz\/sdk/);
     assert.match(dashboardHook, /@tsuz\/utils\/js/);
     assert.match(dashboardHook, /DashboardSummaryMode = "success" \| "empty" \| "error"/);
+  } finally {
+    await rm(cwd, { force: true, recursive: true });
+  }
+});
+
+test("runCli initializes mfe-main projects", async () => {
+  const cwd = await mkdtemp(join(tmpdir(), "quick-start-"));
+
+  try {
+    const message = await runCli(["init", "mfe-main-platform", "--template", "mfe-main", "--local"], cwd);
+
+    assert.match(message, /^Created mfe-main-platform from mfe-main@latest\nLocation: /);
+    assert.match(message, /pnpm install/);
+    assert.match(message, /pnpm dev/);
+    const projectRoot = join(cwd, "mfe-main-platform");
+    const packageJson = await readFile(join(projectRoot, "package.json"), "utf8");
+    const workspace = await readFile(join(projectRoot, "pnpm-workspace.yaml"), "utf8");
+    const appPackageJson = await readFile(join(projectRoot, "apps", "main", "package.json"), "utf8");
+    const appTsConfig = await readFile(join(projectRoot, "apps", "main", "tsconfig.json"), "utf8");
+    const appViteConfig = await readFile(join(projectRoot, "apps", "main", "vite.config.ts"), "utf8");
+    const readme = await readFile(join(projectRoot, "README.md"), "utf8");
+    const main = await readFile(join(projectRoot, "apps", "main", "src", "main.tsx"), "utf8");
+    const app = await readFile(join(projectRoot, "apps", "main", "src", "App.tsx"), "utf8");
+    const styles = await readFile(join(projectRoot, "apps", "main", "src", "styles", "main.css"), "utf8");
+    const config = await readFile(join(projectRoot, "apps", "main", "src", "micro-apps", "config.ts"), "utf8");
+    const registry = await readFile(join(projectRoot, "apps", "main", "src", "micro-apps", "registry.ts"), "utf8");
+    const authStore = await readFile(join(projectRoot, "apps", "main", "src", "stores", "auth.store.ts"), "utf8");
+    const authService = await readFile(join(projectRoot, "apps", "main", "src", "services", "auth.service.ts"), "utf8");
+    const apiClient = await readFile(join(projectRoot, "apps", "main", "src", "services", "api-client.ts"), "utf8");
+    const shared = await readFile(join(projectRoot, "packages", "shared", "src", "index.ts"), "utf8");
+    const ui = await readFile(join(projectRoot, "packages", "ui", "src", "index.tsx"), "utf8");
+    const api = await readFile(join(projectRoot, "packages", "api", "src", "index.ts"), "utf8");
+    const dockerfile = await readFile(join(projectRoot, "Dockerfile"), "utf8");
+    const nginxConfig = await readFile(join(projectRoot, "nginx", "nginx.conf"), "utf8");
+    const compose = await readFile(join(projectRoot, "docker-compose.yml"), "utf8");
+    const deployEnv = await readFile(join(projectRoot, ".env.deploy.example"), "utf8");
+    const dockerignore = await readFile(join(projectRoot, ".dockerignore"), "utf8");
+    const appEnv = await readFile(join(projectRoot, "apps", "main", ".env.example"), "utf8");
+    const viteEnv = await readFile(join(projectRoot, "apps", "main", "src", "vite-env.d.ts"), "utf8");
+    const workflow = await readFile(join(projectRoot, ".github", "workflows", "ci.yml"), "utf8");
+    const deployWorkflow = await readFile(join(projectRoot, ".github", "workflows", "deploy.yml"), "utf8");
+
+    assert.match(packageJson, /"lint": "eslint \. --max-warnings 0 && turbo run lint"/);
+    assert.match(packageJson, /"test": "turbo run test"/);
+    assert.match(packageJson, /"test:e2e": "playwright test"/);
+    assert.match(packageJson, /"docker:build": "docker build -t mfe-main-platform:\$\{APP_VERSION:-local\} \./);
+    assert.match(packageJson, /"docker:run": "docker run --rm -p 7200:80 mfe-main-platform:\$\{APP_VERSION:-local\}"/);
+    assert.match(packageJson, /"compose:up": "docker compose up --build"/);
+    assert.match(packageJson, /"compose:down": "docker compose down"/);
+    assert.match(packageJson, /"@playwright\/test"/);
+    assert.match(packageJson, /"format": "prettier --ignore-unknown --write/);
+    assert.match(packageJson, /"format:check": "prettier --ignore-unknown --check/);
+    assert.match(packageJson, /\.github\/workflows\/deploy\.yml/);
+    assertMfeCiWorkflow(workflow);
+    assertMfeDeployWorkflow(deployWorkflow);
+    assert.doesNotMatch(deployWorkflow, /:latest/);
+    assert.match(workspace, /packages\/\*/);
+    assert.match(appPackageJson, /"@tsuz\/api": "workspace:\*"/);
+    assert.match(appPackageJson, /"@tsuz\/shared": "workspace:\*"/);
+    assert.match(appPackageJson, /"@tsuz\/ui": "workspace:\*"/);
+    assert.match(appPackageJson, /"tailwindcss"/);
+    assert.match(appPackageJson, /"postcss"/);
+    assert.match(appPackageJson, /"autoprefixer"/);
+    assert.match(appPackageJson, /"@testing-library\/jest-dom"/);
+    assert.match(appPackageJson, /"@testing-library\/react"/);
+    assert.match(appPackageJson, /"@testing-library\/user-event"/);
+    assert.match(appPackageJson, /"jsdom"/);
+    assert.match(appPackageJson, /"test": "vitest run"/);
+    assert.match(appPackageJson, /"vitest": "\^3\.0\.5"/);
+    assert.match(appTsConfig, /@tsuz\/shared/);
+    assert.match(appTsConfig, /@tsuz\/ui/);
+    assert.match(appTsConfig, /@tsuz\/api/);
+    assert.match(appViteConfig, /@tsuz\/shared/);
+    assert.match(appViteConfig, /@tsuz\/ui/);
+    assert.match(appViteConfig, /@tsuz\/api/);
+    assert.match(appViteConfig, /vitest\/config/);
+    assert.match(appViteConfig, /environment: "jsdom"/);
+    assert.match(appViteConfig, /setupFiles: "\.\/src\/test\/setup\.ts"/);
+    assert.match(readme, /production-ready React qiankun host shell starter/);
+    assert.match(readme, /Generate the Project/);
+    assert.match(readme, /Local development/);
+    assert.match(readme, /Local quality gates/);
+    assert.match(readme, /GitHub Actions CI/);
+    assert.match(readme, /GitHub Actions Deploy/);
+    assert.match(readme, /GitHub Environments/);
+    assert.match(readme, /test-v\*\.\*\.\*/);
+    assert.match(readme, /product-v\*\.\*\.\*/);
+    assert.match(readme, /test-v1\.0\.1/);
+    assert.match(readme, /product-v1\.0\.1/);
+    assert.match(readme, /workflow_dispatch/);
+    assert.match(readme, /image_tag/);
+    assert.match(readme, /rollback/);
+    assert.match(readme, /docker compose up -d --no-build/);
+    assert.match(readme, /deploy\.yml automatically uploads docker-compose\.yml/);
+    assert.match(readme, /DOCKER_REGISTRY_TOKEN/);
+    assert.match(readme, /SSH_PRIVATE_KEY/);
+    assert.match(readme, /Docker and nginx/);
+    assert.match(readme, /Docker Compose/);
+    assert.match(readme, /VITE_APP_ENV/);
+    assert.match(readme, /APP_VERSION/);
+    assert.match(readme, /pnpm docker:build/);
+    assert.match(readme, /pnpm compose:up/);
+    assert.match(readme, /Testing Library/);
+    assert.match(readme, /Playwright/);
+    assert.match(readme, /pnpm test:e2e/);
+    assert.match(readme, /Shared Workspace Packages/);
+    assert.match(readme, /Demo credentials/);
+    assert.match(readme, /VITE_API_BASE_URL is a build-time variable/);
+    assert.match(readme, /VITE_MFE_APP_ENTRY/);
+    assert.match(dockerfile, /FROM node:20-alpine AS build/);
+    assert.match(dockerfile, /FROM nginx:1\.27-alpine/);
+    assert.match(dockerfile, /ARG VITE_API_BASE_URL=\/api/);
+    assert.match(dockerfile, /ARG VITE_MFE_APP_ENTRY=\/\/localhost:7201/);
+    assert.match(dockerfile, /ARG VITE_APP_ENV=production/);
+    assert.match(dockerfile, /COPY --from=build \/app\/apps\/main\/dist \/usr\/share\/nginx\/html/);
+    assert.match(nginxConfig, /try_files \$uri \$uri\/ \/index\.html/);
+    assert.match(nginxConfig, /Cache-Control "no-store, no-cache, must-revalidate"/);
+    assert.match(nginxConfig, /Cache-Control "public, immutable"/);
+    assert.doesNotMatch(nginxConfig, /Access-Control-Allow-Origin/);
+    assert.match(compose, /\$\{DOCKER_IMAGE_NAME:-mfe-main-platform\}:\$\{APP_VERSION:-local\}/);
+    assert.match(compose, /\$\{CONTAINER_NAME:-mfe-main-platform\}/);
+    assert.match(compose, /"\$\{APP_PORT:-7200\}:80"/);
+    assert.match(compose, /VITE_APP_ENV: \$\{APP_ENV:-local\}/);
+    assert.match(deployEnv, /DOCKER_IMAGE_NAME=mfe-main-platform/);
+    assert.match(deployEnv, /APP_VERSION=local/);
+    assert.match(deployEnv, /APP_PORT=7200/);
+    assert.match(deployEnv, /VITE_MFE_APP_ENTRY=\/\/localhost:7201/);
+    assert.match(dockerignore, /apps\/\*\/dist/);
+    assert.match(dockerignore, /!\.env\.deploy\.example/);
+    assert.match(appEnv, /VITE_APP_ENV=local/);
+    assert.match(viteEnv, /VITE_APP_ENV/);
+    assert.match(await readFile(join(projectRoot, "eslint.config.js"), "utf8"), /react-hooks/);
+    assert.match(await readFile(join(projectRoot, "eslint.config.js"), "utf8"), /react-refresh/);
+    assert.match(await readFile(join(projectRoot, "prettier.config.js"), "utf8"), /printWidth/);
+    assert.match(await readFile(join(projectRoot, "apps", "main", ".env.example"), "utf8"), /VITE_MFE_APP_ENTRY=\/\/localhost:7201/);
+    assert.match(await readFile(join(projectRoot, "apps", "main", "tailwind.config.js"), "utf8"), /\.\/src\/\*\*\/\*\.\{ts,tsx\}/);
+    assert.match(await readFile(join(projectRoot, "apps", "main", "postcss.config.js"), "utf8"), /tailwindcss/);
+    assert.match(await readFile(join(projectRoot, "apps", "main", "src", "vite-env.d.ts"), "utf8"), /VITE_API_BASE_URL/);
+    assert.match(await readFile(join(projectRoot, "playwright.config.ts"), "utf8"), /MFE_INTEGRATION_E2E/);
+    assert.match(await readFile(join(projectRoot, "e2e", "host-login.spec.ts"), "utf8"), /Waiting for mfe-app/);
+    assert.match(await readFile(join(projectRoot, "e2e", "host-load-subapp.spec.ts"), "utf8"), /Auth bridge: provided/);
+    assert.match(await readFile(join(projectRoot, "apps", "main", "src", "test", "setup.ts"), "utf8"), /@testing-library\/jest-dom/);
+    await assert.rejects(() => readFile(join(projectRoot, "apps", "main", "src", "types", "auth.ts"), "utf8"));
+    assert.match(await readFile(join(projectRoot, "apps", "main", "src", "pages", "LoginPage.tsx"), "utf8"), /Username: admin \/ Password: password123/);
+    assert.match(await readFile(join(projectRoot, "apps", "main", "src", "pages", "LoginPage.test.tsx"), "utf8"), /renders demo credentials/);
+    assert.match(await readFile(join(projectRoot, "apps", "main", "src", "components", "RequireAuth.tsx"), "utf8"), /Navigate to="\/login"/);
+    assert.match(await readFile(join(projectRoot, "apps", "main", "src", "providers", "AppProviders.tsx"), "utf8"), /QueryClientProvider/);
+    assert.match(await readFile(join(projectRoot, "apps", "main", "src", "providers", "query-client.ts"), "utf8"), /staleTime/);
+    assert.match(await readFile(join(projectRoot, "apps", "main", "src", "services", "auth.service.test.ts"), "utf8"), /returns a demo session/);
+    assert.match(await readFile(join(projectRoot, "apps", "main", "src", "micro-apps", "config.test.ts"), "utf8"), /matches active rules/);
+    assert.match(styles, /@tailwind base/);
+    assert.match(styles, /@tailwind components/);
+    assert.match(styles, /@tailwind utilities/);
+    assert.match(main, /AppProviders/);
+    assert.match(main, /registerMicroFrontendApps/);
+    assert.match(app, /LoginPage/);
+    assert.match(app, /RequireAuth/);
+    assert.match(app, /@tsuz\/ui/);
+    assert.match(app, /id="subapp-container"/);
+    assert.match(app, /getAccessToken/);
+    assert.doesNotMatch(app, /qiankun will mount sub applications here in Phase 3/);
+    assert.match(config, /@tsuz\/shared/);
+    assert.match(config, /VITE_MFE_APP_ENTRY/);
+    assert.match(config, /VITE_API_BASE_URL/);
+    assert.match(config, /matchesActiveRoute/);
+    assert.match(config, /#subapp-container/);
+    assert.match(config, /getCurrentUser/);
+    assert.match(registry, /registerMicroApps/);
+    assert.match(registry, /prefetch: false/);
+    assert.match(authStore, /@tsuz\/shared/);
+    assert.match(authStore, /authBridge/);
+    assert.match(authStore, /getAccessToken/);
+    assert.match(authStore, /getCurrentUser/);
+    assert.match(authService, /@tsuz\/shared/);
+    assert.match(authService, /password123/);
+    assert.match(apiClient, /createApiClient/);
+    assert.match(shared, /export interface MicroAppProps/);
+    assert.match(ui, /export function Logo/);
+    assert.match(ui, /export function EmptyState/);
+    assert.match(api, /export function createApiClient/);
+  } finally {
+    await rm(cwd, { force: true, recursive: true });
+  }
+});
+
+test("runCli initializes mfe-app projects", async () => {
+  const cwd = await mkdtemp(join(tmpdir(), "quick-start-"));
+
+  try {
+    const message = await runCli(["init", "mfe-business-app", "--template", "mfe-app", "--local"], cwd);
+
+    assert.match(message, /^Created mfe-business-app from mfe-app@latest\nLocation: /);
+    assert.match(message, /pnpm install/);
+    assert.match(message, /pnpm dev/);
+    const projectRoot = join(cwd, "mfe-business-app");
+    const packageJson = await readFile(join(projectRoot, "package.json"), "utf8");
+    const workspace = await readFile(join(projectRoot, "pnpm-workspace.yaml"), "utf8");
+    const appPackageJson = await readFile(join(projectRoot, "apps", "app", "package.json"), "utf8");
+    const appTsConfig = await readFile(join(projectRoot, "apps", "app", "tsconfig.json"), "utf8");
+    const appViteConfig = await readFile(join(projectRoot, "apps", "app", "vite.config.ts"), "utf8");
+    const readme = await readFile(join(projectRoot, "README.md"), "utf8");
+    const app = await readFile(join(projectRoot, "apps", "app", "src", "App.tsx"), "utf8");
+    const businessHomePage = await readFile(join(projectRoot, "apps", "app", "src", "pages", "BusinessHomePage.tsx"), "utf8");
+    const appProviders = await readFile(join(projectRoot, "apps", "app", "src", "providers", "AppProviders.tsx"), "utf8");
+    const queryClient = await readFile(join(projectRoot, "apps", "app", "src", "providers", "query-client.ts"), "utf8");
+    const appStore = await readFile(join(projectRoot, "apps", "app", "src", "stores", "app.store.ts"), "utf8");
+    const businessHomeQuery = await readFile(join(projectRoot, "apps", "app", "src", "queries", "business-home.query.ts"), "utf8");
+    const bootstrap = await readFile(join(projectRoot, "apps", "app", "src", "bootstrap.tsx"), "utf8");
+    const qiankun = await readFile(join(projectRoot, "apps", "app", "src", "qiankun.ts"), "utf8");
+    const apiClient = await readFile(join(projectRoot, "apps", "app", "src", "services", "api-client.ts"), "utf8");
+    const shared = await readFile(join(projectRoot, "packages", "shared", "src", "index.ts"), "utf8");
+    const ui = await readFile(join(projectRoot, "packages", "ui", "src", "index.tsx"), "utf8");
+    const api = await readFile(join(projectRoot, "packages", "api", "src", "index.ts"), "utf8");
+    const dockerfile = await readFile(join(projectRoot, "Dockerfile"), "utf8");
+    const nginxConfig = await readFile(join(projectRoot, "nginx", "nginx.conf"), "utf8");
+    const compose = await readFile(join(projectRoot, "docker-compose.yml"), "utf8");
+    const deployEnv = await readFile(join(projectRoot, ".env.deploy.example"), "utf8");
+    const dockerignore = await readFile(join(projectRoot, ".dockerignore"), "utf8");
+    const appEnv = await readFile(join(projectRoot, "apps", "app", ".env.example"), "utf8");
+    const prettierConfig = await readFile(join(projectRoot, "prettier.config.js"), "utf8");
+    const workflow = await readFile(join(projectRoot, ".github", "workflows", "ci.yml"), "utf8");
+    const deployWorkflow = await readFile(join(projectRoot, ".github", "workflows", "deploy.yml"), "utf8");
+
+    assert.match(packageJson, /"test": "turbo run test"/);
+    assert.match(packageJson, /"test:e2e": "playwright test"/);
+    assert.match(packageJson, /"format": "prettier --ignore-unknown --write/);
+    assert.match(packageJson, /"format:check": "prettier --ignore-unknown --check/);
+    assert.match(packageJson, /\.github\/workflows\/deploy\.yml/);
+    assert.match(packageJson, /"docker:build": "docker build -t mfe-business-app:\$\{APP_VERSION:-local\} \./);
+    assert.match(packageJson, /"docker:run": "docker run --rm -p 7201:80 mfe-business-app:\$\{APP_VERSION:-local\}"/);
+    assert.match(packageJson, /"compose:up": "docker compose up --build"/);
+    assert.match(packageJson, /"compose:down": "docker compose down"/);
+    assert.match(packageJson, /"@playwright\/test"/);
+    assert.match(packageJson, /"prettier"/);
+    assertMfeCiWorkflow(workflow);
+    assertMfeDeployWorkflow(deployWorkflow);
+    assert.doesNotMatch(deployWorkflow, /:latest/);
+    assert.match(workspace, /packages\/\*/);
+    assert.match(appPackageJson, /"@tsuz\/api": "workspace:\*"/);
+    assert.match(appPackageJson, /"@tsuz\/shared": "workspace:\*"/);
+    assert.match(appPackageJson, /"@tsuz\/ui": "workspace:\*"/);
+    assert.match(appPackageJson, /"vite-plugin-qiankun": "\^1\.0\.15"/);
+    assert.match(appPackageJson, /"@testing-library\/jest-dom"/);
+    assert.match(appPackageJson, /"@testing-library\/react"/);
+    assert.match(appPackageJson, /"@testing-library\/user-event"/);
+    assert.match(appPackageJson, /"jsdom"/);
+    assert.match(appPackageJson, /"test": "vitest run"/);
+    assert.match(appPackageJson, /"vitest": "\^3\.0\.5"/);
+    assert.match(appTsConfig, /@tsuz\/shared/);
+    assert.match(appTsConfig, /@tsuz\/ui/);
+    assert.match(appTsConfig, /@tsuz\/api/);
+    assert.match(appViteConfig, /@tsuz\/shared/);
+    assert.match(appViteConfig, /@tsuz\/ui/);
+    assert.match(appViteConfig, /@tsuz\/api/);
+    assert.match(appViteConfig, /vitest\/config/);
+    assert.match(appViteConfig, /environment: "jsdom"/);
+    assert.match(appViteConfig, /setupFiles: "\.\/src\/test\/setup\.ts"/);
+    assert.match(appViteConfig, /vite-plugin-qiankun/);
+    assert.match(readme, /production-ready React qiankun sub application starter/);
+    assert.match(readme, /Generate the Project/);
+    assert.match(readme, /Local development/);
+    assert.match(readme, /Local quality gates/);
+    assert.match(readme, /GitHub Actions CI/);
+    assert.match(readme, /GitHub Actions Deploy/);
+    assert.match(readme, /GitHub Environments/);
+    assert.match(readme, /test-v\*\.\*\.\*/);
+    assert.match(readme, /product-v\*\.\*\.\*/);
+    assert.match(readme, /test-v1\.0\.1/);
+    assert.match(readme, /product-v1\.0\.1/);
+    assert.match(readme, /workflow_dispatch/);
+    assert.match(readme, /image_tag/);
+    assert.match(readme, /rollback/);
+    assert.match(readme, /docker compose up -d --no-build/);
+    assert.match(readme, /deploy\.yml automatically uploads docker-compose\.yml/);
+    assert.match(readme, /DOCKER_REGISTRY_TOKEN/);
+    assert.match(readme, /SSH_PRIVATE_KEY/);
+    assert.match(readme, /VITE_API_BASE_URL is a build-time variable/);
+    assert.match(readme, /pnpm format:check/);
+    assert.match(readme, /Docker and nginx/);
+    assert.match(readme, /Docker Compose/);
+    assert.match(readme, /VITE_APP_ENV/);
+    assert.match(readme, /APP_VERSION/);
+    assert.match(readme, /pnpm docker:build/);
+    assert.match(readme, /pnpm compose:up/);
+    assert.match(readme, /Testing Library/);
+    assert.match(readme, /Playwright/);
+    assert.match(readme, /pnpm test:e2e/);
+    assert.match(readme, /Shared Workspace Packages/);
+    assert.match(readme, /apps\/app\/src\/pages\/BusinessHomePage\.tsx/);
+    assert.match(app, /BusinessHomePage/);
+    assert.match(app, /@tsuz\/ui/);
+    assert.match(dockerfile, /FROM node:20-alpine AS build/);
+    assert.match(dockerfile, /FROM nginx:1\.27-alpine/);
+    assert.match(dockerfile, /ARG VITE_API_BASE_URL=\/api/);
+    assert.match(dockerfile, /ARG VITE_MFE_APP_ENTRY=\/\/localhost:7201/);
+    assert.match(dockerfile, /ARG VITE_APP_ENV=production/);
+    assert.match(dockerfile, /COPY --from=build \/app\/apps\/app\/dist \/usr\/share\/nginx\/html/);
+    assert.match(nginxConfig, /try_files \$uri \$uri\/ \/index\.html/);
+    assert.match(nginxConfig, /Cache-Control "no-store, no-cache, must-revalidate"/);
+    assert.match(nginxConfig, /Cache-Control "public, immutable"/);
+    assert.match(nginxConfig, /Access-Control-Allow-Origin "\*"/);
+    assert.match(nginxConfig, /Access-Control-Allow-Methods "GET, HEAD, OPTIONS"/);
+    assert.match(compose, /\$\{DOCKER_IMAGE_NAME:-mfe-business-app\}:\$\{APP_VERSION:-local\}/);
+    assert.match(compose, /\$\{CONTAINER_NAME:-mfe-business-app\}/);
+    assert.match(compose, /"\$\{APP_PORT:-7201\}:80"/);
+    assert.match(compose, /VITE_APP_ENV: \$\{APP_ENV:-local\}/);
+    assert.match(deployEnv, /DOCKER_IMAGE_NAME=mfe-business-app/);
+    assert.match(deployEnv, /APP_VERSION=local/);
+    assert.match(deployEnv, /APP_PORT=7201/);
+    assert.match(deployEnv, /VITE_MFE_APP_ENTRY=\/\/localhost:7201/);
+    assert.match(dockerignore, /apps\/\*\/dist/);
+    assert.match(dockerignore, /!\.env\.deploy\.example/);
+    assert.match(prettierConfig, /printWidth/);
+    assert.match(appEnv, /VITE_APP_ENV=local/);
+    assert.match(apiClient, /resolveDefaultApiBaseUrl/);
+    assert.match(apiClient, /import\.meta\.env\.VITE_API_BASE_URL/);
+    assert.match(await readFile(join(projectRoot, "playwright.config.ts"), "utf8"), /127\.0\.0\.1:7201/);
+    assert.match(await readFile(join(projectRoot, "e2e", "standalone.spec.ts"), "utf8"), /Standalone mode/);
+    assert.match(await readFile(join(projectRoot, "apps", "app", "src", "test", "setup.ts"), "utf8"), /@testing-library\/jest-dom/);
+    assert.match(await readFile(join(projectRoot, "apps", "app", "src", "pages", "BusinessHomePage.test.tsx"), "utf8"), /deterministic business data/);
+    assert.match(businessHomePage, /useQuery/);
+    assert.match(businessHomePage, /PageContainer/);
+    assert.match(appProviders, /QueryClientProvider/);
+    assert.match(queryClient, /new QueryClient/);
+    assert.match(appStore, /create<AppStore>/);
+    assert.match(businessHomeQuery, /businessHomeQueryKey/);
+    assert.match(bootstrap, /createMfeApiClient/);
+    assert.match(bootstrap, /useAppStore/);
+    assert.match(qiankun, /@tsuz\/shared/);
+    assert.match(qiankun, /Partial<MicroAppProps>/);
+    assert.match(qiankun, /render\(props\)/);
+    assert.match(apiClient, /createApiClient/);
+    assert.match(shared, /export interface MicroAppProps/);
+    assert.match(ui, /export function Logo/);
+    assert.match(ui, /export function ErrorState/);
+    assert.match(api, /export function createApiClient/);
   } finally {
     await rm(cwd, { force: true, recursive: true });
   }

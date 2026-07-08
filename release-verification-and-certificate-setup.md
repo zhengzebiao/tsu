@@ -20,11 +20,22 @@ git push origin template-v1.0.3
 
 The GitHub Actions workflow builds and uploads the asset automatically.
 
-Verify after the Release exists:
+Build and validate the template archive before publishing:
+
+```bash
+pnpm template:release:build --version=1.0.3
+TEMPLATE_VERSION=1.0.3 pnpm validate:template-release
+```
+
+`validate:template-release` checks the real `tsu-templates-v<version>.tar.gz` archive, manifest metadata, bundle contents, generated `mfe-main` / `mfe-app` projects, deploy workflow markers, README documentation markers, generated-project install/lint/format/test/build/E2E gates, and host + sub-app integration E2E. It does not publish a GitHub Release, push registry images, or SSH to a server.
+
+Verify remote initialization after the Release exists:
 
 ```bash
 node cli/dist/index.js init verify-default --template default --version 1.0.3 --cwd ./tmp-verify
 node cli/dist/index.js init verify-monorepo --template monorepo --version 1.0.3 --cwd ./tmp-verify
+node cli/dist/index.js init verify-mfe-main --template mfe-main --version 1.0.3 --cwd ./tmp-verify
+node cli/dist/index.js init verify-mfe-app --template mfe-app --version 1.0.3 --cwd ./tmp-verify
 ```
 
 Expected output:
@@ -32,6 +43,8 @@ Expected output:
 ```text
 Created verify-default from default@1.0.3 at ...
 Created verify-monorepo from monorepo@1.0.3 at ...
+Created verify-mfe-main from mfe-main@1.0.3 at ...
+Created verify-mfe-app from mfe-app@1.0.3 at ...
 ```
 
 ## Node TLS certificate fix
@@ -108,3 +121,5 @@ Verified successfully with:
 - `tsu-templates-v1.0.3.tar.gz`
 - `default` template remote init
 - `monorepo` template remote init
+- `mfe-main` template remote init and release archive validation
+- `mfe-app` template remote init and release archive validation

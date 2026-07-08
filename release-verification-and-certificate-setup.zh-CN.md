@@ -23,11 +23,22 @@ git push origin template-v1.0.3
 
 GitHub Actions 会自动构建并上传 asset。
 
-发布后验证：
+发布前先构建并验证模板压缩包：
+
+```bash
+pnpm template:release:build --version=1.0.3
+TEMPLATE_VERSION=1.0.3 pnpm validate:template-release
+```
+
+`validate:template-release` 会检查真实的 `tsu-templates-v<version>.tar.gz` archive、manifest metadata、bundle 内容、从 release archive 初始化出来的 `mfe-main` / `mfe-app` 项目、deploy workflow markers、README 文档 markers、生成项目 install/lint/format/test/build/E2E 门禁，以及 host + sub-app 集成 E2E。它不会发布 GitHub Release、推送 registry 镜像或 SSH 到服务器。
+
+Release 存在后验证远程初始化：
 
 ```bash
 node cli/dist/index.js init verify-default --template default --version 1.0.3 --cwd ./tmp-verify
 node cli/dist/index.js init verify-monorepo --template monorepo --version 1.0.3 --cwd ./tmp-verify
+node cli/dist/index.js init verify-mfe-main --template mfe-main --version 1.0.3 --cwd ./tmp-verify
+node cli/dist/index.js init verify-mfe-app --template mfe-app --version 1.0.3 --cwd ./tmp-verify
 ```
 
 期望输出：
@@ -35,6 +46,8 @@ node cli/dist/index.js init verify-monorepo --template monorepo --version 1.0.3 
 ```text
 Created verify-default from default@1.0.3 at ...
 Created verify-monorepo from monorepo@1.0.3 at ...
+Created verify-mfe-main from mfe-main@1.0.3 at ...
+Created verify-mfe-app from mfe-app@1.0.3 at ...
 ```
 
 ## 二、Node 证书报错处理
@@ -114,3 +127,5 @@ node -e "require('node:https').get('https://api.github.com',{headers:{'User-Agen
 - `tsu-templates-v1.0.3.tar.gz`
 - `default` 模板远程初始化
 - `monorepo` 模板远程初始化
+- `mfe-main` 模板远程初始化和 release archive 验证
+- `mfe-app` 模板远程初始化和 release archive 验证

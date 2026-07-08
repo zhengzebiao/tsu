@@ -1,0 +1,34 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(pnpm --filter @tsuz/cli build)",
+      "Bash(pnpm --filter @tsuz/cli lint)",
+      "Bash(pnpm --filter @tsuz/cli test)",
+      "Bash(node cli/dist/index.js --help)",
+      "Bash(node cli/dist/index.js template info --help)",
+      "Bash(node cli/dist/index.js templates)",
+      "Bash(node cli/dist/index.js list)",
+      "Bash(node cli/dist/index.js template list)",
+      "Bash(pnpm build *)",
+      "Bash(pnpm lint *)",
+      "Bash(pnpm test *)",
+      "Bash(git add *)",
+      "Bash(git commit -m 'Finish CLI command contract polish *)",
+      "Bash(python -)",
+      "Bash(pnpm --filter @tsuz/template build)",
+      "Bash(pnpm --filter @tsuz/template lint)",
+      "Bash(pnpm --filter @tsuz/template test)",
+      "Bash(pnpm validate:generated-apps)",
+      "Bash(git commit -m 'Optimize the Vue 3 template *)",
+      "Bash(git switch *)",
+      "Bash(git commit -m 'Document Python template architecture and Swagger support *)",
+      "Bash(git commit *)",
+      "Bash(git checkout *)",
+      "Bash(node cli/dist/index.js init auth-service --template python-main --local --cwd tmp/python-template-smoke)",
+      "Bash(node cli/dist/index.js init backend-api --template python-app --local --cwd tmp/python-template-smoke)",
+      "Bash(python -m compileall -q tmp/python-template-smoke/auth-service/app tmp/python-template-smoke/backend-api/app)",
+      "Bash(git restore *)",
+      "Bash(git commit -m 'Add phased execution plan document *)"
+    ]
+  }
+}

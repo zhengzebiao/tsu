@@ -1,3 +1,5 @@
+import { createMfeAppTemplateFiles } from "./mfe-app.js";
+import { createMfeMainTemplateFiles } from "./mfe-main.js";
 import { createMfeTemplateFiles } from "./mfe.js";
 import { createPythonAppTemplateFiles, createPythonMainTemplateFiles } from "./python.js";
 import { createReactTemplateFiles } from "./react.js";
@@ -29,7 +31,7 @@ export interface CreateTemplateFilesOptions {
   templateName?: string;
 }
 
-export type TemplateName = "default" | "monorepo" | "vue3" | "mfe" | "react" | "python-main" | "python-app";
+export type TemplateName = "default" | "monorepo" | "vue3" | "mfe" | "mfe-main" | "mfe-app" | "react" | "python-main" | "python-app";
 
 export const templateDefinitions: TemplateDefinition[] = [
   {
@@ -64,6 +66,24 @@ export const templateDefinitions: TemplateDefinition[] = [
     description: "Micro frontend workspace with host and Vue sub apps",
     tags: ["mfe", "qiankun", "vue", "workspace"],
     recommendedFor: ["micro frontend", "multi app"],
+    node: ">=20",
+    packageManagers: ["pnpm"],
+    nextSteps: ["pnpm install", "pnpm dev"]
+  },
+  {
+    name: "mfe-main",
+    description: "React qiankun host shell starter with Docker, nginx, CI, and deploy workflow",
+    tags: ["mfe", "qiankun", "react", "host", "vite", "docker", "nginx", "ci", "deploy", "release", "github-actions"],
+    recommendedFor: ["micro frontend host", "auth shell", "app container"],
+    node: ">=20",
+    packageManagers: ["pnpm"],
+    nextSteps: ["pnpm install", "pnpm dev"]
+  },
+  {
+    name: "mfe-app",
+    description: "React qiankun sub application starter with Docker, nginx, CI, and deploy workflow",
+    tags: ["mfe", "qiankun", "react", "sub app", "vite", "docker", "nginx", "ci", "deploy", "release", "github-actions"],
+    recommendedFor: ["micro frontend sub app", "business app", "remote module"],
     node: ">=20",
     packageManagers: ["pnpm"],
     nextSteps: ["pnpm install", "pnpm dev"]
@@ -130,6 +150,14 @@ export function createTemplateSourceFiles(templateName?: string): TemplateFile[]
 
   if (resolvedTemplateName === "mfe") {
     return createMfeTemplateFiles(templateProjectNameToken);
+  }
+
+  if (resolvedTemplateName === "mfe-main") {
+    return createMfeMainTemplateFiles(templateProjectNameToken);
+  }
+
+  if (resolvedTemplateName === "mfe-app") {
+    return createMfeAppTemplateFiles(templateProjectNameToken);
   }
 
   if (resolvedTemplateName === "react") {
