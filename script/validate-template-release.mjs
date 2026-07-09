@@ -10,6 +10,7 @@ import { mfeAppTemplates, removeWithRetries, validateGeneratedApps } from "./gen
 const execFileAsync = promisify(execFile);
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const version = process.env.TEMPLATE_VERSION ?? "0.0.0";
+const validationMode = readValidationMode();
 const releaseDir = join(repoRoot, "dist", "template-release");
 const archiveName = `tsu-templates-v${version}.tar.gz`;
 const archivePath = join(releaseDir, archiveName);
@@ -26,11 +27,25 @@ try {
   validateManifest(manifest);
 
   await validateBundleFiles(bundleDir);
-  await validateReleaseGeneratedMfeApps(bundleDir);
+  if (validationMode === "full") {
+    await validateReleaseGeneratedMfeApps(bundleDir);
+  } else {
+    process.stdout.write("Skipped release generated MFE project validation in quick mode\n");
+  }
 
   process.stdout.write(`Validated release archive ${archivePath}\n`);
 } finally {
   await removeWithRetries(tempDir);
+}
+
+function readValidationMode() {
+  const mode = process.env.TEMPLATE_RELEASE_VALIDATE_MODE ?? "full";
+
+  if (mode !== "full" && mode !== "quick") {
+    throw new Error(`Unsupported TEMPLATE_RELEASE_VALIDATE_MODE ${mode}. Expected full or quick.`);
+  }
+
+  return mode;
 }
 
 async function validateBundleFiles(bundleDir) {
