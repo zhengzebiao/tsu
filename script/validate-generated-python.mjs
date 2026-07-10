@@ -1,4 +1,4 @@
-import { mkdir, rm } from "node:fs/promises";
+import { mkdir, readFile, rm } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { execFile, spawn } from "node:child_process";
@@ -85,6 +85,8 @@ try {
   await runNode(cliEntry, ["init", "auth-service", "--template", "python-main", "--local", "--cwd", tempRoot]);
   await runNode(cliEntry, ["init", "backend-api", "--template", "python-app", "--local", "--cwd", tempRoot]);
 
+  await validateDeployArtifacts(authRoot, true);
+  await validateDeployArtifacts(appRoot, false);
   await validateProject(authRoot, authEnv);
   await validateProject(appRoot, appEnv);
   await validateCrossService(authRoot, appRoot, authEnv, appEnv);
@@ -92,6 +94,50 @@ try {
   process.stdout.write(`Validated generated Python templates at ${tempRoot}\n`);
 } finally {
   await rm(tempRoot, { recursive: true, force: true });
+}
+
+async function validateDeployArtifacts(projectRoot, includePrivateKey) {
+  const readme = await readFile(join(projectRoot, "README.md"), "utf8");
+  const workflow = await readFile(join(projectRoot, ".github", "workflows", "deploy.yml"), "utf8");
+  const deployCompose = await readFile(join(projectRoot, "docker-compose.deploy.yml"), "utf8");
+  const infraCompose = await readFile(join(projectRoot, "docker-compose.infra.yml"), "utf8");
+  const envDeploy = await readFile(join(projectRoot, ".env.deploy.example"), "utf8");
+
+  assertIncludes(workflow, [
+    "name: Deploy",
+    "test-v*.*.*",
+    "product-v*.*.*",
+    "workflow_dispatch:",
+    "image_tag",
+    "should_build",
+    "docker build",
+    "docker push",
+    "DOCKER_REGISTRY_TOKEN",
+    "SSH_PRIVATE_KEY",
+    "DATABASE_URL",
+    "REDIS_URL",
+    "JWT_PUBLIC_KEY",
+    "docker compose --env-file .env -f docker-compose.deploy.yml pull api",
+    "docker compose --env-file .env -f docker-compose.deploy.yml up -d --no-build api nginx",
+    "Refusing to deploy a latest tag"
+  ]);
+  assertIncludes(deployCompose, ["${DOCKER_IMAGE_NAME}:${APP_VERSION}", "api:", "nginx:", "/health", "external: true", "DOCKER_NETWORK_NAME"]);
+  assertIncludes(infraCompose, ["postgres:16-alpine", "redis:7-alpine", "postgres_data", "redis_data", "appendonly yes", "DOCKER_NETWORK_NAME"]);
+  assertIncludes(envDeploy, ["DOCKER_IMAGE_NAME", "APP_VERSION", "DATABASE_URL", "REDIS_URL", "JWT_PUBLIC_KEY", "TOKEN_BLACKLIST_PREFIX", "SESSION_PREFIX"]);
+  assertIncludes(readme, ["Release Deploy and Rollback", "Docker Infra", "Tag Release", "Rollback", "Migration Policy", "Seed Policy", "Product does not auto-run seed"]);
+
+  const forbiddenWorkflowMarkers = ["docker-compose.infra.yml", "pdm run migrate", "alembic upgrade", "pdm run seed", "python -m app.seed"];
+  const workflowLeak = forbiddenWorkflowMarkers.find((marker) => workflow.includes(marker));
+  if (workflowLeak) {
+    throw new Error(`Deploy workflow unexpectedly contains ${workflowLeak}.`);
+  }
+
+  if (includePrivateKey) {
+    assertIncludes(workflow, ["JWT_PRIVATE_KEY"]);
+    assertIncludes(envDeploy, ["JWT_PRIVATE_KEY"]);
+  } else if (workflow.includes("JWT_PRIVATE_KEY") || envDeploy.includes("JWT_PRIVATE_KEY")) {
+    throw new Error("python-app deploy artifacts must not contain JWT_PRIVATE_KEY.");
+  }
 }
 
 async function validateProject(projectRoot, env) {
@@ -255,6 +301,13 @@ async function getFreePort() {
     });
     server.on("error", reject);
   });
+}
+
+function assertIncludes(content, markers) {
+  const missingMarkers = markers.filter((marker) => !content.includes(marker));
+  if (missingMarkers.length > 0) {
+    throw new Error(`Generated Python deploy artifact is missing required markers: ${missingMarkers.join(", ")}.`);
+  }
 }
 
 async function runNode(entry, args) {

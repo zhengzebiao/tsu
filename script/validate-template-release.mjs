@@ -139,13 +139,22 @@ async function validateBundleFiles(bundleDir) {
   await access(join(bundleDir, "python-main", "app", "models", "permission.py"));
   await access(join(bundleDir, "python-main", "app", "services", "session_service.py"));
   await access(join(bundleDir, "python-main", "app", "seed", "__main__.py"));
+  await access(join(bundleDir, "python-main", ".env.deploy.example"));
   await access(join(bundleDir, "python-main", ".github", "workflows", "ci.yml"));
+  await access(join(bundleDir, "python-main", ".github", "workflows", "deploy.yml"));
+  await access(join(bundleDir, "python-main", "docker-compose.deploy.yml"));
+  await access(join(bundleDir, "python-main", "docker-compose.infra.yml"));
   await access(join(bundleDir, "python-main", "tests", "test_auth_api.py"));
   await access(join(bundleDir, "python-main", "tests", "test_token_service.py"));
   await access(join(bundleDir, "python-main", "tests", "test_refresh_token_service.py"));
   await access(join(bundleDir, "python-main", "tests", "test_logging.py"));
   await access(join(bundleDir, "python-main", "tests", "test_redis_state_services.py"));
+  await assertFileContains(join(bundleDir, "python-main", ".github", "workflows", "deploy.yml"), pythonDeployWorkflowMarkers(true));
+  await assertFileContains(join(bundleDir, "python-main", "docker-compose.deploy.yml"), pythonDeployComposeMarkers());
+  await assertFileContains(join(bundleDir, "python-main", "docker-compose.infra.yml"), pythonInfraComposeMarkers());
+  await assertFileContains(join(bundleDir, "python-main", ".env.deploy.example"), pythonDeployEnvMarkers(true));
   await assertReadmeContains(join(bundleDir, "python-main", "README.md"), [
+    ...pythonDeployReadmeMarkers(true),
     "## Auth API",
     "POST /auth/login",
     "## JWT Configuration",
@@ -167,11 +176,22 @@ async function validateBundleFiles(bundleDir) {
   await access(join(bundleDir, "python-app", "app", "models", "sample_profile.py"));
   await access(join(bundleDir, "python-app", "app", "services", "session_service.py"));
   await access(join(bundleDir, "python-app", "app", "seed", "__main__.py"));
+  await access(join(bundleDir, "python-app", ".env.deploy.example"));
   await access(join(bundleDir, "python-app", ".github", "workflows", "ci.yml"));
+  await access(join(bundleDir, "python-app", ".github", "workflows", "deploy.yml"));
+  await access(join(bundleDir, "python-app", "docker-compose.deploy.yml"));
+  await access(join(bundleDir, "python-app", "docker-compose.infra.yml"));
   await access(join(bundleDir, "python-app", "tests", "test_profile_api.py"));
   await access(join(bundleDir, "python-app", "tests", "test_logging.py"));
   await access(join(bundleDir, "python-app", "tests", "test_redis_state_services.py"));
+  await assertFileContains(join(bundleDir, "python-app", ".github", "workflows", "deploy.yml"), pythonDeployWorkflowMarkers(false));
+  await assertFileDoesNotContain(join(bundleDir, "python-app", ".github", "workflows", "deploy.yml"), ["JWT_PRIVATE_KEY"]);
+  await assertFileContains(join(bundleDir, "python-app", "docker-compose.deploy.yml"), pythonDeployComposeMarkers());
+  await assertFileContains(join(bundleDir, "python-app", "docker-compose.infra.yml"), pythonInfraComposeMarkers());
+  await assertFileContains(join(bundleDir, "python-app", ".env.deploy.example"), pythonDeployEnvMarkers(false));
+  await assertFileDoesNotContain(join(bundleDir, "python-app", ".env.deploy.example"), ["JWT_PRIVATE_KEY"]);
   await assertReadmeContains(join(bundleDir, "python-app", "README.md"), [
+    ...pythonDeployReadmeMarkers(false),
     "## Protected API Usage",
     "Authorization: Bearer <access-token>",
     "## Auth Integration with python-main",
@@ -377,6 +397,88 @@ function deployReadmeMarkers() {
   ];
 }
 
+function pythonDeployWorkflowMarkers(includePrivateKey) {
+  return [
+    "name: Deploy",
+    "test-v*.*.*",
+    "product-v*.*.*",
+    "workflow_dispatch:",
+    "environment:",
+    "image_tag",
+    "version",
+    "should_build",
+    "packages: write",
+    "docker build",
+    "docker push",
+    "DOCKER_REGISTRY_TOKEN",
+    "SSH_PRIVATE_KEY",
+    "DATABASE_URL",
+    "REDIS_URL",
+    "JWT_PUBLIC_KEY",
+    ...(includePrivateKey ? ["JWT_PRIVATE_KEY"] : []),
+    "docker-compose.deploy.yml",
+    "nginx/default.conf",
+    "scp",
+    "ssh",
+    "docker compose --env-file .env -f docker-compose.deploy.yml pull api",
+    "docker compose --env-file .env -f docker-compose.deploy.yml up -d --no-build api nginx",
+    "Refusing to deploy a latest tag"
+  ];
+}
+
+function pythonDeployComposeMarkers() {
+  return [
+    "api:",
+    "nginx:",
+    "${DOCKER_IMAGE_NAME}:${APP_VERSION}",
+    "env_file:",
+    "/health",
+    "external: true",
+    "DOCKER_NETWORK_NAME"
+  ];
+}
+
+function pythonInfraComposeMarkers() {
+  return ["postgres:16-alpine", "redis:7-alpine", "postgres_data", "redis_data", "appendonly yes", "DOCKER_NETWORK_NAME"];
+}
+
+function pythonDeployEnvMarkers(includePrivateKey) {
+  return [
+    "DOCKER_IMAGE_NAME",
+    "APP_VERSION",
+    "CONTAINER_NAME",
+    "APP_ENV",
+    "APP_PORT",
+    "NGINX_PORT",
+    "DATABASE_URL",
+    "REDIS_URL",
+    "JWT_ISSUER",
+    "JWT_AUDIENCE",
+    "JWT_PUBLIC_KEY",
+    "TOKEN_BLACKLIST_PREFIX",
+    "SESSION_PREFIX",
+    ...(includePrivateKey ? ["JWT_PRIVATE_KEY", "REFRESH_TOKEN_EXPIRE_DAYS", "REFRESH_TOKEN_REUSE_GRACE_SECONDS"] : [])
+  ];
+}
+
+function pythonDeployReadmeMarkers(includePrivateKey) {
+  return [
+    "Release Deploy and Rollback",
+    "GitHub Environments",
+    "Docker Infra",
+    "Tag Release",
+    "Rollback",
+    "Migration Policy",
+    "Seed Policy",
+    "test-v1.0.1",
+    "product-v1.0.1",
+    "image_tag = product-v1.0.0",
+    "docker compose --env-file .env -f docker-compose.deploy.yml pull api",
+    "Product does not auto-run seed",
+    includePrivateKey ? "python-main` owns `JWT_PRIVATE_KEY" : "python-app` uses only `JWT_PUBLIC_KEY"
+  ];
+}
+
 async function assertReadmeContains(filePath, requiredMarkers) {
   const content = await readFile(filePath, "utf8");
   const missingMarkers = requiredMarkers.filter((marker) => !content.includes(marker));
@@ -392,6 +494,15 @@ async function assertFileContains(filePath, requiredMarkers) {
 
   if (missingMarkers.length > 0) {
     throw new Error(`${filePath} is missing required markers: ${missingMarkers.join(", ")}.`);
+  }
+}
+
+async function assertFileDoesNotContain(filePath, forbiddenMarkers) {
+  const content = await readFile(filePath, "utf8");
+  const foundMarkers = forbiddenMarkers.filter((marker) => content.includes(marker));
+
+  if (foundMarkers.length > 0) {
+    throw new Error(`${filePath} contains forbidden markers: ${foundMarkers.join(", ")}.`);
   }
 }
 

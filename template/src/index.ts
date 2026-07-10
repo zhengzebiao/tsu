@@ -99,8 +99,8 @@ export const templateDefinitions: TemplateDefinition[] = [
   },
   {
     name: "python-main",
-    description: "FastAPI auth service with PostgreSQL, Redis, RS256 JWT, Alembic, Docker, nginx, and CI",
-    tags: ["python", "fastapi", "auth", "postgresql", "redis"],
+    description: "FastAPI auth service with PostgreSQL, Redis, RS256 JWT, Alembic, Docker, nginx, CI, and deploy workflow",
+    tags: ["python", "fastapi", "auth", "postgresql", "redis", "deploy", "rollback"],
     recommendedFor: ["auth service", "jwt issuer", "backend api"],
     node: "not required",
     packageManagers: ["pdm"],
@@ -108,8 +108,8 @@ export const templateDefinitions: TemplateDefinition[] = [
   },
   {
     name: "python-app",
-    description: "FastAPI resource service with PostgreSQL, Redis blacklist checks, RS256 JWT verification, Docker, nginx, and CI",
-    tags: ["python", "fastapi", "api", "postgresql", "redis"],
+    description: "FastAPI resource service with PostgreSQL, Redis blacklist checks, RS256 JWT verification, Docker, nginx, CI, and deploy workflow",
+    tags: ["python", "fastapi", "api", "postgresql", "redis", "deploy", "rollback"],
     recommendedFor: ["resource service", "business api", "jwt verifier"],
     node: "not required",
     packageManagers: ["pdm"],

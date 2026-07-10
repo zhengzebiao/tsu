@@ -1,3 +1,11 @@
+import {
+  createPythonDeployEnvExample,
+  createPythonDeployReadmeSection,
+  createPythonDeployWorkflow,
+  createPythonDockerComposeDeploy,
+  createPythonDockerComposeInfra
+} from "./python-deploy.js";
+
 export interface TemplateFile {
   path: string;
   content: string;
@@ -776,7 +784,7 @@ class ProfileResponse(BaseModel):
 
 interface SharedPythonOptions {
   projectName: string;
-  templateName: string;
+  templateName: "python-main" | "python-app";
   serviceName: string;
   description: string;
   envDatabaseName: string;
@@ -787,6 +795,16 @@ function createSharedPythonFiles(options: SharedPythonOptions): TemplateFile[] {
   const includePrivateKey = options.templateName === "python-main";
   const apiImport = options.templateName === "python-main" ? "from app.api.auth import router as feature_router" : "from app.api.example import router as feature_router";
   const modelImports = options.templateName === "python-main" ? "from app.models import permission, role, session, user  # noqa: F401" : "from app.models import app_setting, sample_profile  # noqa: F401";
+  const deployOptions = {
+    templateName: options.templateName,
+    serviceName: options.serviceName,
+    envDatabaseName: options.envDatabaseName,
+    includePrivateKey,
+    defaultImageName: options.serviceName,
+    defaultContainerName: options.serviceName,
+    defaultAppPort: 8000,
+    defaultNginxPort: 8080
+  };
 
   return [
     {
@@ -850,6 +868,7 @@ line-length = 120
 .env.*
 !.env.test.example
 !.env.product.example
+!.env.deploy.example
 `
     },
     {
@@ -861,6 +880,7 @@ __pycache__
 .ruff_cache
 .env
 .env.*
+!.env.deploy.example
 *.pyc
 `
     },
@@ -973,12 +993,28 @@ server {
       content: createGithubActionsWorkflow(options, includePrivateKey)
     },
     {
+      path: ".github/workflows/deploy.yml",
+      content: createPythonDeployWorkflow(deployOptions)
+    },
+    {
+      path: "docker-compose.deploy.yml",
+      content: createPythonDockerComposeDeploy(deployOptions)
+    },
+    {
+      path: "docker-compose.infra.yml",
+      content: createPythonDockerComposeInfra(deployOptions)
+    },
+    {
       path: ".env.test.example",
       content: createEnvExample("test", options, includePrivateKey)
     },
     {
       path: ".env.product.example",
       content: createEnvExample("product", options, includePrivateKey)
+    },
+    {
+      path: ".env.deploy.example",
+      content: createPythonDeployEnvExample(deployOptions)
     },
     {
       path: "alembic.ini",
@@ -2968,7 +3004,6 @@ if __name__ == "__main__":
 
 function createGithubActionsWorkflow(options: SharedPythonOptions, includePrivateKey: boolean): string {
   const testPrivateKeySecret = includePrivateKey ? "      JWT_PRIVATE_KEY: ${{ secrets.TEST_JWT_PRIVATE_KEY }}\n" : "";
-  const productPrivateKeySecret = includePrivateKey ? "      JWT_PRIVATE_KEY: ${{ secrets.PRODUCT_JWT_PRIVATE_KEY }}\n" : "";
 
   return `name: CI
 
@@ -2979,27 +3014,12 @@ on:
   push:
     branches:
       - master
-    tags:
-      - "v*"
-      - "release-*"
-  workflow_dispatch:
-    inputs:
-      deploy_environment:
-        description: "Optional environment to deploy"
-        type: choice
-        default: none
-        options:
-          - none
-          - test
-          - product
 
 env:
   IMAGE_NAME: ${options.serviceName}
-  REGISTRY: ghcr.io/\${{ github.repository_owner }}
 
 permissions:
   contents: read
-  packages: write
 
 jobs:
   test:
@@ -3051,63 +3071,7 @@ ${testPrivateKeySecret}      JWT_PUBLIC_KEY: \${{ secrets.TEST_JWT_PUBLIC_KEY }}
     steps:
       - uses: actions/checkout@v4
       - name: Build Docker image
-        run: docker build --tag "$IMAGE_NAME:test-\${{ github.sha }}" .
-
-  deploy-test:
-    runs-on: ubuntu-latest
-    needs: docker-build
-    if: github.ref == 'refs/heads/master' || (github.event_name == 'workflow_dispatch' && inputs.deploy_environment == 'test')
-    environment: test
-    env:
-      DATABASE_URL: \${{ secrets.TEST_DATABASE_URL }}
-      REDIS_URL: \${{ secrets.TEST_REDIS_URL }}
-${testPrivateKeySecret}      JWT_PUBLIC_KEY: \${{ secrets.TEST_JWT_PUBLIC_KEY }}
-      CORS_ALLOW_ORIGINS: \${{ secrets.TEST_CORS_ALLOW_ORIGINS }}
-      REGISTRY_TOKEN: \${{ secrets.TEST_DOCKER_REGISTRY_TOKEN }}
-      IMAGE_TAG: test-\${{ github.sha }}
-    steps:
-      - uses: actions/checkout@v4
-      - name: Build deployment image
-        run: docker build --tag "$REGISTRY/$IMAGE_NAME:$IMAGE_TAG" .
-      - name: Login to registry
-        if: env.REGISTRY_TOKEN != ''
-        run: echo "$REGISTRY_TOKEN" | docker login "$REGISTRY" --username "\${{ github.actor }}" --password-stdin
-      - name: Push test image
-        if: env.REGISTRY_TOKEN != ''
-        run: docker push "$REGISTRY/$IMAGE_NAME:$IMAGE_TAG"
-      - name: Deploy test environment
-        run: |
-          echo "Deploy test environment with image $REGISTRY/$IMAGE_NAME:$IMAGE_TAG"
-          echo "Replace this placeholder with your test deployment command. Do not print secrets or .env contents."
-
-  deploy-product:
-    runs-on: ubuntu-latest
-    needs: docker-build
-    if: >-
-      (startsWith(github.ref, 'refs/tags/v') || startsWith(github.ref, 'refs/tags/release-')) ||
-      (github.event_name == 'workflow_dispatch' && inputs.deploy_environment == 'product' && github.ref == 'refs/heads/master')
-    environment: product
-    env:
-      DATABASE_URL: \${{ secrets.PRODUCT_DATABASE_URL }}
-      REDIS_URL: \${{ secrets.PRODUCT_REDIS_URL }}
-${productPrivateKeySecret}      JWT_PUBLIC_KEY: \${{ secrets.PRODUCT_JWT_PUBLIC_KEY }}
-      CORS_ALLOW_ORIGINS: \${{ secrets.PRODUCT_CORS_ALLOW_ORIGINS }}
-      REGISTRY_TOKEN: \${{ secrets.PRODUCT_DOCKER_REGISTRY_TOKEN }}
-      IMAGE_TAG: product-\${{ github.ref_name }}-\${{ github.sha }}
-    steps:
-      - uses: actions/checkout@v4
-      - name: Build deployment image
-        run: docker build --tag "$REGISTRY/$IMAGE_NAME:$IMAGE_TAG" .
-      - name: Login to registry
-        if: env.REGISTRY_TOKEN != ''
-        run: echo "$REGISTRY_TOKEN" | docker login "$REGISTRY" --username "\${{ github.actor }}" --password-stdin
-      - name: Push product image
-        if: env.REGISTRY_TOKEN != ''
-        run: docker push "$REGISTRY/$IMAGE_NAME:$IMAGE_TAG"
-      - name: Deploy product environment
-        run: |
-          echo "Deploy product environment with image $REGISTRY/$IMAGE_NAME:$IMAGE_TAG"
-          echo "Use GitHub Environment reviewers and branch/tag rules before enabling the real deploy command."
+        run: docker build --tag "$IMAGE_NAME:ci-\${{ github.sha }}" .
 `;
 }
 
@@ -3381,34 +3345,18 @@ ${createPythonTemplateUsageDocs(options)}
 
 ## GitHub Actions, Secrets, and Environments
 
-The generated \`.github/workflows/ci.yml\` keeps CI/CD environment-aware:
+The generated \`.github/workflows/ci.yml\` is CI-only: it runs PDM install, lint, pytest, Alembic state checks, and a Docker build. The generated \`.github/workflows/deploy.yml\` owns tag release and rollback.
 
-- \`test\` runs PDM install, lint, pytest, Alembic state checks, and a Docker build.
-- \`deploy-test\` uses the GitHub Environment named \`test\` and a \`test-<git-sha>\` image tag.
-- \`deploy-product\` uses the GitHub Environment named \`product\` and only runs from release tags or a manual master deployment.
-- Deployment steps are placeholders by default; replace them with your platform command without printing \`.env\` files or secret values.
-
-Configure GitHub Environments before enabling real deploy commands:
-
-| Environment | Recommended protection |
-| --- | --- |
-| \`test\` | limited deploy credentials and test-only data stores |
-| \`product\` | required reviewers, master/release-tag restrictions, and least-privilege deploy credentials |
-
-Recommended secrets:
-
-| Scope | Secrets |
-| --- | --- |
-| test | ${options.templateName === "python-main" ? "\`TEST_JWT_PRIVATE_KEY\`, " : ""}\`TEST_DATABASE_URL\`, \`TEST_REDIS_URL\`, \`TEST_JWT_PUBLIC_KEY\`, \`TEST_CORS_ALLOW_ORIGINS\`, \`TEST_DOCKER_REGISTRY_TOKEN\` |
-| product | ${options.templateName === "python-main" ? "\`PRODUCT_JWT_PRIVATE_KEY\`, " : ""}\`PRODUCT_DATABASE_URL\`, \`PRODUCT_REDIS_URL\`, \`PRODUCT_JWT_PUBLIC_KEY\`, \`PRODUCT_CORS_ALLOW_ORIGINS\`, \`PRODUCT_DOCKER_REGISTRY_TOKEN\` |
-
-Use immutable image tags rather than relying on \`latest\`:
-
-- \`${options.serviceName}:test-<git-sha>\`
-- \`${options.serviceName}:product-<version>\`
-- \`${options.serviceName}:product-<git-sha>\`
-
-For production rollback, redeploy a previously verified image tag first. Prefer forward-compatible migrations and repair migrations over relying on database downgrades.
+${createPythonDeployReadmeSection({
+  templateName: options.templateName,
+  serviceName: options.serviceName,
+  envDatabaseName: options.envDatabaseName,
+  includePrivateKey: options.templateName === "python-main",
+  defaultImageName: options.serviceName,
+  defaultContainerName: options.serviceName,
+  defaultAppPort: 8000,
+  defaultNginxPort: 8080
+})}
 
 ## Scripts
 

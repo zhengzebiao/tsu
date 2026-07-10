@@ -70,6 +70,102 @@ function assertMfeDeployWorkflow(content: string) {
   assert.match(content, /Refusing to deploy a latest tag/);
 }
 
+function assertPythonDeployWorkflow(content: string, includePrivateKey: boolean) {
+  assert.match(content, /name: Deploy/);
+  assert.match(content, /test-v\*\.\*\.\*/);
+  assert.match(content, /product-v\*\.\*\.\*/);
+  assert.match(content, /workflow_dispatch/);
+  assert.match(content, /environment/);
+  assert.match(content, /image_tag/);
+  assert.match(content, /version/);
+  assert.match(content, /should_build/);
+  assert.match(content, /permissions:/);
+  assert.match(content, /packages: write/);
+  assert.match(content, /docker build/);
+  assert.match(content, /docker push/);
+  assert.match(content, /DOCKER_REGISTRY_TOKEN/);
+  assert.match(content, /SSH_PRIVATE_KEY/);
+  assert.match(content, /DATABASE_URL/);
+  assert.match(content, /REDIS_URL/);
+  assert.match(content, /JWT_PUBLIC_KEY/);
+  assert.match(content, /docker-compose\.deploy\.yml/);
+  assert.match(content, /nginx\/default\.conf/);
+  assert.match(content, /scp/);
+  assert.match(content, /ssh/);
+  assert.match(content, /docker compose --env-file \.env -f docker-compose\.deploy\.yml pull api/);
+  assert.match(content, /docker compose --env-file \.env -f docker-compose\.deploy\.yml up -d --no-build api nginx/);
+  assert.match(content, /Refusing to deploy a latest tag/);
+  assert.doesNotMatch(content, /docker-compose\.infra\.yml/);
+  assert.doesNotMatch(content, /pdm run migrate|alembic upgrade|pdm run seed|python -m app\.seed/);
+  if (includePrivateKey) {
+    assert.match(content, /JWT_PRIVATE_KEY/);
+  } else {
+    assert.doesNotMatch(content, /JWT_PRIVATE_KEY/);
+  }
+}
+
+function assertPythonDeployCompose(content: string) {
+  assert.match(content, /api:/);
+  assert.match(content, /nginx:/);
+  assert.match(content, /\$\{DOCKER_IMAGE_NAME\}:\$\{APP_VERSION\}/);
+  assert.match(content, /env_file:/);
+  assert.match(content, /\/health/);
+  assert.match(content, /external: true/);
+  assert.match(content, /DOCKER_NETWORK_NAME/);
+  assert.doesNotMatch(content, /build:/);
+}
+
+function assertPythonInfraCompose(content: string) {
+  assert.match(content, /postgres:16-alpine/);
+  assert.match(content, /redis:7-alpine/);
+  assert.match(content, /postgres_data/);
+  assert.match(content, /redis_data/);
+  assert.match(content, /appendonly yes/);
+  assert.match(content, /DOCKER_NETWORK_NAME/);
+  assert.doesNotMatch(content, /api:/);
+}
+
+function assertPythonDeployEnv(content: string, includePrivateKey: boolean) {
+  assert.match(content, /DOCKER_IMAGE_NAME/);
+  assert.match(content, /APP_VERSION/);
+  assert.match(content, /CONTAINER_NAME/);
+  assert.match(content, /APP_ENV/);
+  assert.match(content, /APP_PORT/);
+  assert.match(content, /NGINX_PORT/);
+  assert.match(content, /DATABASE_URL/);
+  assert.match(content, /REDIS_URL/);
+  assert.match(content, /JWT_ISSUER/);
+  assert.match(content, /JWT_AUDIENCE/);
+  assert.match(content, /JWT_PUBLIC_KEY/);
+  assert.match(content, /TOKEN_BLACKLIST_PREFIX/);
+  assert.match(content, /SESSION_PREFIX/);
+  if (includePrivateKey) {
+    assert.match(content, /JWT_PRIVATE_KEY/);
+  } else {
+    assert.doesNotMatch(content, /JWT_PRIVATE_KEY/);
+  }
+}
+
+function assertPythonDeployReadme(content: string, includePrivateKey: boolean) {
+  assert.match(content, /Release Deploy and Rollback/);
+  assert.match(content, /GitHub Environments/);
+  assert.match(content, /Docker Infra/);
+  assert.match(content, /Tag Release/);
+  assert.match(content, /Rollback/);
+  assert.match(content, /Migration Policy/);
+  assert.match(content, /Seed Policy/);
+  assert.match(content, /test-v1\.0\.1/);
+  assert.match(content, /product-v1\.0\.1/);
+  assert.match(content, /image_tag = product-v1\.0\.0/);
+  assert.match(content, /docker compose --env-file \.env -f docker-compose\.deploy\.yml pull api/);
+  assert.match(content, /Product does not auto-run seed/);
+  if (includePrivateKey) {
+    assert.match(content, /python-main` owns `JWT_PRIVATE_KEY/);
+  } else {
+    assert.match(content, /python-app` uses only `JWT_PUBLIC_KEY/);
+  }
+}
+
 test("default template normalizes project names", () => {
   const files = createTemplateFiles({ projectName: "My App" });
   const packageJson = files.find((file) => file.path === "package.json");
@@ -266,11 +362,19 @@ test("python-main template creates auth service files", () => {
   const readme = files.find((file) => file.path === "README.md");
   const envTest = files.find((file) => file.path === ".env.test.example");
   const envProduct = files.find((file) => file.path === ".env.product.example");
+  const deployWorkflow = files.find((file) => file.path === ".github/workflows/deploy.yml");
+  const deployCompose = files.find((file) => file.path === "docker-compose.deploy.yml");
+  const infraCompose = files.find((file) => file.path === "docker-compose.infra.yml");
+  const envDeploy = files.find((file) => file.path === ".env.deploy.example");
 
   assert.ok(pyproject);
   assert.ok(readme);
   assert.ok(envTest);
   assert.ok(envProduct);
+  assert.ok(deployWorkflow);
+  assert.ok(deployCompose);
+  assert.ok(infraCompose);
+  assert.ok(envDeploy);
   assert.match(pyproject.content, /name = "auth-service"/);
   assert.match(pyproject.content, /fastapi/);
   assert.match(pyproject.content, /\[dependency-groups\]/);
@@ -306,7 +410,11 @@ test("python-main template creates auth service files", () => {
   assert.ok(paths.includes("alembic/versions/0001_initial_auth_schema.py"));
   assert.ok(paths.includes("nginx/default.conf"));
   assert.ok(paths.includes("docker-compose.yml"));
+  assert.ok(paths.includes("docker-compose.deploy.yml"));
+  assert.ok(paths.includes("docker-compose.infra.yml"));
   assert.ok(paths.includes(".github/workflows/ci.yml"));
+  assert.ok(paths.includes(".github/workflows/deploy.yml"));
+  assert.ok(paths.includes(".env.deploy.example"));
   assert.ok(paths.includes("tests/test_health.py"));
   assert.ok(paths.includes("tests/test_logging.py"));
   assert.ok(paths.includes("tests/test_redis_state_services.py"));
@@ -324,17 +432,14 @@ test("python-main template creates auth service files", () => {
   assert.match(workflow, /pdm run alembic-current/);
   assert.match(workflow, /docker-build:/);
   assert.match(workflow, /docker build --tag/);
-  assert.match(workflow, /deploy-test:/);
-  assert.match(workflow, /environment: test/);
-  assert.match(workflow, /TEST_DOCKER_REGISTRY_TOKEN/);
-  assert.match(workflow, /deploy-product:/);
-  assert.match(workflow, /environment: product/);
-  assert.match(workflow, /PRODUCT_DOCKER_REGISTRY_TOKEN/);
+  assert.doesNotMatch(workflow, /deploy-test:|deploy-product:|TEST_DOCKER_REGISTRY_TOKEN|PRODUCT_DOCKER_REGISTRY_TOKEN/);
   assert.match(workflow, /TEST_JWT_PRIVATE_KEY/);
-  assert.match(workflow, /PRODUCT_JWT_PRIVATE_KEY/);
+  assertPythonDeployWorkflow(deployWorkflow.content, true);
+  assertPythonDeployCompose(deployCompose.content);
+  assertPythonInfraCompose(infraCompose.content);
+  assertPythonDeployEnv(envDeploy.content, true);
+  assertPythonDeployReadme(readme.content, true);
   assert.match(readme.content, /GitHub Actions, Secrets, and Environments/);
-  assert.match(readme.content, /auth-service:test-<git-sha>/);
-  assert.match(readme.content, /production rollback/);
   assert.match(readme.content, /## Auth API/);
   assert.match(readme.content, /POST \/auth\/login/);
   assert.match(readme.content, /POST \/auth\/refresh/);
@@ -407,10 +512,18 @@ test("python-app template creates resource service files", () => {
   const pyproject = files.find((file) => file.path === "pyproject.toml");
   const readme = files.find((file) => file.path === "README.md");
   const envTest = files.find((file) => file.path === ".env.test.example");
+  const deployWorkflow = files.find((file) => file.path === ".github/workflows/deploy.yml");
+  const deployCompose = files.find((file) => file.path === "docker-compose.deploy.yml");
+  const infraCompose = files.find((file) => file.path === "docker-compose.infra.yml");
+  const envDeploy = files.find((file) => file.path === ".env.deploy.example");
 
   assert.ok(pyproject);
   assert.ok(readme);
   assert.ok(envTest);
+  assert.ok(deployWorkflow);
+  assert.ok(deployCompose);
+  assert.ok(infraCompose);
+  assert.ok(envDeploy);
   assert.match(pyproject.content, /name = "backend-api"/);
   assert.match(pyproject.content, /\[tool\.pdm\.scripts\]/);
   assert.match(pyproject.content, /lint = "ruff check \./);
@@ -433,6 +546,12 @@ test("python-app template creates resource service files", () => {
   assert.ok(paths.includes("alembic/env.py"));
   assert.ok(paths.includes("alembic/versions/0001_initial_app_schema.py"));
   assert.ok(paths.includes("nginx/default.conf"));
+  assert.ok(paths.includes("docker-compose.yml"));
+  assert.ok(paths.includes("docker-compose.deploy.yml"));
+  assert.ok(paths.includes("docker-compose.infra.yml"));
+  assert.ok(paths.includes(".github/workflows/ci.yml"));
+  assert.ok(paths.includes(".github/workflows/deploy.yml"));
+  assert.ok(paths.includes(".env.deploy.example"));
   assert.ok(paths.includes("tests/conftest.py"));
   assert.ok(paths.includes("tests/test_logging.py"));
   assert.ok(paths.includes("tests/test_redis_state_services.py"));
@@ -444,15 +563,15 @@ test("python-app template creates resource service files", () => {
   const nginx = files.find((file) => file.path === "nginx/default.conf")?.content ?? "";
   assert.match(workflow, /pdm run alembic-current/);
   assert.match(workflow, /docker-build:/);
-  assert.match(workflow, /deploy-test:/);
-  assert.match(workflow, /environment: test/);
-  assert.match(workflow, /TEST_DOCKER_REGISTRY_TOKEN/);
-  assert.match(workflow, /deploy-product:/);
-  assert.match(workflow, /environment: product/);
-  assert.match(workflow, /PRODUCT_DOCKER_REGISTRY_TOKEN/);
+  assert.match(workflow, /docker build --tag/);
+  assert.doesNotMatch(workflow, /deploy-test:|deploy-product:|TEST_DOCKER_REGISTRY_TOKEN|PRODUCT_DOCKER_REGISTRY_TOKEN/);
   assert.doesNotMatch(workflow, /TEST_JWT_PRIVATE_KEY|PRODUCT_JWT_PRIVATE_KEY/);
+  assertPythonDeployWorkflow(deployWorkflow.content, false);
+  assertPythonDeployCompose(deployCompose.content);
+  assertPythonInfraCompose(infraCompose.content);
+  assertPythonDeployEnv(envDeploy.content, false);
+  assertPythonDeployReadme(readme.content, false);
   assert.match(readme.content, /GitHub Actions, Secrets, and Environments/);
-  assert.match(readme.content, /backend-api:test-<git-sha>/);
   assert.match(readme.content, /GitHub Environments/);
   assert.match(readme.content, /## Protected API Usage/);
   assert.match(readme.content, /Authorization: Bearer <access-token>/);

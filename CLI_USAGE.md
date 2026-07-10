@@ -44,8 +44,8 @@ demo-app/
 | `mfe-main` | `tsu-cli init mfe-main-platform --template mfe-main` | React + Vite + qiankun 主应用 / 基座，内置登录态、CI、Docker/nginx/compose、tag 发布和回滚文档 |
 | `mfe-app` | `tsu-cli init mfe-business-app --template mfe-app` | React + Vite + qiankun 子应用 / 业务应用，支持独立运行和 host 挂载，内置 CI、Docker/nginx/compose、tag 发布和回滚文档 |
 | `monorepo` | `tsu-cli init platform --template monorepo` | 符合当前 PRD 的 pnpm + Turborepo + Changesets 多包仓库模板 |
-| `python-main` | `tsu-cli init auth-service --template python-main` | FastAPI 认证服务模板，内置 PostgreSQL、Redis、Alembic、JWT、Docker、Nginx 和 CI/CD Environments |
-| `python-app` | `tsu-cli init business-service --template python-app` | FastAPI 业务服务模板，内置受保护 API、PostgreSQL、Redis 黑名单、Docker、Nginx 和 CI/CD Environments |
+| `python-main` | `tsu-cli init auth-service --template python-main` | FastAPI 认证服务模板，内置 PostgreSQL、Redis、Alembic、JWT、Docker、Nginx、CI、tag 发布和镜像回滚部署 |
+| `python-app` | `tsu-cli init business-service --template python-app` | FastAPI 业务服务模板，内置受保护 API、PostgreSQL、Redis 黑名单、Docker、Nginx、CI、tag 发布和镜像回滚部署 |
 
 默认情况下，CLI 会尝试从 GitHub Release asset 拉取模板；如果提供了 `--local`，则使用本地模板生成。
 
@@ -329,6 +329,21 @@ pnpm template:release:build --version=1.0.0
 TEMPLATE_VERSION=1.0.0 pnpm validate:template-release
 ```
 
+## 验证生成后的 Python 模板
+
+```bash
+REDIS_URL=redis://localhost:6379/15 pnpm validate:generated-python
+```
+
+该命令会生成 `python-main` 和 `python-app` 项目，检查 deploy workflow、`docker-compose.deploy.yml`、`docker-compose.infra.yml`、`.env.deploy.example` 和 README 发布部署 markers，然后执行 Python 语法检查、Alembic upgrade、seed 幂等、Ruff、pytest，并启动两个生成服务验证登录、资源访问、注销后拒绝访问、Request ID 透传和敏感日志不泄露。
+
+生成的 Python 项目包含：
+
+- `.github/workflows/deploy.yml`：`test-v*.*.*` / `product-v*.*.*` tag 发布，以及 `workflow_dispatch` 输入历史 `image_tag` 回滚。
+- `docker-compose.infra.yml`：长期运行 PostgreSQL / Redis Docker 基础设施，product/test 可用 Docker，但不跟随应用发布重建。
+- `docker-compose.deploy.yml`：只发布/回滚 `api` + `nginx`，执行 `docker compose pull api` 和 `docker compose up -d --no-build api nginx`。
+- `.env.deploy.example`：远端运行时环境变量示例；`python-main` 包含 `JWT_PRIVATE_KEY`，`python-app` 只包含 `JWT_PUBLIC_KEY`。
+
 ## npm 发布包
 
 完整发布流程见 [npm-release-flow.zh-CN.md](npm-release-flow.zh-CN.md)。
@@ -512,6 +527,8 @@ pnpm template:release:preflight --version=1.0.0
 
 ```bash
 pnpm build
+pnpm validate:generated-apps
+REDIS_URL=redis://localhost:6379/15 pnpm validate:generated-python
 pnpm template:release:build --version=1.0.0
 TEMPLATE_VERSION=1.0.0 pnpm validate:template-release
 ```

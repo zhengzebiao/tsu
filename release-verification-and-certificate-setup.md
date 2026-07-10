@@ -27,7 +27,7 @@ pnpm template:release:build --version=1.0.3
 TEMPLATE_VERSION=1.0.3 pnpm validate:template-release
 ```
 
-`validate:template-release` checks the real `tsu-templates-v<version>.tar.gz` archive, manifest metadata, bundle contents, generated `mfe-main` / `mfe-app` projects, deploy workflow markers, README documentation markers, generated-project install/lint/format/test/build/E2E gates, and host + sub-app integration E2E. It does not publish a GitHub Release, push registry images, or SSH to a server.
+`validate:template-release` checks the real `tsu-templates-v<version>.tar.gz` archive, manifest metadata, bundle contents, generated `mfe-main` / `mfe-app` projects, MFE deploy workflow markers, Python deploy/rollback artifacts (`deploy.yml`, `docker-compose.deploy.yml`, `docker-compose.infra.yml`, `.env.deploy.example`), README documentation markers, generated-project install/lint/format/test/build/E2E gates, and host + sub-app integration E2E. It does not publish a GitHub Release, push registry images, or SSH to a server.
 
 Verify remote initialization after the Release exists:
 

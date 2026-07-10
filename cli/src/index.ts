@@ -917,8 +917,42 @@ const templateExpectedFiles: Record<string, string[]> = {
     "packages/api/src/index.ts"
   ],
   react: ["package.json", "README.md", "src/main.tsx", "src/App.tsx", "vite.config.ts"],
-  "python-main": ["pyproject.toml", "README.md", "app/main.py", "app/api/auth.py", "app/core/config.py", "app/services/session_service.py", "alembic/versions/0001_initial_auth_schema.py", "tests/test_logging.py", "tests/test_redis_state_services.py"],
-  "python-app": ["pyproject.toml", "README.md", "app/main.py", "app/api/example.py", "app/deps/auth.py", "app/services/session_service.py", "alembic/versions/0001_initial_app_schema.py", "tests/test_logging.py", "tests/test_redis_state_services.py"]
+  "python-main": [
+    "pyproject.toml",
+    "README.md",
+    ".env.deploy.example",
+    ".github/workflows/deploy.yml",
+    "Dockerfile",
+    "docker-compose.yml",
+    "docker-compose.deploy.yml",
+    "docker-compose.infra.yml",
+    "nginx/default.conf",
+    "app/main.py",
+    "app/api/auth.py",
+    "app/core/config.py",
+    "app/services/session_service.py",
+    "alembic/versions/0001_initial_auth_schema.py",
+    "tests/test_logging.py",
+    "tests/test_redis_state_services.py"
+  ],
+  "python-app": [
+    "pyproject.toml",
+    "README.md",
+    ".env.deploy.example",
+    ".github/workflows/deploy.yml",
+    "Dockerfile",
+    "docker-compose.yml",
+    "docker-compose.deploy.yml",
+    "docker-compose.infra.yml",
+    "nginx/default.conf",
+    "app/main.py",
+    "app/api/example.py",
+    "app/deps/auth.py",
+    "app/services/session_service.py",
+    "alembic/versions/0001_initial_app_schema.py",
+    "tests/test_logging.py",
+    "tests/test_redis_state_services.py"
+  ]
 };
 
 function pass(label: string, details?: string): DoctorCheck {

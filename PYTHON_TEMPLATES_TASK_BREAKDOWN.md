@@ -21,9 +21,9 @@
 | 阶段 6：`python-app` 业务服务鉴权能力 | ✅ 已完成基础版 | 已生成 Bearer Token 解析、公钥校验、issuer/audience/exp 校验、Redis 黑名单读取、revoked session 检查、`sub`/`sid`/`jti`/`roles`/`scope` claim 规范化、`require_scope`/`require_scopes`/`require_any_scope`/`require_role`/`require_any_role` 依赖、细分鉴权失败日志、claim 边界测试、组合鉴权 helper 测试和 OpenAPI Bearer Auth 测试；基础模板不引入复杂 `require_policy` / deny 系列 |
 | 阶段 7：Alembic、Seed 与数据库策略 | ✅ 已完成基础版 | 已生成 Alembic 环境、`python-main` / `python-app` 初始 migration、默认数据幂等 seed、README migration/seed/downgrade/product 边界说明，并补充模板/CLI/release 校验；本轮将 `sessions.user_id` 对齐为 DB user 外键 |
 | 阶段 8：Docker 与 Nginx | ✅ 已完成基础版 | 已生成 Dockerfile、开发 compose、Nginx 反向代理、安全响应头和 Request ID 透传；Dockerfile 使用生产 Gunicorn + Uvicorn Worker，compose 使用开发 Uvicorn `--reload` |
-| 阶段 9：GitHub Actions / Secrets / Environments | ✅ 已完成基础 deploy 模板 | 已生成 PDM CI、Alembic 状态检查、Docker build、test/product environment、docker push 与 deploy 占位 job；README 已说明 secrets 分离和 product 保护规则，真实平台 deploy 命令留给使用方替换 |
+| 阶段 9：GitHub Actions / Secrets / Environments | ✅ 已完成发布回滚链路优化 | 已生成 CI-only workflow、独立 Deploy workflow、`test-v*.*.*` / `product-v*.*.*` tag 发布、`workflow_dispatch` 历史 `image_tag` 回滚、Docker image build/push、SSH 上传 deploy compose/env/nginx，并保持 product migration/seed 不自动执行 |
 | 阶段 10：测试覆盖与验收 | ✅ 已完成基础验收 | 已补模板生成测试、CLI 初始化测试、release bundle 校验、生成文件 Python 语法 smoke check、`python-main` auth/token/refresh rotation/DB-backed auth service pytest、共享日志脱敏/Request ID pytest、Redis state service pytest、`python-app` profile/auth/session revoke/malformed claim/role dependency/任意 scope/role helper/细分日志/OpenAPI pytest，并通过 `validate:generated-python` 在本地 Redis 上完成生成项目与跨服务验证 |
-| 阶段 11：README 与模板使用文档 | ✅ 已完成基础完整使用文档 | 已生成 README 基础说明、PDM 依赖管理说明、开发/生产 app server 说明、安全说明、基础部署、Secrets 和 Environments 说明，并补齐 `python-main` 认证接口/JWT/Redis/migration/seed/FAQ 与 `python-app` 受保护接口/public key/issuer/audience/scope/roles/FAQ 文档 |
+| 阶段 11：README 与模板使用文档 | ✅ 已完成发布部署文档优化 | 已生成 README 基础说明、PDM 依赖管理说明、开发/生产 app server 说明、安全说明、Release Deploy and Rollback、Docker infra/app compose 拆分、GitHub Environments、tag 发布、rollback、migration policy、seed policy，并补齐 `python-main` 认证接口/JWT/Redis/migration/seed/FAQ 与 `python-app` 受保护接口/public key/issuer/audience/scope/roles/FAQ 文档 |
 
 本轮已验证：
 
@@ -39,7 +39,7 @@ TEMPLATE_VERSION=0.0.0 pnpm validate:template-release
 REDIS_URL=redis://localhost:6379/15 pnpm validate:generated-python
 ```
 
-`validate:generated-python` 已覆盖：通过本地 CLI 生成 `auth-service` / `backend-api`、`compileall`、Alembic upgrade、seed 幂等、Ruff、pytest、启动两个生成服务并验证 DB-backed login、`/auth/me`、`/api/profile`、wrong scope `403`、malformed claims `401`、logout 后 profile `401`、Request ID 透传和敏感日志不泄露。
+`validate:generated-python` 已覆盖：通过本地 CLI 生成 `auth-service` / `backend-api`、检查 `.github/workflows/deploy.yml`、`docker-compose.deploy.yml`、`docker-compose.infra.yml`、`.env.deploy.example` 和 README 发布/回滚 markers、`compileall`、Alembic upgrade、seed 幂等、Ruff、pytest、启动两个生成服务并验证 DB-backed login、`/auth/me`、`/api/profile`、wrong scope `403`、malformed claims `401`、logout 后 profile `401`、Request ID 透传和敏感日志不泄露。
 
 ## 1. 总体目标
 
@@ -505,9 +505,9 @@ GET /api/profile
    - Nginx
 6. 镜像 tag 不默认只用 `latest`。
 7. README 中说明推荐 tag：
-   - `service-name:test-<git-sha>`
-   - `service-name:product-<version>`
-   - `service-name:product-<git-sha>`
+   - `test-v1.0.1`
+   - `product-v1.0.1`
+   - 历史 `image_tag` 用于 workflow_dispatch 回滚
 8. Nginx 增加：
    - 反向代理 FastAPI
    - 健康检查入口
@@ -542,38 +542,42 @@ GET /api/profile
    - `pdm install`
    - `pdm run lint`
    - `pdm run test`
-3. workflow 支持：
+3. CI workflow 支持：
    - 安装依赖
    - lint
    - test
-   - alembic check / migration
+   - alembic current 检查
    - docker build
-   - docker push
-   - deploy test
-   - deploy product
-4. 使用 GitHub Environments：
+4. Deploy workflow 支持：
+   - `test-v*.*.*` 发布到 test
+   - `product-v*.*.*` 发布到 product
+   - `workflow_dispatch` 输入历史 `image_tag` 回滚
+   - docker build / docker push 只在 tag 发布时执行
+   - rollback 只 pull 历史 image 并 `docker compose up -d --no-build`
+5. 使用 GitHub Environments：
    - `test`
    - `product`
-5. test secrets：
-   - `TEST_DATABASE_URL`
-   - `TEST_REDIS_URL`
-   - `TEST_JWT_PRIVATE_KEY`
-   - `TEST_JWT_PUBLIC_KEY`
-   - `TEST_CORS_ALLOW_ORIGINS`
-   - `TEST_DOCKER_REGISTRY_TOKEN`
-6. product secrets：
-   - `PRODUCT_DATABASE_URL`
-   - `PRODUCT_REDIS_URL`
-   - `PRODUCT_JWT_PRIVATE_KEY`
-   - `PRODUCT_JWT_PUBLIC_KEY`
-   - `PRODUCT_CORS_ALLOW_ORIGINS`
-   - `PRODUCT_DOCKER_REGISTRY_TOKEN`
-7. product 环境增加保护建议：
+6. Environment Variables：
+   - `DOCKER_REGISTRY`
+   - `DOCKER_IMAGE_NAME`
+   - `DEPLOY_HOST` / `DEPLOY_PORT` / `DEPLOY_USER` / `DEPLOY_PATH`
+   - `CONTAINER_NAME` / `APP_PORT` / `NGINX_PORT`
+   - `APP_ENV` / `DOCKER_NETWORK_NAME`
+   - `JWT_ISSUER` / `JWT_AUDIENCE` / `CORS_ALLOW_ORIGINS`
+7. Environment Secrets：
+   - `DOCKER_REGISTRY_TOKEN`
+   - `SSH_PRIVATE_KEY`
+   - `SSH_KNOWN_HOSTS`
+   - `DATABASE_URL`
+   - `REDIS_URL`
+   - `JWT_PUBLIC_KEY`
+   - `JWT_PRIVATE_KEY`（仅 `python-main`）
+8. product 环境增加保护建议：
    - 人工审批
-   - 只允许 master / release tag 部署
+   - 只允许 `product-v*.*.*` tag 或经过审批的 rollback 部署
    - 限制 deploy 权限
    - product secrets 只允许 product job 读取
-8. CI/CD 日志中不打印 `.env` 完整内容或 secrets 值。
+9. CI/CD 日志中不打印 `.env` 完整内容或 secrets 值。
 
 ### 交付物
 
