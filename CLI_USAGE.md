@@ -44,8 +44,8 @@ demo-app/
 | `mfe-main` | `tsu-cli init mfe-main-platform --template mfe-main` | React + Vite + qiankun 主应用 / 基座，内置登录态、CI、Docker/nginx/compose、tag 发布和回滚文档 |
 | `mfe-app` | `tsu-cli init mfe-business-app --template mfe-app` | React + Vite + qiankun 子应用 / 业务应用，支持独立运行和 host 挂载，内置 CI、Docker/nginx/compose、tag 发布和回滚文档 |
 | `monorepo` | `tsu-cli init platform --template monorepo` | 符合当前 PRD 的 pnpm + Turborepo + Changesets 多包仓库模板 |
-| `python-main` | `tsu-cli init auth-service --template python-main` | FastAPI 认证服务模板，内置 PostgreSQL、Redis、Alembic、JWT、Docker、Nginx、CI、tag 发布、镜像回滚和独立 migration workflow |
-| `python-app` | `tsu-cli init business-service --template python-app` | FastAPI 业务服务模板，内置受保护 API、PostgreSQL、Redis 黑名单、Docker、Nginx、CI、tag 发布、镜像回滚和独立 migration workflow |
+| `python-main` | `tsu-cli init auth-service --template python-main` | FastAPI 认证服务模板，内置 PostgreSQL、Redis、Alembic、JWT、Docker、Nginx、CI、tag 发布、镜像回滚、独立 migration workflow 和发布后 health/smoke 检查 |
+| `python-app` | `tsu-cli init business-service --template python-app` | FastAPI 业务服务模板，内置受保护 API、PostgreSQL、Redis 黑名单、Docker、Nginx、CI、tag 发布、镜像回滚、独立 migration workflow 和发布后 health/smoke 检查 |
 
 默认情况下，CLI 会尝试从 GitHub Release asset 拉取模板；如果提供了 `--local`，则使用本地模板生成。
 
@@ -335,11 +335,11 @@ TEMPLATE_VERSION=1.0.0 pnpm validate:template-release
 REDIS_URL=redis://localhost:6379/15 pnpm validate:generated-python
 ```
 
-该命令会生成 `python-main` 和 `python-app` 项目，检查 deploy workflow、migrate workflow、`docker-compose.deploy.yml`、`docker-compose.infra.yml`、`.env.deploy.example` 和 README 发布部署 markers，然后执行 Python 语法检查、Alembic upgrade、seed 幂等、Ruff、pytest，并启动两个生成服务验证登录、资源访问、注销后拒绝访问、Request ID 透传和敏感日志不泄露。
+该命令会生成 `python-main` 和 `python-app` 项目，检查 deploy workflow、migrate workflow、发布后 health/smoke、`docker-compose.deploy.yml`、`docker-compose.infra.yml`、`.env.deploy.example` 和 README 发布部署/生产 runbook markers，然后执行 Python 语法检查、Alembic upgrade、seed 幂等、Ruff、pytest，并启动两个生成服务验证登录、资源访问、注销后拒绝访问、Request ID 透传和敏感日志不泄露。
 
 生成的 Python 项目包含：
 
-- `.github/workflows/deploy.yml`：`test-v*.*.*` / `product-v*.*.*` tag 发布，以及 `workflow_dispatch` 输入历史 `image_tag` 回滚。
+- `.github/workflows/deploy.yml`：`test-v*.*.*` / `product-v*.*.*` tag 发布，以及 `workflow_dispatch` 输入历史 `image_tag` 回滚；部署后等待 Docker health、执行容器内 `/health` smoke，并可选检查 `DEPLOY_PUBLIC_HEALTH_URL`。
 - `.github/workflows/migrate.yml`：手动触发 Alembic migration，输入 `environment` / `revision` / `backup_confirmed`，product 通过 GitHub Environment 审批和备份确认保护。
 - `docker-compose.infra.yml`：长期运行 PostgreSQL / Redis Docker 基础设施，product/test 可用 Docker，但不跟随应用发布重建。
 - `docker-compose.deploy.yml`：只发布/回滚 `api` + `nginx`，执行 `docker compose pull api` 和 `docker compose up -d --no-build api nginx`。

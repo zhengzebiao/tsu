@@ -428,6 +428,16 @@ function pythonDeployWorkflowMarkers(includePrivateKey) {
     "ssh",
     "docker compose --env-file .env -f docker-compose.deploy.yml pull api",
     "docker compose --env-file .env -f docker-compose.deploy.yml up -d --no-build api nginx",
+    "Wait for API container health",
+    "DEPLOY_HEALTH_RETRIES",
+    "DEPLOY_HEALTH_INTERVAL_SECONDS",
+    "docker inspect",
+    "logs --tail=100 api nginx",
+    "Run deployment smoke test",
+    "X-Request-ID",
+    "/health",
+    "DEPLOY_PUBLIC_HEALTH_URL",
+    "curl --fail",
     "Refusing to deploy a latest tag"
   ];
 }
@@ -481,6 +491,9 @@ function pythonDeployEnvMarkers(includePrivateKey) {
     "JWT_PUBLIC_KEY",
     "TOKEN_BLACKLIST_PREFIX",
     "SESSION_PREFIX",
+    "DEPLOY_HEALTH_RETRIES",
+    "DEPLOY_HEALTH_INTERVAL_SECONDS",
+    "DEPLOY_PUBLIC_HEALTH_URL",
     ...(includePrivateKey ? ["JWT_PRIVATE_KEY", "REFRESH_TOKEN_EXPIRE_DAYS", "REFRESH_TOKEN_REUSE_GRACE_SECONDS"] : [])
   ];
 }
@@ -492,6 +505,14 @@ function pythonDeployReadmeMarkers(includePrivateKey) {
     "Docker Infra",
     "Tag Release",
     "Rollback",
+    "Post-deploy health check",
+    "Smoke test",
+    "Backup checklist",
+    "Multi-service release",
+    "Logging and monitoring",
+    "Rollback playbook",
+    "DEPLOY_PUBLIC_HEALTH_URL",
+    "X-Request-ID",
     "Migration Policy",
     "Migrate workflow",
     "backup_confirmed = true",

@@ -705,12 +705,13 @@ release archive validation 也应覆盖这些 marker。
 
 内容：
 
-- deploy 后 health check
-- smoke test
-- 数据备份建议
-- 多服务联动发布
-- 日志/监控建议
-- rollback playbook
+- deploy 后 health check：Deploy workflow 等待 api Docker health，失败时输出 compose 状态和 `api` / `nginx` 日志。
+- smoke test：Deploy workflow 在 api 容器内执行无凭证 smoke，检查 `/health` + `X-Request-ID`，`python-main` 额外验证 invalid `/auth/login` 返回 401，`python-app` 额外验证无 token `/api/profile` 返回 401。
+- 可选公开入口检查：通过 `DEPLOY_PUBLIC_HEALTH_URL` 执行 `curl --fail`。
+- 数据备份建议：README 生成 `Backup checklist`，明确 `backup_confirmed=true` 的含义和 Docker PostgreSQL `pg_dump` 示例，但不自动备份。
+- 多服务联动发布：README 生成 `Multi-service release`，说明 JWT issuer/audience/key/claims/scopes/Redis prefix 兼容顺序和跨服务 smoke。
+- 日志/监控建议：README 生成 `Logging and monitoring`，说明 JSON logs、redaction、nginx `safe_json`、`X-Request-ID` 关联和生产监控指标。
+- rollback playbook：README 生成 `Rollback playbook`，说明 image rollback、schema/Redis 不自动回滚、优先 forward repair migration。
 
 ---
 
@@ -747,7 +748,7 @@ image_tag = product-v1.0.0
 
 ### Step 4：生产增强
 
-最后补 health check、smoke test、备份和多服务发布说明。
+最后补 health check、smoke test、备份和多服务发布说明；当前实现采用发布后 Docker health wait、容器内无凭证 smoke、可选 `DEPLOY_PUBLIC_HEALTH_URL`、README backup checklist / multi-service release / logging and monitoring / rollback playbook。
 
 ---
 

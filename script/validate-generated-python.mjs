@@ -120,6 +120,16 @@ async function validateDeployArtifacts(projectRoot, includePrivateKey) {
     "JWT_PUBLIC_KEY",
     "docker compose --env-file .env -f docker-compose.deploy.yml pull api",
     "docker compose --env-file .env -f docker-compose.deploy.yml up -d --no-build api nginx",
+    "Wait for API container health",
+    "DEPLOY_HEALTH_RETRIES",
+    "DEPLOY_HEALTH_INTERVAL_SECONDS",
+    "docker inspect",
+    "logs --tail=100 api nginx",
+    "Run deployment smoke test",
+    "X-Request-ID",
+    "/health",
+    "DEPLOY_PUBLIC_HEALTH_URL",
+    "curl --fail",
     "Refusing to deploy a latest tag"
   ]);
   assertIncludes(migrateWorkflow, [
@@ -138,8 +148,37 @@ async function validateDeployArtifacts(projectRoot, includePrivateKey) {
   ]);
   assertIncludes(deployCompose, ["${DOCKER_IMAGE_NAME}:${APP_VERSION}", "api:", "nginx:", "/health", "external: true", "DOCKER_NETWORK_NAME"]);
   assertIncludes(infraCompose, ["postgres:16-alpine", "redis:7-alpine", "postgres_data", "redis_data", "appendonly yes", "DOCKER_NETWORK_NAME"]);
-  assertIncludes(envDeploy, ["DOCKER_IMAGE_NAME", "APP_VERSION", "DATABASE_URL", "REDIS_URL", "JWT_PUBLIC_KEY", "TOKEN_BLACKLIST_PREFIX", "SESSION_PREFIX"]);
-  assertIncludes(readme, ["Release Deploy and Rollback", "Docker Infra", "Tag Release", "Rollback", "Migration Policy", "Migrate workflow", "backup_confirmed = true", "Seed Policy", "Product does not auto-run seed"]);
+  assertIncludes(envDeploy, [
+    "DOCKER_IMAGE_NAME",
+    "APP_VERSION",
+    "DATABASE_URL",
+    "REDIS_URL",
+    "JWT_PUBLIC_KEY",
+    "TOKEN_BLACKLIST_PREFIX",
+    "SESSION_PREFIX",
+    "DEPLOY_HEALTH_RETRIES",
+    "DEPLOY_HEALTH_INTERVAL_SECONDS",
+    "DEPLOY_PUBLIC_HEALTH_URL"
+  ]);
+  assertIncludes(readme, [
+    "Release Deploy and Rollback",
+    "Docker Infra",
+    "Tag Release",
+    "Rollback",
+    "Post-deploy health check",
+    "Smoke test",
+    "Backup checklist",
+    "Multi-service release",
+    "Logging and monitoring",
+    "Rollback playbook",
+    "DEPLOY_PUBLIC_HEALTH_URL",
+    "X-Request-ID",
+    "Migration Policy",
+    "Migrate workflow",
+    "backup_confirmed = true",
+    "Seed Policy",
+    "Product does not auto-run seed"
+  ]);
 
   const forbiddenWorkflowMarkers = ["docker-compose.infra.yml", "pdm run migrate", "alembic upgrade", "pdm run seed", "python -m app.seed"];
   const workflowLeak = forbiddenWorkflowMarkers.find((marker) => workflow.includes(marker));

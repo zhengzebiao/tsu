@@ -151,6 +151,11 @@ CORS_ALLOW_CREDENTIALS=true
 OPENAPI_ENABLED=false
 DOCS_ENABLED=false
 REDOC_ENABLED=false
+
+# Optional deploy workflow health checks.
+DEPLOY_HEALTH_RETRIES=30
+DEPLOY_HEALTH_INTERVAL_SECONDS=5
+# DEPLOY_PUBLIC_HEALTH_URL=https://api.example.com/health
 `;
 }
 
@@ -158,6 +163,21 @@ export function createPythonDeployWorkflow(options: PythonDeployOptions) {
   const privateKeyEnv = options.includePrivateKey ? "      JWT_PRIVATE_KEY: ${{ secrets.JWT_PRIVATE_KEY }}\n" : "";
   const privateKeyGeneratedEnv = options.includePrivateKey ? "          JWT_PRIVATE_KEY=$JWT_PRIVATE_KEY\n          REFRESH_TOKEN_EXPIRE_DAYS=${REFRESH_TOKEN_EXPIRE_DAYS:-30}\n          REFRESH_TOKEN_REUSE_GRACE_SECONDS=${REFRESH_TOKEN_REUSE_GRACE_SECONDS:-10}\n          REFRESH_TOKEN_ROTATE=${REFRESH_TOKEN_ROTATE:-true}\n          REFRESH_TOKEN_PREFIX=${REFRESH_TOKEN_PREFIX:-auth:$DEPLOY_ENV:refresh:}\n" : "";
   const privateKeyRequiredCheck = options.includePrivateKey ? "          : \"${JWT_PRIVATE_KEY:?Missing JWT_PRIVATE_KEY secret}\"\n" : "";
+  const deploymentSmokeCheck =
+    options.templateName === "python-main"
+      ? `login_body = json.dumps({"username": "__deploy_smoke__", "password": "__deploy_smoke__"}).encode("utf-8")
+          login_request = urllib.request.Request(
+              "http://127.0.0.1:8000/auth/login",
+              data=login_body,
+              headers={"Content-Type": "application/json", "X-Request-ID": REQUEST_ID},
+              method="POST",
+          )
+          assert_status(login_request, 401, "invalid login")`
+      : `profile_request = urllib.request.Request(
+              "http://127.0.0.1:8000/api/profile",
+              headers={"X-Request-ID": REQUEST_ID},
+          )
+          assert_status(profile_request, 401, "unauthenticated profile")`;
 
   return `name: Deploy
 
@@ -321,6 +341,9 @@ jobs:
       JWT_ISSUER: \${{ vars.JWT_ISSUER }}
       JWT_AUDIENCE: \${{ vars.JWT_AUDIENCE }}
       CORS_ALLOW_ORIGINS: \${{ vars.CORS_ALLOW_ORIGINS }}
+      DEPLOY_HEALTH_RETRIES: \${{ vars.DEPLOY_HEALTH_RETRIES }}
+      DEPLOY_HEALTH_INTERVAL_SECONDS: \${{ vars.DEPLOY_HEALTH_INTERVAL_SECONDS }}
+      DEPLOY_PUBLIC_HEALTH_URL: \${{ vars.DEPLOY_PUBLIC_HEALTH_URL }}
       DATABASE_URL: \${{ secrets.DATABASE_URL }}
       REDIS_URL: \${{ secrets.REDIS_URL }}
 ${privateKeyEnv}      JWT_PUBLIC_KEY: \${{ secrets.JWT_PUBLIC_KEY }}
@@ -411,6 +434,82 @@ ${privateKeyGeneratedEnv}          TOKEN_BLACKLIST_PREFIX=auth:$DEPLOY_ENV:black
             printf '%s' "$DOCKER_REGISTRY_TOKEN" | ssh -i ~/.ssh/deploy_key -p "\${DEPLOY_PORT:-22}" "$DEPLOY_USER@$DEPLOY_HOST" "docker login '\${{ steps.image.outputs.registry }}' -u '$username' --password-stdin"
           fi
           ssh -i ~/.ssh/deploy_key -p "\${DEPLOY_PORT:-22}" "$DEPLOY_USER@$DEPLOY_HOST" "cd '$DEPLOY_PATH' && docker compose --env-file .env -f docker-compose.deploy.yml pull api && docker compose --env-file .env -f docker-compose.deploy.yml up -d --no-build api nginx"
+      - name: Wait for API container health
+        shell: bash
+        run: |
+          set -euo pipefail
+          retries="\${DEPLOY_HEALTH_RETRIES:-30}"
+          interval="\${DEPLOY_HEALTH_INTERVAL_SECONDS:-5}"
+          if ! [[ "$retries" =~ ^[0-9]+$ ]]; then
+            echo "DEPLOY_HEALTH_RETRIES must be a positive integer." >&2
+            exit 1
+          fi
+          if ! [[ "$interval" =~ ^[0-9]+$ ]]; then
+            echo "DEPLOY_HEALTH_INTERVAL_SECONDS must be a positive integer." >&2
+            exit 1
+          fi
+          ssh -i ~/.ssh/deploy_key -p "\${DEPLOY_PORT:-22}" "$DEPLOY_USER@$DEPLOY_HOST" "cd '$DEPLOY_PATH' && DEPLOY_HEALTH_RETRIES='$retries' DEPLOY_HEALTH_INTERVAL_SECONDS='$interval' bash -s" <<'REMOTE_HEALTH'
+          set -euo pipefail
+          container_id="$(docker compose --env-file .env -f docker-compose.deploy.yml ps -q api)"
+          if [ -z "$container_id" ]; then
+            echo "Unable to resolve api container id." >&2
+            docker compose --env-file .env -f docker-compose.deploy.yml ps
+            exit 1
+          fi
+          for attempt in $(seq 1 "$DEPLOY_HEALTH_RETRIES"); do
+            status="$(docker inspect --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}' "$container_id")"
+            if [ "$status" = "healthy" ] || [ "$status" = "running" ]; then
+              echo "api container health is $status."
+              exit 0
+            fi
+            echo "Waiting for api container health ($attempt/$DEPLOY_HEALTH_RETRIES): $status"
+            sleep "$DEPLOY_HEALTH_INTERVAL_SECONDS"
+          done
+          echo "api container did not become healthy." >&2
+          docker compose --env-file .env -f docker-compose.deploy.yml ps
+          docker compose --env-file .env -f docker-compose.deploy.yml logs --tail=100 api nginx
+          exit 1
+          REMOTE_HEALTH
+      - name: Run deployment smoke test
+        shell: bash
+        run: |
+          set -euo pipefail
+          request_id="deploy-$GITHUB_RUN_ID-$IMAGE_TAG"
+          ssh -i ~/.ssh/deploy_key -p "\${DEPLOY_PORT:-22}" "$DEPLOY_USER@$DEPLOY_HOST" "cd '$DEPLOY_PATH' && docker compose --env-file .env -f docker-compose.deploy.yml exec -T -e DEPLOY_SMOKE_REQUEST_ID='$request_id' api python -" <<'PY'
+          import json
+          import os
+          import urllib.error
+          import urllib.request
+
+          REQUEST_ID = os.environ["DEPLOY_SMOKE_REQUEST_ID"]
+
+          def assert_status(request, expected_status, label):
+              try:
+                  with urllib.request.urlopen(request, timeout=10) as response:
+                      status = response.status
+                      request_id = response.headers.get("X-Request-ID")
+              except urllib.error.HTTPError as exc:
+                  status = exc.code
+                  request_id = exc.headers.get("X-Request-ID")
+              if status != expected_status:
+                  raise SystemExit(f"{label} expected {expected_status}, got {status}")
+              if request_id != REQUEST_ID:
+                  raise SystemExit(f"{label} expected X-Request-ID {REQUEST_ID}, got {request_id}")
+
+          health_request = urllib.request.Request(
+              "http://127.0.0.1:8000/health",
+              headers={"X-Request-ID": REQUEST_ID},
+          )
+          assert_status(health_request, 200, "health")
+          ${deploymentSmokeCheck}
+          print("Deployment smoke test passed.")
+          PY
+      - name: Optional public health check
+        if: \${{ env.DEPLOY_PUBLIC_HEALTH_URL != '' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl --fail --retry 5 --retry-delay 5 --retry-connrefused -H "X-Request-ID: deploy-$GITHUB_RUN_ID" "$DEPLOY_PUBLIC_HEALTH_URL"
 `;
 }
 
@@ -602,6 +701,71 @@ docker compose --env-file .env -f docker-compose.deploy.yml up -d --no-build api
 \`\`\`
 
 PostgreSQL and Redis are not rebuilt or rolled back by application deploys.
+
+### Post-deploy health check
+
+Deploy waits for the api container Docker health status after \`docker compose up\`. Configure the wait window with GitHub Environment variables:
+
+\`\`\`text
+DEPLOY_HEALTH_RETRIES=30
+DEPLOY_HEALTH_INTERVAL_SECONDS=5
+DEPLOY_PUBLIC_HEALTH_URL=https://api.example.com/health
+\`\`\`
+
+When the container does not become healthy, the workflow prints \`docker compose --env-file .env -f docker-compose.deploy.yml ps\` and \`docker compose --env-file .env -f docker-compose.deploy.yml logs --tail=100 api nginx\` without printing the remote \`.env\` file.
+
+If \`DEPLOY_PUBLIC_HEALTH_URL\` is set, the workflow also runs a public ingress check with \`curl --fail\` and an \`X-Request-ID\` header.
+
+### Smoke test
+
+The generated Deploy workflow runs a credential-free smoke test inside the api container. It always checks \`/health\` with an \`X-Request-ID\` header.
+
+${options.templateName === "python-main" ? "For `python-main`, it also posts intentionally invalid credentials to `/auth/login` and expects `401`, proving the auth route responds without relying on seed users." : "For `python-app`, it also requests `/api/profile` without a token and expects `401`, proving the auth guard responds without relying on a real access token."}
+
+Run full cross-service smoke from a higher-level release pipeline or manually after deployment: login through \`python-main\`, call \`python-app /api/profile\`, logout through \`python-main\`, then confirm the revoked token is rejected.
+
+### Backup checklist
+
+For product migration, \`backup_confirmed=true\` should mean:
+
+- PostgreSQL backup exists and is stored outside the single Docker host.
+- Restore has been tested or has an executable runbook.
+- Current immutable image tag and Alembic revision are recorded.
+- Migration diff is reviewed and the rollback or forward repair path is known.
+- Redis session/blacklist impact has been considered.
+
+Example Docker PostgreSQL backup command:
+
+\`\`\`bash
+docker exec product-postgres pg_dump -U "$POSTGRES_USER" "$POSTGRES_DB" > backup-$(date +%Y%m%d%H%M%S).sql
+\`\`\`
+
+Do not treat Deploy or Migrate as database backup workflows; keep backup storage, encryption, retention, and restore drills environment-specific.
+
+### Multi-service release
+
+When releasing \`python-main\` and \`python-app\` together, keep \`JWT_ISSUER\`, \`JWT_AUDIENCE\`, key pairs, Redis prefixes, token claims, scopes, and roles compatible across both services.
+
+Recommended order for auth-contract changes:
+
+1. Deploy consumers that tolerate both old and new claims/scopes.
+2. Deploy \`python-main\` changes that emit or require the new contract.
+3. Run cross-service smoke in test before product.
+4. Record compatible image pairs, for example \`python-main product-v1.2.0\` with \`python-app product-v1.4.0\`.
+
+Use expand-contract changes for database and token/API compatibility so rollback windows remain safe.
+
+### Logging and monitoring
+
+The template emits app JSON logs with sensitive redaction, propagates \`X-Request-ID\`, and configures nginx \`safe_json\` access logs. Use the deploy smoke request id to correlate workflow failures with api and nginx logs.
+
+Monitor at least \`/health\`, Docker health status, 5xx rate, latency, PostgreSQL connectivity and disk, Redis connectivity and AOF persistence, and deploy failure rate. Add external log collection, metrics, tracing, and alerts according to your production platform.
+
+### Rollback playbook
+
+Before rollback, identify the last known-good immutable image tag, confirm the target environment prefix, record the current Alembic revision, and check schema compatibility. Run Actions -> Deploy -> Run workflow with the historical \`image_tag\`.
+
+After rollback, review the generated health and smoke results, then inspect api/nginx logs by \`X-Request-ID\`. Database schema and Redis data are not rolled back. Prefer a forward repair migration when schema compatibility breaks; only run Alembic downgrade after explicit backup, approval, and restore planning.
 
 ### Migration Policy
 

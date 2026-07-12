@@ -30,7 +30,7 @@ pnpm template:release:build --version=1.0.3
 TEMPLATE_VERSION=1.0.3 pnpm validate:template-release
 ```
 
-`validate:template-release` 会检查真实的 `tsu-templates-v<version>.tar.gz` archive、manifest metadata、bundle 内容、从 release archive 初始化出来的 `mfe-main` / `mfe-app` 项目、MFE deploy workflow markers、Python 发布/回滚/migration 产物（`deploy.yml`、`migrate.yml`、`docker-compose.deploy.yml`、`docker-compose.infra.yml`、`.env.deploy.example`）、README 文档 markers、生成项目 install/lint/format/test/build/E2E 门禁，以及 host + sub-app 集成 E2E。它不会发布 GitHub Release、推送 registry 镜像或 SSH 到服务器。
+`validate:template-release` 会检查真实的 `tsu-templates-v<version>.tar.gz` archive、manifest metadata、bundle 内容、从 release archive 初始化出来的 `mfe-main` / `mfe-app` 项目、MFE deploy workflow markers、Python 发布/回滚/migration 产物（`deploy.yml`、`migrate.yml`、`docker-compose.deploy.yml`、`docker-compose.infra.yml`、`.env.deploy.example`）、Python 生产增强 markers（post-deploy health、smoke、backup checklist、observability、rollback playbook）、README 文档 markers、生成项目 install/lint/format/test/build/E2E 门禁，以及 host + sub-app 集成 E2E。它不会发布 GitHub Release、推送 registry 镜像或 SSH 到服务器。
 
 Release 存在后验证远程初始化：
 

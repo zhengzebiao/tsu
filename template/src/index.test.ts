@@ -94,6 +94,16 @@ function assertPythonDeployWorkflow(content: string, includePrivateKey: boolean)
   assert.match(content, /ssh/);
   assert.match(content, /docker compose --env-file \.env -f docker-compose\.deploy\.yml pull api/);
   assert.match(content, /docker compose --env-file \.env -f docker-compose\.deploy\.yml up -d --no-build api nginx/);
+  assert.match(content, /Wait for API container health/);
+  assert.match(content, /DEPLOY_HEALTH_RETRIES/);
+  assert.match(content, /DEPLOY_HEALTH_INTERVAL_SECONDS/);
+  assert.match(content, /docker inspect/);
+  assert.match(content, /logs --tail=100 api nginx/);
+  assert.match(content, /Run deployment smoke test/);
+  assert.match(content, /X-Request-ID/);
+  assert.match(content, /\/health/);
+  assert.match(content, /DEPLOY_PUBLIC_HEALTH_URL/);
+  assert.match(content, /curl --fail/);
   assert.match(content, /Refusing to deploy a latest tag/);
   assert.doesNotMatch(content, /docker-compose\.infra\.yml/);
   assert.doesNotMatch(content, /pdm run migrate|alembic upgrade|pdm run seed|python -m app\.seed/);
@@ -158,6 +168,9 @@ function assertPythonDeployEnv(content: string, includePrivateKey: boolean) {
   assert.match(content, /JWT_PUBLIC_KEY/);
   assert.match(content, /TOKEN_BLACKLIST_PREFIX/);
   assert.match(content, /SESSION_PREFIX/);
+  assert.match(content, /DEPLOY_HEALTH_RETRIES/);
+  assert.match(content, /DEPLOY_HEALTH_INTERVAL_SECONDS/);
+  assert.match(content, /DEPLOY_PUBLIC_HEALTH_URL/);
   if (includePrivateKey) {
     assert.match(content, /JWT_PRIVATE_KEY/);
   } else {
@@ -172,6 +185,14 @@ function assertPythonDeployReadme(content: string, includePrivateKey: boolean) {
   assert.match(content, /Tag Release/);
   assert.match(content, /Rollback/);
   assert.match(content, /Migrate workflow/);
+  assert.match(content, /Post-deploy health check/);
+  assert.match(content, /Smoke test/);
+  assert.match(content, /Backup checklist/);
+  assert.match(content, /Multi-service release/);
+  assert.match(content, /Logging and monitoring/);
+  assert.match(content, /Rollback playbook/);
+  assert.match(content, /DEPLOY_PUBLIC_HEALTH_URL/);
+  assert.match(content, /X-Request-ID/);
   assert.match(content, /Migration Policy/);
   assert.match(content, /backup_confirmed = true/);
   assert.match(content, /Seed Policy/);

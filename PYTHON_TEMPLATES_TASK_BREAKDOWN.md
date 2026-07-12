@@ -8,7 +8,7 @@
 
 > 状态更新时间：2026-07-05
 > 当前实现分支：`implement-python-templates`
-> 当前推进阶段：发布部署优化 Phase 2：独立 migration workflow（在 Phase 9 发布/回滚链路基础上新增手动 Alembic migration workflow）
+> 当前推进阶段：发布部署优化 Phase 3：生产部署增强（发布后 health/smoke、备份/回滚 runbook、多服务联动发布和日志/监控建议）
 
 | 阶段 | 状态 | 说明 |
 | --- | --- | --- |
@@ -21,9 +21,9 @@
 | 阶段 6：`python-app` 业务服务鉴权能力 | ✅ 已完成基础版 | 已生成 Bearer Token 解析、公钥校验、issuer/audience/exp 校验、Redis 黑名单读取、revoked session 检查、`sub`/`sid`/`jti`/`roles`/`scope` claim 规范化、`require_scope`/`require_scopes`/`require_any_scope`/`require_role`/`require_any_role` 依赖、细分鉴权失败日志、claim 边界测试、组合鉴权 helper 测试和 OpenAPI Bearer Auth 测试；基础模板不引入复杂 `require_policy` / deny 系列 |
 | 阶段 7：Alembic、Seed 与数据库策略 | ✅ 已完成基础版 | 已生成 Alembic 环境、`python-main` / `python-app` 初始 migration、默认数据幂等 seed、README migration/seed/downgrade/product 边界说明，并补充模板/CLI/release 校验；本轮将 `sessions.user_id` 对齐为 DB user 外键 |
 | 阶段 8：Docker 与 Nginx | ✅ 已完成基础版 | 已生成 Dockerfile、开发 compose、Nginx 反向代理、安全响应头和 Request ID 透传；Dockerfile 使用生产 Gunicorn + Uvicorn Worker，compose 使用开发 Uvicorn `--reload` |
-| 阶段 9：GitHub Actions / Secrets / Environments | ✅ 已完成发布回滚与 migration 链路优化 | 已生成 CI-only workflow、独立 Deploy workflow、独立 Migrate workflow、`test-v*.*.*` / `product-v*.*.*` tag 发布、`workflow_dispatch` 历史 `image_tag` 回滚、Docker image build/push、SSH 上传 deploy compose/env/nginx；migration 通过手动 workflow_dispatch + GitHub Environment approval + `backup_confirmed` 执行，并保持 deploy/rollback 不自动 migration、seed 不自动执行 |
+| 阶段 9：GitHub Actions / Secrets / Environments | ✅ 已完成发布回滚、migration 与生产增强 | 已生成 CI-only workflow、独立 Deploy workflow、独立 Migrate workflow、`test-v*.*.*` / `product-v*.*.*` tag 发布、`workflow_dispatch` 历史 `image_tag` 回滚、Docker image build/push、SSH 上传 deploy compose/env/nginx；Deploy 发布后等待 Docker health、执行容器内 `/health` smoke、可选检查 `DEPLOY_PUBLIC_HEALTH_URL`；migration 通过手动 workflow_dispatch + GitHub Environment approval + `backup_confirmed` 执行，并保持 deploy/rollback 不自动 migration、seed 不自动执行 |
 | 阶段 10：测试覆盖与验收 | ✅ 已完成基础验收 | 已补模板生成测试、CLI 初始化测试、release bundle 校验、生成文件 Python 语法 smoke check、`python-main` auth/token/refresh rotation/DB-backed auth service pytest、共享日志脱敏/Request ID pytest、Redis state service pytest、`python-app` profile/auth/session revoke/malformed claim/role dependency/任意 scope/role helper/细分日志/OpenAPI pytest，并通过 `validate:generated-python` 在本地 Redis 上完成生成项目与跨服务验证 |
-| 阶段 11：README 与模板使用文档 | ✅ 已完成发布部署文档优化 | 已生成 README 基础说明、PDM 依赖管理说明、开发/生产 app server 说明、安全说明、Release Deploy and Rollback、Docker infra/app compose 拆分、GitHub Environments、tag 发布、rollback、migration policy、seed policy，并补齐 `python-main` 认证接口/JWT/Redis/migration/seed/FAQ 与 `python-app` 受保护接口/public key/issuer/audience/scope/roles/FAQ 文档 |
+| 阶段 11：README 与模板使用文档 | ✅ 已完成发布部署与生产 runbook 优化 | 已生成 README 基础说明、PDM 依赖管理说明、开发/生产 app server 说明、安全说明、Release Deploy and Rollback、Docker infra/app compose 拆分、GitHub Environments、tag 发布、rollback、migration policy、seed policy、post-deploy health check、smoke test、backup checklist、multi-service release、logging and monitoring、rollback playbook，并补齐 `python-main` 认证接口/JWT/Redis/migration/seed/FAQ 与 `python-app` 受保护接口/public key/issuer/audience/scope/roles/FAQ 文档 |
 
 本轮已验证：
 
@@ -39,7 +39,7 @@ TEMPLATE_VERSION=0.0.0 pnpm validate:template-release
 REDIS_URL=redis://localhost:6379/15 pnpm validate:generated-python
 ```
 
-`validate:generated-python` 已覆盖：通过本地 CLI 生成 `auth-service` / `backend-api`、检查 `.github/workflows/deploy.yml`、`.github/workflows/migrate.yml`、`docker-compose.deploy.yml`、`docker-compose.infra.yml`、`.env.deploy.example` 和 README 发布/回滚/migration markers、`compileall`、Alembic upgrade、seed 幂等、Ruff、pytest、启动两个生成服务并验证 DB-backed login、`/auth/me`、`/api/profile`、wrong scope `403`、malformed claims `401`、logout 后 profile `401`、Request ID 透传和敏感日志不泄露。
+`validate:generated-python` 已覆盖：通过本地 CLI 生成 `auth-service` / `backend-api`、检查 `.github/workflows/deploy.yml`、`.github/workflows/migrate.yml`、发布后 health/smoke markers、`docker-compose.deploy.yml`、`docker-compose.infra.yml`、`.env.deploy.example` 和 README 发布/回滚/migration/生产 runbook markers、`compileall`、Alembic upgrade、seed 幂等、Ruff、pytest、启动两个生成服务并验证 DB-backed login、`/auth/me`、`/api/profile`、wrong scope `403`、malformed claims `401`、logout 后 profile `401`、Request ID 透传和敏感日志不泄露。
 
 ## 1. 总体目标
 
