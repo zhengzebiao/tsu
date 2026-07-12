@@ -1,5 +1,11 @@
 # @tsuz/template
 
+## 0.4.0
+
+### Minor Changes
+
+- Add production-ready Python template release workflows with immutable tag deploys, image rollback, manual Alembic migration workflows, post-deploy health/smoke checks, Docker infra/app compose separation, and generated production runbooks.
+
 ## 0.3.0
 
 ### Minor Changes

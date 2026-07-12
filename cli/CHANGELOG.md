@@ -1,5 +1,16 @@
 # @tsuz/cli
 
+## 0.4.0
+
+### Minor Changes
+
+- Add Python template deploy, rollback, migration, and production hardening artifacts to generated projects and CLI doctor expectations.
+
+### Patch Changes
+
+- Updated dependencies
+  - @tsuz/template@0.4.0
+
 ## 0.3.0
 
 ### Minor Changes
