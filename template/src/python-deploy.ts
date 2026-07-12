@@ -414,6 +414,101 @@ ${privateKeyGeneratedEnv}          TOKEN_BLACKLIST_PREFIX=auth:$DEPLOY_ENV:black
 `;
 }
 
+export function createPythonMigrateWorkflow(options: PythonDeployOptions) {
+  return `name: Migrate
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: Target environment for the migration
+        required: true
+        type: choice
+        options:
+          - test
+          - product
+      revision:
+        description: Alembic target revision, for example head or a revision id
+        required: true
+        default: head
+        type: string
+      backup_confirmed:
+        description: Confirm database backup and rollback plan before product migration
+        required: true
+        default: false
+        type: boolean
+
+permissions:
+  contents: read
+
+jobs:
+  migrate:
+    runs-on: ubuntu-latest
+    environment: \${{ inputs.environment }}
+    env:
+      DEPLOY_ENV: \${{ inputs.environment }}
+      REVISION: \${{ inputs.revision }}
+      BACKUP_CONFIRMED: \${{ inputs.backup_confirmed }}
+      SSH_PRIVATE_KEY: \${{ secrets.SSH_PRIVATE_KEY }}
+      SSH_KNOWN_HOSTS: \${{ secrets.SSH_KNOWN_HOSTS }}
+      DEPLOY_HOST: \${{ vars.DEPLOY_HOST }}
+      DEPLOY_PORT: \${{ vars.DEPLOY_PORT }}
+      DEPLOY_USER: \${{ vars.DEPLOY_USER }}
+      DEPLOY_PATH: \${{ vars.DEPLOY_PATH }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate migration inputs
+        shell: bash
+        run: |
+          set -euo pipefail
+          case "$DEPLOY_ENV" in
+            test|product)
+              ;;
+            *)
+              echo "Unsupported migration environment: $DEPLOY_ENV" >&2
+              exit 1
+              ;;
+          esac
+
+          if [ -z "$REVISION" ]; then
+            echo "Refusing to run migration without an Alembic revision." >&2
+            exit 1
+          fi
+
+          if ! [[ "$REVISION" =~ ^[A-Za-z0-9_.:-]+$ ]]; then
+            echo "Refusing to run migration with unsupported revision characters." >&2
+            exit 1
+          fi
+
+          if [ "$DEPLOY_ENV" = "product" ] && [ "$BACKUP_CONFIRMED" != "true" ]; then
+            echo "Refusing to run product migration without backup confirmation." >&2
+            exit 1
+          fi
+      - name: Configure SSH
+        shell: bash
+        run: |
+          set -euo pipefail
+          : "\${DEPLOY_HOST:?Missing DEPLOY_HOST environment variable}"
+          : "\${DEPLOY_USER:?Missing DEPLOY_USER environment variable}"
+          : "\${DEPLOY_PATH:?Missing DEPLOY_PATH environment variable}"
+          : "\${SSH_PRIVATE_KEY:?Missing SSH_PRIVATE_KEY secret}"
+          mkdir -p ~/.ssh
+          printf '%s\\n' "$SSH_PRIVATE_KEY" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          if [ -n "\${SSH_KNOWN_HOSTS:-}" ]; then
+            printf '%s\\n' "$SSH_KNOWN_HOSTS" > ~/.ssh/known_hosts
+          else
+            ssh-keyscan -p "\${DEPLOY_PORT:-22}" "$DEPLOY_HOST" >> ~/.ssh/known_hosts
+          fi
+      - name: Run Alembic migration
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "Running ${options.serviceName} migration for $DEPLOY_ENV to revision $REVISION."
+          ssh -i ~/.ssh/deploy_key -p "\${DEPLOY_PORT:-22}" "$DEPLOY_USER@$DEPLOY_HOST" "cd '$DEPLOY_PATH' && docker compose --env-file .env -f docker-compose.deploy.yml run --rm api alembic current && docker compose --env-file .env -f docker-compose.deploy.yml run --rm api alembic upgrade '$REVISION' && docker compose --env-file .env -f docker-compose.deploy.yml run --rm api alembic current"
+`;
+}
+
 export function createPythonDeployReadmeSection(options: PythonDeployOptions) {
   const privateKeyNote = options.includePrivateKey
     ? "- `python-main` owns `JWT_PRIVATE_KEY` and `JWT_PUBLIC_KEY`; keep the private key only in the auth service environment."
@@ -429,11 +524,12 @@ This template includes a dedicated GitHub Actions Deploy workflow plus separate 
 | \`docker-compose.infra.yml\` | Docker PostgreSQL and Redis for long-lived test/product infrastructure | start once and preserve volumes |
 | \`docker-compose.deploy.yml\` | Application release and rollback for api + nginx | updated for each image tag |
 | \`.github/workflows/deploy.yml\` | Tag release and workflow_dispatch rollback | runs on immutable image tags |
+| \`.github/workflows/migrate.yml\` | Manual Alembic migration workflow | runs only by reviewed workflow_dispatch |
 | \`.env.deploy.example\` | Example remote runtime environment | copy to real secrets/variables |
 
 ### GitHub Environments
 
-Create GitHub Environments named \`test\` and \`product\`. Product should use GitHub Environment protection rules and required reviewers before deployment.
+Create GitHub Environments named \`test\` and \`product\`. Product should use GitHub Environment protection rules and required reviewers before deployment or migration.
 
 Recommended Variables:
 
@@ -512,11 +608,29 @@ PostgreSQL and Redis are not rebuilt or rolled back by application deploys.
 Application image rollback does not automatically rollback database schema. Product migration should be reviewed and approved separately. Prefer expand-contract migrations so older images can still run during rollback windows.
 
 - local: run \`pdm run migrate\` manually.
-- test: run migration manually or via a later dedicated workflow.
-- product: do not auto-run migration from Deploy; require approval and backups before schema changes.
+- test: use Actions -> Migrate -> Run workflow, or run Alembic manually against test after review.
+- product: use Actions -> Migrate -> Run workflow with product approval, backup confirmation, and a reviewed migration diff.
+
+The generated Migrate workflow inputs are:
+
+\`\`\`text
+environment = product
+revision = head
+backup_confirmed = true
+\`\`\`
+
+It runs:
+
+\`\`\`bash
+docker compose --env-file .env -f docker-compose.deploy.yml run --rm api alembic current
+docker compose --env-file .env -f docker-compose.deploy.yml run --rm api alembic upgrade "$REVISION"
+docker compose --env-file .env -f docker-compose.deploy.yml run --rm api alembic current
+\`\`\`
+
+Deploy and rollback do not run migrations automatically.
 
 ### Seed Policy
 
-Product does not auto-run seed. Use \`pdm run seed\` for local development, and execute product seed only as an explicit reviewed operation after confirming it is idempotent and safe for real data.
+Product does not auto-run seed. The Migrate workflow also does not run seed. Use \`pdm run seed\` for local development, and execute product seed only as an explicit reviewed operation after confirming it is idempotent and safe for real data.
 `;
 }

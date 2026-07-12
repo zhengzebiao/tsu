@@ -99,6 +99,7 @@ try {
 async function validateDeployArtifacts(projectRoot, includePrivateKey) {
   const readme = await readFile(join(projectRoot, "README.md"), "utf8");
   const workflow = await readFile(join(projectRoot, ".github", "workflows", "deploy.yml"), "utf8");
+  const migrateWorkflow = await readFile(join(projectRoot, ".github", "workflows", "migrate.yml"), "utf8");
   const deployCompose = await readFile(join(projectRoot, "docker-compose.deploy.yml"), "utf8");
   const infraCompose = await readFile(join(projectRoot, "docker-compose.infra.yml"), "utf8");
   const envDeploy = await readFile(join(projectRoot, ".env.deploy.example"), "utf8");
@@ -121,15 +122,35 @@ async function validateDeployArtifacts(projectRoot, includePrivateKey) {
     "docker compose --env-file .env -f docker-compose.deploy.yml up -d --no-build api nginx",
     "Refusing to deploy a latest tag"
   ]);
+  assertIncludes(migrateWorkflow, [
+    "name: Migrate",
+    "workflow_dispatch:",
+    "environment:",
+    "revision",
+    "backup_confirmed",
+    "SSH_PRIVATE_KEY",
+    "DEPLOY_HOST",
+    "DEPLOY_USER",
+    "DEPLOY_PATH",
+    "Refusing to run product migration without backup confirmation",
+    "docker compose --env-file .env -f docker-compose.deploy.yml run --rm api alembic current",
+    "docker compose --env-file .env -f docker-compose.deploy.yml run --rm api alembic upgrade"
+  ]);
   assertIncludes(deployCompose, ["${DOCKER_IMAGE_NAME}:${APP_VERSION}", "api:", "nginx:", "/health", "external: true", "DOCKER_NETWORK_NAME"]);
   assertIncludes(infraCompose, ["postgres:16-alpine", "redis:7-alpine", "postgres_data", "redis_data", "appendonly yes", "DOCKER_NETWORK_NAME"]);
   assertIncludes(envDeploy, ["DOCKER_IMAGE_NAME", "APP_VERSION", "DATABASE_URL", "REDIS_URL", "JWT_PUBLIC_KEY", "TOKEN_BLACKLIST_PREFIX", "SESSION_PREFIX"]);
-  assertIncludes(readme, ["Release Deploy and Rollback", "Docker Infra", "Tag Release", "Rollback", "Migration Policy", "Seed Policy", "Product does not auto-run seed"]);
+  assertIncludes(readme, ["Release Deploy and Rollback", "Docker Infra", "Tag Release", "Rollback", "Migration Policy", "Migrate workflow", "backup_confirmed = true", "Seed Policy", "Product does not auto-run seed"]);
 
   const forbiddenWorkflowMarkers = ["docker-compose.infra.yml", "pdm run migrate", "alembic upgrade", "pdm run seed", "python -m app.seed"];
   const workflowLeak = forbiddenWorkflowMarkers.find((marker) => workflow.includes(marker));
   if (workflowLeak) {
     throw new Error(`Deploy workflow unexpectedly contains ${workflowLeak}.`);
+  }
+
+  const forbiddenMigrateWorkflowMarkers = ["docker-compose.infra.yml", "pdm run seed", "python -m app.seed", "JWT_PRIVATE_KEY"];
+  const migrateWorkflowLeak = forbiddenMigrateWorkflowMarkers.find((marker) => migrateWorkflow.includes(marker));
+  if (migrateWorkflowLeak) {
+    throw new Error(`Migrate workflow unexpectedly contains ${migrateWorkflowLeak}.`);
   }
 
   if (includePrivateKey) {

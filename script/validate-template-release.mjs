@@ -142,6 +142,7 @@ async function validateBundleFiles(bundleDir) {
   await access(join(bundleDir, "python-main", ".env.deploy.example"));
   await access(join(bundleDir, "python-main", ".github", "workflows", "ci.yml"));
   await access(join(bundleDir, "python-main", ".github", "workflows", "deploy.yml"));
+  await access(join(bundleDir, "python-main", ".github", "workflows", "migrate.yml"));
   await access(join(bundleDir, "python-main", "docker-compose.deploy.yml"));
   await access(join(bundleDir, "python-main", "docker-compose.infra.yml"));
   await access(join(bundleDir, "python-main", "tests", "test_auth_api.py"));
@@ -150,6 +151,8 @@ async function validateBundleFiles(bundleDir) {
   await access(join(bundleDir, "python-main", "tests", "test_logging.py"));
   await access(join(bundleDir, "python-main", "tests", "test_redis_state_services.py"));
   await assertFileContains(join(bundleDir, "python-main", ".github", "workflows", "deploy.yml"), pythonDeployWorkflowMarkers(true));
+  await assertFileContains(join(bundleDir, "python-main", ".github", "workflows", "migrate.yml"), pythonMigrateWorkflowMarkers());
+  await assertFileDoesNotContain(join(bundleDir, "python-main", ".github", "workflows", "migrate.yml"), ["JWT_PRIVATE_KEY", "pdm run seed", "python -m app.seed", "docker-compose.infra.yml"]);
   await assertFileContains(join(bundleDir, "python-main", "docker-compose.deploy.yml"), pythonDeployComposeMarkers());
   await assertFileContains(join(bundleDir, "python-main", "docker-compose.infra.yml"), pythonInfraComposeMarkers());
   await assertFileContains(join(bundleDir, "python-main", ".env.deploy.example"), pythonDeployEnvMarkers(true));
@@ -179,6 +182,7 @@ async function validateBundleFiles(bundleDir) {
   await access(join(bundleDir, "python-app", ".env.deploy.example"));
   await access(join(bundleDir, "python-app", ".github", "workflows", "ci.yml"));
   await access(join(bundleDir, "python-app", ".github", "workflows", "deploy.yml"));
+  await access(join(bundleDir, "python-app", ".github", "workflows", "migrate.yml"));
   await access(join(bundleDir, "python-app", "docker-compose.deploy.yml"));
   await access(join(bundleDir, "python-app", "docker-compose.infra.yml"));
   await access(join(bundleDir, "python-app", "tests", "test_profile_api.py"));
@@ -186,6 +190,8 @@ async function validateBundleFiles(bundleDir) {
   await access(join(bundleDir, "python-app", "tests", "test_redis_state_services.py"));
   await assertFileContains(join(bundleDir, "python-app", ".github", "workflows", "deploy.yml"), pythonDeployWorkflowMarkers(false));
   await assertFileDoesNotContain(join(bundleDir, "python-app", ".github", "workflows", "deploy.yml"), ["JWT_PRIVATE_KEY"]);
+  await assertFileContains(join(bundleDir, "python-app", ".github", "workflows", "migrate.yml"), pythonMigrateWorkflowMarkers());
+  await assertFileDoesNotContain(join(bundleDir, "python-app", ".github", "workflows", "migrate.yml"), ["JWT_PRIVATE_KEY", "pdm run seed", "python -m app.seed", "docker-compose.infra.yml"]);
   await assertFileContains(join(bundleDir, "python-app", "docker-compose.deploy.yml"), pythonDeployComposeMarkers());
   await assertFileContains(join(bundleDir, "python-app", "docker-compose.infra.yml"), pythonInfraComposeMarkers());
   await assertFileContains(join(bundleDir, "python-app", ".env.deploy.example"), pythonDeployEnvMarkers(false));
@@ -426,6 +432,24 @@ function pythonDeployWorkflowMarkers(includePrivateKey) {
   ];
 }
 
+function pythonMigrateWorkflowMarkers() {
+  return [
+    "name: Migrate",
+    "workflow_dispatch:",
+    "environment:",
+    "revision",
+    "backup_confirmed",
+    "actions/checkout@v4",
+    "SSH_PRIVATE_KEY",
+    "DEPLOY_HOST",
+    "DEPLOY_USER",
+    "DEPLOY_PATH",
+    "Refusing to run product migration without backup confirmation",
+    "docker compose --env-file .env -f docker-compose.deploy.yml run --rm api alembic current",
+    "docker compose --env-file .env -f docker-compose.deploy.yml run --rm api alembic upgrade"
+  ];
+}
+
 function pythonDeployComposeMarkers() {
   return [
     "api:",
@@ -469,6 +493,8 @@ function pythonDeployReadmeMarkers(includePrivateKey) {
     "Tag Release",
     "Rollback",
     "Migration Policy",
+    "Migrate workflow",
+    "backup_confirmed = true",
     "Seed Policy",
     "test-v1.0.1",
     "product-v1.0.1",

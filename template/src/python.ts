@@ -3,7 +3,8 @@ import {
   createPythonDeployReadmeSection,
   createPythonDeployWorkflow,
   createPythonDockerComposeDeploy,
-  createPythonDockerComposeInfra
+  createPythonDockerComposeInfra,
+  createPythonMigrateWorkflow
 } from "./python-deploy.js";
 
 export interface TemplateFile {
@@ -995,6 +996,10 @@ server {
     {
       path: ".github/workflows/deploy.yml",
       content: createPythonDeployWorkflow(deployOptions)
+    },
+    {
+      path: ".github/workflows/migrate.yml",
+      content: createPythonMigrateWorkflow(deployOptions)
     },
     {
       path: "docker-compose.deploy.yml",

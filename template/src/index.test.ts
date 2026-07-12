@@ -104,6 +104,25 @@ function assertPythonDeployWorkflow(content: string, includePrivateKey: boolean)
   }
 }
 
+function assertPythonMigrateWorkflow(content: string) {
+  assert.match(content, /name: Migrate/);
+  assert.match(content, /workflow_dispatch:/);
+  assert.match(content, /environment/);
+  assert.match(content, /revision/);
+  assert.match(content, /backup_confirmed/);
+  assert.match(content, /actions\/checkout@v4/);
+  assert.match(content, /SSH_PRIVATE_KEY/);
+  assert.match(content, /DEPLOY_HOST/);
+  assert.match(content, /DEPLOY_USER/);
+  assert.match(content, /DEPLOY_PATH/);
+  assert.match(content, /Refusing to run product migration without backup confirmation/);
+  assert.match(content, /docker compose --env-file \.env -f docker-compose\.deploy\.yml run --rm api alembic current/);
+  assert.match(content, /docker compose --env-file \.env -f docker-compose\.deploy\.yml run --rm api alembic upgrade/);
+  assert.doesNotMatch(content, /pdm run seed|python -m app\.seed/);
+  assert.doesNotMatch(content, /docker-compose\.infra\.yml/);
+  assert.doesNotMatch(content, /JWT_PRIVATE_KEY/);
+}
+
 function assertPythonDeployCompose(content: string) {
   assert.match(content, /api:/);
   assert.match(content, /nginx:/);
@@ -152,7 +171,9 @@ function assertPythonDeployReadme(content: string, includePrivateKey: boolean) {
   assert.match(content, /Docker Infra/);
   assert.match(content, /Tag Release/);
   assert.match(content, /Rollback/);
+  assert.match(content, /Migrate workflow/);
   assert.match(content, /Migration Policy/);
+  assert.match(content, /backup_confirmed = true/);
   assert.match(content, /Seed Policy/);
   assert.match(content, /test-v1\.0\.1/);
   assert.match(content, /product-v1\.0\.1/);
@@ -363,6 +384,7 @@ test("python-main template creates auth service files", () => {
   const envTest = files.find((file) => file.path === ".env.test.example");
   const envProduct = files.find((file) => file.path === ".env.product.example");
   const deployWorkflow = files.find((file) => file.path === ".github/workflows/deploy.yml");
+  const migrateWorkflow = files.find((file) => file.path === ".github/workflows/migrate.yml");
   const deployCompose = files.find((file) => file.path === "docker-compose.deploy.yml");
   const infraCompose = files.find((file) => file.path === "docker-compose.infra.yml");
   const envDeploy = files.find((file) => file.path === ".env.deploy.example");
@@ -372,6 +394,7 @@ test("python-main template creates auth service files", () => {
   assert.ok(envTest);
   assert.ok(envProduct);
   assert.ok(deployWorkflow);
+  assert.ok(migrateWorkflow);
   assert.ok(deployCompose);
   assert.ok(infraCompose);
   assert.ok(envDeploy);
@@ -414,6 +437,7 @@ test("python-main template creates auth service files", () => {
   assert.ok(paths.includes("docker-compose.infra.yml"));
   assert.ok(paths.includes(".github/workflows/ci.yml"));
   assert.ok(paths.includes(".github/workflows/deploy.yml"));
+  assert.ok(paths.includes(".github/workflows/migrate.yml"));
   assert.ok(paths.includes(".env.deploy.example"));
   assert.ok(paths.includes("tests/test_health.py"));
   assert.ok(paths.includes("tests/test_logging.py"));
@@ -435,6 +459,7 @@ test("python-main template creates auth service files", () => {
   assert.doesNotMatch(workflow, /deploy-test:|deploy-product:|TEST_DOCKER_REGISTRY_TOKEN|PRODUCT_DOCKER_REGISTRY_TOKEN/);
   assert.match(workflow, /TEST_JWT_PRIVATE_KEY/);
   assertPythonDeployWorkflow(deployWorkflow.content, true);
+  assertPythonMigrateWorkflow(migrateWorkflow.content);
   assertPythonDeployCompose(deployCompose.content);
   assertPythonInfraCompose(infraCompose.content);
   assertPythonDeployEnv(envDeploy.content, true);
@@ -513,6 +538,7 @@ test("python-app template creates resource service files", () => {
   const readme = files.find((file) => file.path === "README.md");
   const envTest = files.find((file) => file.path === ".env.test.example");
   const deployWorkflow = files.find((file) => file.path === ".github/workflows/deploy.yml");
+  const migrateWorkflow = files.find((file) => file.path === ".github/workflows/migrate.yml");
   const deployCompose = files.find((file) => file.path === "docker-compose.deploy.yml");
   const infraCompose = files.find((file) => file.path === "docker-compose.infra.yml");
   const envDeploy = files.find((file) => file.path === ".env.deploy.example");
@@ -521,6 +547,7 @@ test("python-app template creates resource service files", () => {
   assert.ok(readme);
   assert.ok(envTest);
   assert.ok(deployWorkflow);
+  assert.ok(migrateWorkflow);
   assert.ok(deployCompose);
   assert.ok(infraCompose);
   assert.ok(envDeploy);
@@ -551,6 +578,7 @@ test("python-app template creates resource service files", () => {
   assert.ok(paths.includes("docker-compose.infra.yml"));
   assert.ok(paths.includes(".github/workflows/ci.yml"));
   assert.ok(paths.includes(".github/workflows/deploy.yml"));
+  assert.ok(paths.includes(".github/workflows/migrate.yml"));
   assert.ok(paths.includes(".env.deploy.example"));
   assert.ok(paths.includes("tests/conftest.py"));
   assert.ok(paths.includes("tests/test_logging.py"));
@@ -567,6 +595,7 @@ test("python-app template creates resource service files", () => {
   assert.doesNotMatch(workflow, /deploy-test:|deploy-product:|TEST_DOCKER_REGISTRY_TOKEN|PRODUCT_DOCKER_REGISTRY_TOKEN/);
   assert.doesNotMatch(workflow, /TEST_JWT_PRIVATE_KEY|PRODUCT_JWT_PRIVATE_KEY/);
   assertPythonDeployWorkflow(deployWorkflow.content, false);
+  assertPythonMigrateWorkflow(migrateWorkflow.content);
   assertPythonDeployCompose(deployCompose.content);
   assertPythonInfraCompose(infraCompose.content);
   assertPythonDeployEnv(envDeploy.content, false);

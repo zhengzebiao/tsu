@@ -60,6 +60,7 @@ MFE 是静态前端资源容器，没有数据库迁移和持久化状态，所�
 
 ```text
 .github/workflows/deploy.yml       # tag 发布 + workflow_dispatch 回退
+.github/workflows/migrate.yml      # 手动 Alembic migration + GitHub Environment approval
 docker-compose.infra.yml           # product/test 可选 Docker 基础设施：PostgreSQL / Redis
 docker-compose.deploy.yml          # 应用发布 compose：api + 可选 nginx
 .env.deploy.example                # 远端应用运行时环境变量示例
@@ -81,6 +82,7 @@ docker-compose.yml                 # 本地开发，一键启动 api/postgres/re
 | `docker-compose.infra.yml` | test/product 的 PostgreSQL / Redis Docker 基础设施 | 长期运行，少变更 |
 | `docker-compose.deploy.yml` | test/product 的 Python API 应用发布 | 随版本发布和回退 |
 | `.github/workflows/deploy.yml` | 自动构建、推送、部署、回退应用镜像 | 每次 tag / 手动触发 |
+| `.github/workflows/migrate.yml` | 手动 Alembic migration | workflow_dispatch + GitHub Environment approval |
 | `.env.deploy.example` | 远端部署环境变量模板 | 随应用模板生成 |
 
 ---
@@ -507,7 +509,7 @@ Python 和 MFE 最大不同是数据库迁移。
 
 ### 独立 migration workflow
 
-后续可新增：
+已规划/生成：
 
 ```text
 .github/workflows/migrate.yml
@@ -518,15 +520,23 @@ Python 和 MFE 最大不同是数据库迁移。
 ```text
 environment = test | product
 revision = head | <revision_id>
+backup_confirmed = true | false
 ```
+
+执行前约束：
+
+- revision 不能为空，并限制为安全字符。
+- product migration 必须经过 GitHub Environment approval。
+- product migration 必须显式确认 `backup_confirmed=true`。
+- workflow 不执行 seed，也不管理 `docker-compose.infra.yml`。
 
 执行：
 
 ```bash
-docker compose --env-file .env -f docker-compose.deploy.yml run --rm api alembic upgrade head
+docker compose --env-file .env -f docker-compose.deploy.yml run --rm api alembic current
+docker compose --env-file .env -f docker-compose.deploy.yml run --rm api alembic upgrade "$REVISION"
+docker compose --env-file .env -f docker-compose.deploy.yml run --rm api alembic current
 ```
-
-product migration 应启用 GitHub Environment approval。
 
 ### 长期策略：expand-contract
 
@@ -621,6 +631,7 @@ template/src/python.ts
 模板测试应新增断言：
 
 - 生成 `.github/workflows/deploy.yml`
+- 生成 `.github/workflows/migrate.yml`
 - 生成 `docker-compose.deploy.yml`
 - 生成 `docker-compose.infra.yml`
 - 生成 `.env.deploy.example`
@@ -634,6 +645,13 @@ template/src/python.ts
   - `docker compose pull api`
   - `docker compose up -d --no-build api`
   - `Refusing to deploy a latest tag`
+- migrate workflow 包含：
+  - `workflow_dispatch`
+  - `revision`
+  - `backup_confirmed`
+  - `docker compose --env-file .env -f docker-compose.deploy.yml run --rm api alembic current`
+  - `docker compose --env-file .env -f docker-compose.deploy.yml run --rm api alembic upgrade`
+  - `Refusing to run product migration without backup confirmation`
 - README 包含：
   - GitHub Environments
   - tag release
