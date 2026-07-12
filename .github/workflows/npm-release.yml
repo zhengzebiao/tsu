@@ -49,7 +49,7 @@ jobs:
           node-version: 20
           cache: pnpm
           registry-url: https://registry.npmjs.org
-      - run: npm install -g npm@10
+      - run: npm install -g npm@latest
       - run: npm --version
       - run: pnpm install --frozen-lockfile
       - run: pnpm build
