@@ -377,6 +377,18 @@ pnpm npm:release:preflight
 pnpm npm:release:pack
 ```
 
+npm 自动发布使用 Trusted Publisher / OIDC。每个 npm 包（例如 `@tsuz/cli`、`@tsuz/template`）都需要在 npm 后台配置：
+
+```text
+Publisher: GitHub Actions
+Organization or user: zhengzebiao
+Repository: tsu
+Workflow filename: npm-release.yml
+Environment name: 留空
+```
+
+`.github/workflows/npm-release.yml` 需要 `id-token: write`，并且发布环境不要传 `NPM_TOKEN` / `NODE_AUTH_TOKEN`，否则会退回传统 token publish，npm 账号开启 2FA 时会要求 OTP。
+
 如果 Windows 本地并行 `pnpm lint` 因 Node OOM 失败，可以先用串行方式确认类型检查：
 
 ```bash

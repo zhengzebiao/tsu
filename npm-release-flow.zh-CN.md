@@ -57,18 +57,27 @@ pnpm npm:release:pack
 - `pnpm npm:release:preflight`：检查只有 5 个顶层包参与 npm 发布
 - `pnpm npm:release:pack`：执行 dry-run pack，确认 tarball 内容符合预期
 
-## Trusted Publishing 配置
+## Trusted Publishing / OIDC 配置
 
-自动发布使用 npm Trusted Publishing，不再依赖 `NPM_TOKEN`。
+自动发布使用 npm Trusted Publishing，也就是 GitHub Actions 通过 OIDC 向 npm 证明发布身份。正常情况下 **不要在 workflow 中传 `NPM_TOKEN` 或 `NODE_AUTH_TOKEN`**；一旦传了 token，`changesets/action` 会优先走传统 token publish，npm 账号开启 2FA 时就会报 `EOTP` 要求 OTP。
 
-npm 侧需要在每个发布包或 scope 上配置 GitHub trusted publisher：
+npm 侧需要在每个要发布的包上配置 GitHub Trusted Publisher，例如 `@tsuz/cli` 和 `@tsuz/template` 都要配置一次：
 
 ```text
-Repository: zhengzebiao/tsu
-Workflow: npm-release.yml
-Branch: master
-Environment: 留空
+Publisher: GitHub Actions
+Organization or user: zhengzebiao
+Repository: tsu
+Workflow filename: npm-release.yml
+Environment name: 留空
+Allowed actions: Allow npm publish / Allow npm stage publish
 ```
+
+注意：
+
+- npm 包名是 `@tsuz/template` / `@tsuz/cli`。
+- GitHub 仓库配置是 `zhengzebiao/tsu`。
+- Workflow filename 只填文件名 `npm-release.yml`，对应仓库内 `.github/workflows/npm-release.yml`。
+- Environment name 当前留空；如果未来 workflow job 配置了 GitHub Environment，则 npm 侧要填同名 environment。
 
 GitHub workflow 需要允许 OIDC：
 
@@ -79,11 +88,27 @@ permissions:
   id-token: write
 ```
 
-发布时通过 provenance 让 npm 使用 GitHub OIDC 身份：
+`changesets/action` 发布环境只保留 GitHub token 和 provenance 开关，不传 npm token：
 
 ```yaml
-NPM_CONFIG_PROVENANCE: true
+env:
+  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+  NPM_CONFIG_PROVENANCE: true
 ```
+
+发布日志中应看到类似：
+
+```text
+No NPM_TOKEN found, but OIDC is available - using npm trusted publishing
+```
+
+如果看到：
+
+```text
+No user .npmrc file found, creating one with NPM_TOKEN used as auth token
+```
+
+说明 workflow 又切回了传统 token publish，可能会触发 OTP，不符合当前发布模式。
 
 ## PR 校验流程
 
