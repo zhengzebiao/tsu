@@ -140,7 +140,7 @@ tsu-cli upgrade-check --cwd admin-console
 tsu-cli upgrade-check --cwd admin-console --repo company/frontend-templates
 ```
 
-加 `--json` 供 CI 消费，JSON 包含 `status`（`current` / `update_available` / `unknown`）、`currentVersion`、`latestVersion` 和 `availableVersions`：
+加 `--json` 供 CI 消费，JSON 包含 `status`（`current` / `update_available` / `unknown`）、`currentVersion`、`latestVersion`、`availableVersions` 和 `nextSteps`。发现可升级版本时，next steps 会指向 `template info`，方便先查看最新 release changelog，再决定是否重新生成并对比变更：
 
 ```bash
 tsu-cli upgrade-check --cwd admin-console --json
@@ -194,7 +194,7 @@ tsu-cli template versions vue3
 tsu-cli template info vue3 --version 1.0.4
 ```
 
-模板 Release 压缩包内包含 `manifest.json`，当前 schema version 为 `0.5`。每个模板条目包含 `name`、`title`、`description`、`tags`、`recommendedFor`、`node`、`packageManagers` 和 `nextSteps`；`template info` 会读取这些字段，方便用户初始化前先确认模板用途。
+模板 Release 压缩包内包含 `manifest.json`，当前 schema version 为 `0.5`。manifest 可以包含顶层 `changelog` 数组记录 release 级变更。每个模板条目包含 `name`、`title`、`description`、`tags`、`recommendedFor`、`node`、`packageManagers` 和 `nextSteps`；`template info` 会读取这些字段和 changelog，方便用户初始化或升级前先确认模板用途与版本变化。
 
 ## 私有模板仓库
 

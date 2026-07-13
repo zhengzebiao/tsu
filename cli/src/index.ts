@@ -8,7 +8,7 @@ import { dirname, join, resolve } from "node:path";
 import { createRequire } from "node:module";
 import { createInterface } from "node:readline/promises";
 import { fileURLToPath } from "node:url";
-import { createTemplateFiles, renderTemplateFiles, templateDefinitions, templateNames, type TemplateFile, type TemplateName } from "./template.js";
+import { createTemplateFiles, renderTemplateFiles, templateDefinitions, templateManifest, templateNames, type TemplateFile, type TemplateName } from "./template.js";
 import {
   compareTemplateVersions,
   downloadTemplateManifest,
@@ -120,6 +120,10 @@ export interface UpgradeCheckResult {
   nextSteps: string[];
 }
 
+export interface RemoteTemplateInfo extends RemoteTemplateDefinition {
+  changelog?: string[];
+}
+
 export interface DoctorCheck {
   label: string;
   status: DoctorCheckStatus;
@@ -228,22 +232,28 @@ export function createTemplateListMessage() {
 
 export function createTemplateInfoMessage(templateName: string) {
   const definition = getTemplateDefinition(templateName);
-
-  return [
+  const lines = [
     `Template: ${definition.name}`,
     `Title: ${definition.title}`,
     `Description: ${definition.description}`,
     `Tags: ${definition.tags.join(", ")}`,
     `Recommended for: ${definition.recommendedFor.join(", ")}`,
     `Node: ${definition.node}`,
-    `Package managers: ${definition.packageManagers.join(", ")}`,
-    "",
-    "Next steps:",
-    ...definition.nextSteps.map((step) => `  ${step}`)
-  ].join("\n");
+    `Package managers: ${definition.packageManagers.join(", ")}`
+  ];
+
+  const changelog = getLocalTemplateChangelog();
+
+  if (changelog.length) {
+    lines.push("", "Changelog:", ...changelog.map((item) => `  - ${item}`));
+  }
+
+  lines.push("", "Next steps:", ...definition.nextSteps.map((step) => `  ${step}`));
+
+  return lines.join("\n");
 }
 
-export function createRemoteTemplateInfoMessage(options: TemplateInfoOptions, definition: RemoteTemplateDefinition) {
+export function createRemoteTemplateInfoMessage(options: TemplateInfoOptions, definition: RemoteTemplateInfo) {
   const lines = [
     `Template: ${definition.name}`,
     `Title: ${definition.title ?? "Not provided"}`,
@@ -255,6 +265,10 @@ export function createRemoteTemplateInfoMessage(options: TemplateInfoOptions, de
     `Node: ${definition.node ?? "Not provided"}`,
     `Package managers: ${formatOptionalList(definition.packageManagers)}`
   ];
+
+  if (definition.changelog?.length) {
+    lines.push("", "Changelog:", ...definition.changelog.map((item) => `  - ${item}`));
+  }
 
   if (definition.nextSteps?.length) {
     lines.push("", "Next steps:", ...definition.nextSteps.map((step) => `  ${step}`));
@@ -700,7 +714,7 @@ function getTemplateDefinition(templateName: string) {
   return definition;
 }
 
-export async function resolveRemoteTemplateInfo(options: TemplateInfoOptions) {
+export async function resolveRemoteTemplateInfo(options: TemplateInfoOptions): Promise<RemoteTemplateInfo> {
   if (!options.version) {
     throw new Error("Missing template version for remote template info.");
   }
@@ -713,7 +727,10 @@ export async function resolveRemoteTemplateInfo(options: TemplateInfoOptions) {
     throw new Error(`Template "${options.templateName}" is not available in ${asset.name}. Available templates: ${remoteManifestTemplateNames(manifest).join(", ")}. Check manifest.json and the template directories inside the archive.`);
   }
 
-  return definition;
+  return {
+    ...definition,
+    changelog: manifest.changelog
+  };
 }
 
 export function createTemplateMetadata(options: InitProjectOptions): string {
@@ -766,7 +783,10 @@ export async function upgradeCheckProject(options: UpgradeCheckOptions): Promise
 
   if (currentVersion === "latest") {
     warnings.push("Current template version is recorded as latest, so an exact upgrade comparison is not possible.");
-    nextSteps.push(`Run tsu-cli template info ${metadata.template.name} --version ${latestVersion} --repo ${repository}`);
+    nextSteps.push(
+      `Run tsu-cli template info ${metadata.template.name} --version ${latestVersion} --repo ${repository}`,
+      "Review the changelog in template info before regenerating and comparing changes."
+    );
 
     return {
       cwd: options.cwd,
@@ -795,6 +815,7 @@ export async function upgradeCheckProject(options: UpgradeCheckOptions): Promise
     nextSteps: hasUpdate
       ? [
           `Run tsu-cli template info ${metadata.template.name} --version ${latestVersion} --repo ${repository}`,
+          "Review the changelog in template info before regenerating and comparing changes.",
           `Generate a fresh project with ${metadata.template.name}@${latestVersion} and compare changes.`
         ]
       : [`Template ${metadata.template.name}@${currentVersion} is current.`]
@@ -1075,6 +1096,11 @@ async function collectTemplateFiles(root: string, directory: string, files: Temp
       content: await readFile(fullPath, "utf8")
     });
   }
+}
+
+function getLocalTemplateChangelog() {
+  const manifest = templateManifest as unknown as { changelog?: string[] };
+  return Array.isArray(manifest.changelog) ? manifest.changelog : [];
 }
 
 function formatOptionalList(value: string[] | undefined) {

@@ -9,6 +9,7 @@ export interface TemplateManifest {
   name: string;
   schemaVersion: string;
   version: string;
+  changelog: string[];
   templates: TemplateDefinition[];
 }
 
@@ -134,6 +135,10 @@ export const templateManifest: TemplateManifest = {
   name: "tsuz-template",
   schemaVersion: "0.5",
   version: "0.0.0",
+  changelog: [
+    "Add manifest v0.5 metadata for template discovery.",
+    "Add private template repository workflow documentation."
+  ],
   templates: templateDefinitions
 };
 

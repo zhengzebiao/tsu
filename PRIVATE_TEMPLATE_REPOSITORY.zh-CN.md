@@ -47,6 +47,10 @@ tsu-templates-v1.0.4/
   "schemaVersion": "0.5",
   "version": "1.0.4",
   "asset": "tsu-templates-v1.0.4.tar.gz",
+  "changelog": [
+    "Add Docker deployment workflow.",
+    "Refresh Vue and React template documentation."
+  ],
   "templates": [
     {
       "name": "vue3",
@@ -70,6 +74,7 @@ tsu-templates-v1.0.4/
 | `schemaVersion` | manifest schema 版本，当前为 `0.5` |
 | `version` | 模板 release 版本，应与 tag / asset 中的版本一致 |
 | `asset` | release asset 文件名 |
+| `changelog` | release 级变更说明，`template info` 会展示；旧 manifest 可不提供 |
 | `templates[].name` | 模板命令名，例如 `vue3` |
 | `templates[].title` | 面向用户展示的模板标题 |
 | `templates[].description` | 模板能力说明 |
@@ -124,7 +129,7 @@ tsu-cli init crm-web --template vue3 --repo company/frontend-templates
 tsu-cli init crm-web --template vue3 --version 1.0.4 --repo company/frontend-templates
 ```
 
-查看模板详情：
+查看模板详情和 release changelog：
 
 ```bash
 tsu-cli template info vue3 --version 1.0.4 --repo company/frontend-templates
@@ -243,6 +248,7 @@ tsu-cli init crm-web --template vue3 --version 1.0.4 --repo company/frontend-tem
 - [ ] 压缩包根目录是 `tsu-templates-v<version>/`。
 - [ ] 根目录包含 `manifest.json`。
 - [ ] `manifest.json` 写入 `schemaVersion: "0.5"`。
+- [ ] `manifest.json` 写入 release 级 `changelog`，方便用户升级前查看版本变化。
 - [ ] 每个模板都有同名目录。
 - [ ] 每个模板条目都包含 `title`、`description`、`tags`、`recommendedFor`、`node`、`packageManagers`、`nextSteps`。
 - [ ] 私有仓库 token 只存在于 shell / CI secret，不写入模板和生成项目。

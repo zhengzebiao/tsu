@@ -568,6 +568,8 @@ git push origin template-v1.0.0
 
 完整配置、token 和排障说明见 [私有模板仓库使用指南](PRIVATE_TEMPLATE_REPOSITORY.zh-CN.md)。
 
+`tsu-cli template info <name> --version <version>` 会读取 manifest 中的模板详情和 release 级 `changelog`；`upgrade-check` 发现新版本时会提示先查看该 changelog，再重新生成并对比变更。
+
 模板压缩包内需要包含 `tsu-templates-v<version>/manifest.json`。当前 manifest schema version 为 `0.5`，示例：
 
 ```json
@@ -576,6 +578,10 @@ git push origin template-v1.0.0
   "schemaVersion": "0.5",
   "version": "1.0.4",
   "asset": "tsu-templates-v1.0.4.tar.gz",
+  "changelog": [
+    "Add Docker deployment workflow.",
+    "Refresh Vue and React template documentation."
+  ],
   "templates": [
     {
       "name": "vue3",

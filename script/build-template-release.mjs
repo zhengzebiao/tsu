@@ -19,6 +19,7 @@ await writeJson(join(bundleDir, "manifest.json"), {
   name: templateManifest.name,
   schemaVersion: templateManifest.schemaVersion,
   version,
+  changelog: templateManifest.changelog,
   templates: templateManifest.templates,
   asset: `tsu-templates-v${version}.tar.gz`
 });

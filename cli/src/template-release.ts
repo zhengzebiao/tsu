@@ -28,6 +28,7 @@ export interface RemoteTemplateManifest {
   schemaVersion?: string;
   version: string;
   asset?: string;
+  changelog?: string[];
   templates: Array<string | RemoteTemplateDefinition>;
 }
 

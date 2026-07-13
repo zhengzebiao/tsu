@@ -5,6 +5,10 @@ import { createTemplateFiles, createTemplateSourceFiles, listTemplates, renderTe
 test("template manifest exposes package metadata", () => {
   assert.equal(templateManifest.name, "tsuz-template");
   assert.equal(templateManifest.schemaVersion, "0.5");
+  assert.deepEqual(templateManifest.changelog, [
+    "Add manifest v0.5 metadata for template discovery.",
+    "Add private template repository workflow documentation."
+  ]);
   assert.deepEqual(
     templateManifest.templates.map((template) => template.name),
     ["default", "monorepo", "vue3", "mfe", "mfe-main", "mfe-app", "react", "python-main", "python-app"]

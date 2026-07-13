@@ -234,6 +234,10 @@ function validateManifest(manifest) {
     throw new Error(`Release manifest asset ${manifest.asset} does not match expected ${archiveName}.`);
   }
 
+  if (!Array.isArray(manifest.changelog) || manifest.changelog.length === 0 || manifest.changelog.some((item) => typeof item !== "string" || !item)) {
+    throw new Error("Release manifest changelog must be a non-empty string array.");
+  }
+
   if (!Array.isArray(manifest.templates)) {
     throw new Error("Release manifest templates must be an array.");
   }

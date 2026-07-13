@@ -232,7 +232,7 @@ test("createUpgradeCheckMessage reports upgrade suggestions", () => {
     repository: "company/templates",
     availableVersions: ["1.0.0", "1.2.0"],
     warnings: [],
-    nextSteps: ["Run tsu-cli template info vue3 --version 1.2.0 --repo company/templates"]
+    nextSteps: ["Run tsu-cli template info vue3 --version 1.2.0 --repo company/templates", "Review the changelog in template info before regenerating and comparing changes."]
   });
 
   assert.match(message, /Template upgrade check: UPDATE_AVAILABLE/);
@@ -241,6 +241,7 @@ test("createUpgradeCheckMessage reports upgrade suggestions", () => {
   assert.match(message, /Latest version: 1\.2\.0/);
   assert.match(message, /Available versions: 1\.0\.0, 1\.2\.0/);
   assert.match(message, /template info vue3 --version 1\.2\.0/);
+  assert.match(message, /Review the changelog/);
 });
 
 test("createTemplateInfoHelpMessage reports template info usage", () => {
@@ -263,6 +264,8 @@ test("createTemplateInfoMessage reports template details", () => {
   assert.match(message, /Recommended for: admin, dashboard, web app/);
   assert.match(message, /Node: >=20/);
   assert.match(message, /Package managers: pnpm/);
+  assert.match(message, /Changelog:/);
+  assert.match(message, /Add manifest v0\.5 metadata/);
   assert.match(message, /pnpm install/);
 });
 
@@ -297,7 +300,8 @@ test("createRemoteTemplateInfoMessage reports versioned template details", () =>
       recommendedFor: ["admin"],
       node: ">=20",
       packageManagers: ["pnpm"],
-      nextSteps: ["pnpm install", "pnpm dev"]
+      nextSteps: ["pnpm install", "pnpm dev"],
+      changelog: ["Add deployment docs", "Refresh dependencies"]
     }
   );
 
@@ -310,6 +314,9 @@ test("createRemoteTemplateInfoMessage reports versioned template details", () =>
   assert.match(message, /Recommended for: admin/);
   assert.match(message, /Node: >=20/);
   assert.match(message, /Package managers: pnpm/);
+  assert.match(message, /Changelog:/);
+  assert.match(message, /Add deployment docs/);
+  assert.match(message, /Refresh dependencies/);
   assert.match(message, /pnpm install/);
 });
 
@@ -559,6 +566,7 @@ test("runCli reports remote template info from a versioned release", async () =>
       JSON.stringify(
         {
           version: "1.2.3",
+          changelog: ["Add remote template changelog", "Update Docker defaults"],
           templates: [
             {
               name: "vue3",
@@ -595,6 +603,8 @@ test("runCli reports remote template info from a versioned release", async () =>
     assert.match(message, /Description: Remote Vue starter/);
     assert.match(message, /Tags: vue, vite/);
     assert.match(message, /Recommended for: admin, dashboard/);
+    assert.match(message, /Changelog:/);
+    assert.match(message, /Add remote template changelog/);
     assert.match(message, /pnpm dev/);
   } finally {
     globalThis.fetch = originalFetch;

@@ -142,7 +142,7 @@ Use `--repo` to override the repository recorded in `.tsu/template.json`:
 tsu-cli upgrade-check --cwd admin-console --repo company/frontend-templates
 ```
 
-Add `--json` for CI consumption. The JSON payload includes `status` (`current` / `update_available` / `unknown`), `currentVersion`, `latestVersion`, and `availableVersions`:
+Add `--json` for CI consumption. The JSON payload includes `status` (`current` / `update_available` / `unknown`), `currentVersion`, `latestVersion`, `availableVersions`, and `nextSteps`. When an update is available, the next steps point to `template info` so you can review the latest release changelog before regenerating and comparing changes:
 
 ```bash
 tsu-cli upgrade-check --cwd admin-console --json
@@ -196,7 +196,7 @@ Inspect template details from a specific release version:
 tsu-cli template info vue3 --version 1.0.4
 ```
 
-Template release archives include `manifest.json` with schema version `0.5`. Each template entry includes `name`, `title`, `description`, `tags`, `recommendedFor`, `node`, `packageManagers`, and `nextSteps`; `template info` reads those fields so users can inspect a template before initializing a project.
+Template release archives include `manifest.json` with schema version `0.5`. The manifest can include a top-level `changelog` array for release-level changes. Each template entry includes `name`, `title`, `description`, `tags`, `recommendedFor`, `node`, `packageManagers`, and `nextSteps`; `template info` reads those fields and the changelog so users can inspect a template before initializing or upgrading a project.
 
 ## Private Template Repositories
 
@@ -279,7 +279,7 @@ Future work:
 - Template detail and version query commands.
 - Richer template manifest with descriptions, tags, and recommended scenarios.
 - Template health checks and upgrade guidance.
-- Organization presets and private template platform support.
+- Organization presets and private template repository workflows.
 
 ## FAQ
 
