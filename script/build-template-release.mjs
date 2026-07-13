@@ -17,6 +17,7 @@ await mkdir(bundleDir, { recursive: true });
 
 await writeJson(join(bundleDir, "manifest.json"), {
   name: templateManifest.name,
+  schemaVersion: templateManifest.schemaVersion,
   version,
   templates: templateManifest.templates,
   asset: `tsu-templates-v${version}.tar.gz`

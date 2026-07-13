@@ -157,11 +157,12 @@ tsu-cli upgrade-check --cwd admin-console --json
     "version": "1.0.4",
     "source": "remote",
     "repository": "company/frontend-templates"
-  }
+  },
+  "generatedAt": "2026-07-13T12:00:00.000Z"
 }
 ```
 
-该元数据会被 `tsu-cli doctor` 使用，也可以支撑后续的模板升级检查。
+该元数据会被 `tsu-cli doctor` 和模板升级检查使用。`generatedAt` 记录项目生成时间；认证 token 不会写入生成项目。
 
 ## 模板版本
 
@@ -193,6 +194,8 @@ tsu-cli template versions vue3
 tsu-cli template info vue3 --version 1.0.4
 ```
 
+模板 Release 压缩包内包含 `manifest.json`，当前 schema version 为 `0.5`。每个模板条目包含 `name`、`title`、`description`、`tags`、`recommendedFor`、`node`、`packageManagers` 和 `nextSteps`；`template info` 会读取这些字段，方便用户初始化前先确认模板用途。
+
 ## 私有模板仓库
 
 团队可以维护自己的模板 release 仓库，并让 Tsu 指向该仓库：
@@ -208,6 +211,21 @@ TSU_TEMPLATE_REPOSITORY=company/frontend-templates tsu-cli init crm-web --templa
 ```
 
 如果使用私有 GitHub 仓库，或者需要更高的 GitHub API 额度，请在 shell 或 CI 环境设置 `GITHUB_TOKEN` 或 `GH_TOKEN`。CLI 会自动把它用于 GitHub API 和 Release asset 请求。不要把 token 写入生成项目。
+
+私有模板仓库需要按下面的约定发布 Release：
+
+- tag：`template-v<version>`
+- asset：`tsu-templates-v<version>.tar.gz`
+- 压缩包根目录：`tsu-templates-v<version>/`
+- manifest：`tsu-templates-v<version>/manifest.json`
+- 模板目录：`tsu-templates-v<version>/<template-name>/...`
+
+常见排查：
+
+- `Failed to resolve GitHub Release`：检查 `--repo`、release tag、仓库权限以及 `GITHUB_TOKEN` / `GH_TOKEN`。
+- `No tsu template asset found`：确认 Release 已上传 `tsu-templates-v<version>.tar.gz`。
+- `Template "<name>" is not available`：确认模板名已经写入 `manifest.json`，且压缩包内存在对应模板目录。
+- 模板内容不是最新：使用 `--refresh` 重拉，或用 `--no-cache` 单次跳过缓存。
 
 ## 生成项目后的工作流
 

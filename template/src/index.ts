@@ -7,12 +7,14 @@ import { createVue3TemplateFiles } from "./vue3.js";
 
 export interface TemplateManifest {
   name: string;
+  schemaVersion: string;
   version: string;
   templates: TemplateDefinition[];
 }
 
 export interface TemplateDefinition {
   name: TemplateName;
+  title: string;
   description: string;
   tags: string[];
   recommendedFor: string[];
@@ -36,6 +38,7 @@ export type TemplateName = "default" | "monorepo" | "vue3" | "mfe" | "mfe-main" 
 export const templateDefinitions: TemplateDefinition[] = [
   {
     name: "default",
+    title: "Minimal Node.js Starter",
     description: "Minimal Node.js starter",
     tags: ["node", "minimal"],
     recommendedFor: ["node", "minimal"],
@@ -45,6 +48,7 @@ export const templateDefinitions: TemplateDefinition[] = [
   },
   {
     name: "monorepo",
+    title: "pnpm Monorepo Workspace",
     description: "Multi-package workspace with pnpm, Turbo, Changesets, and TypeScript",
     tags: ["monorepo", "pnpm", "turbo", "changesets"],
     recommendedFor: ["workspace", "packages", "team standard"],
@@ -54,6 +58,7 @@ export const templateDefinitions: TemplateDefinition[] = [
   },
   {
     name: "vue3",
+    title: "Vue 3 Web App",
     description: "Vue 3 app with Vite, Router, Pinia, ESLint, Docker, and CI",
     tags: ["vue", "vite", "spa", "docker"],
     recommendedFor: ["admin", "dashboard", "web app"],
@@ -63,6 +68,7 @@ export const templateDefinitions: TemplateDefinition[] = [
   },
   {
     name: "mfe",
+    title: "Vue Micro Frontend Workspace",
     description: "Micro frontend workspace with host and Vue sub apps",
     tags: ["mfe", "qiankun", "vue", "workspace"],
     recommendedFor: ["micro frontend", "multi app"],
@@ -72,6 +78,7 @@ export const templateDefinitions: TemplateDefinition[] = [
   },
   {
     name: "mfe-main",
+    title: "React Micro Frontend Host",
     description: "React qiankun host shell starter with Docker, nginx, CI, and deploy workflow",
     tags: ["mfe", "qiankun", "react", "host", "vite", "docker", "nginx", "ci", "deploy", "release", "github-actions"],
     recommendedFor: ["micro frontend host", "auth shell", "app container"],
@@ -81,6 +88,7 @@ export const templateDefinitions: TemplateDefinition[] = [
   },
   {
     name: "mfe-app",
+    title: "React Micro Frontend Sub App",
     description: "React qiankun sub application starter with Docker, nginx, CI, and deploy workflow",
     tags: ["mfe", "qiankun", "react", "sub app", "vite", "docker", "nginx", "ci", "deploy", "release", "github-actions"],
     recommendedFor: ["micro frontend sub app", "business app", "remote module"],
@@ -90,6 +98,7 @@ export const templateDefinitions: TemplateDefinition[] = [
   },
   {
     name: "react",
+    title: "React Web App",
     description: "React app with Vite, TypeScript, Router, ESLint, Docker, and CI",
     tags: ["react", "vite", "spa", "docker"],
     recommendedFor: ["react app", "dashboard", "web app"],
@@ -99,6 +108,7 @@ export const templateDefinitions: TemplateDefinition[] = [
   },
   {
     name: "python-main",
+    title: "FastAPI Auth Service",
     description: "FastAPI auth service with PostgreSQL, Redis, RS256 JWT, Alembic, Docker, nginx, CI, and deploy workflow",
     tags: ["python", "fastapi", "auth", "postgresql", "redis", "deploy", "rollback"],
     recommendedFor: ["auth service", "jwt issuer", "backend api"],
@@ -108,6 +118,7 @@ export const templateDefinitions: TemplateDefinition[] = [
   },
   {
     name: "python-app",
+    title: "FastAPI Resource Service",
     description: "FastAPI resource service with PostgreSQL, Redis blacklist checks, RS256 JWT verification, Docker, nginx, CI, and deploy workflow",
     tags: ["python", "fastapi", "api", "postgresql", "redis", "deploy", "rollback"],
     recommendedFor: ["resource service", "business api", "jwt verifier"],
@@ -121,6 +132,7 @@ export const templateProjectNameToken = "__tsu_project_name__";
 
 export const templateManifest: TemplateManifest = {
   name: "tsuz-template",
+  schemaVersion: "0.5",
   version: "0.0.0",
   templates: templateDefinitions
 };

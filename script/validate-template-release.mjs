@@ -218,12 +218,24 @@ async function validateBundleFiles(bundleDir) {
 }
 
 function validateManifest(manifest) {
+  if (manifest.name !== "tsuz-template") {
+    throw new Error(`Release manifest name ${manifest.name} does not match expected tsuz-template.`);
+  }
+
+  if (manifest.schemaVersion !== "0.5") {
+    throw new Error(`Release manifest schemaVersion ${manifest.schemaVersion} does not match expected 0.5.`);
+  }
+
   if (manifest.version !== version) {
     throw new Error(`Release manifest version ${manifest.version} does not match expected ${version}.`);
   }
 
-  if (manifest.asset && manifest.asset !== archiveName) {
+  if (manifest.asset !== archiveName) {
     throw new Error(`Release manifest asset ${manifest.asset} does not match expected ${archiveName}.`);
+  }
+
+  if (!Array.isArray(manifest.templates)) {
+    throw new Error("Release manifest templates must be an array.");
   }
 
   const templateNames = manifest.templates.map((template) => (typeof template === "string" ? template : template.name));
@@ -234,16 +246,31 @@ function validateManifest(manifest) {
     throw new Error(`Release manifest does not include expected templates: ${missingTemplates.join(", ")}.`);
   }
 
-  for (const templateName of ["mfe-main", "mfe-app"]) {
+  for (const templateName of expectedTemplates) {
     const definition = manifest.templates.find((template) => (typeof template === "string" ? template : template.name) === templateName);
 
-    if (!definition || typeof definition === "string" || !definition.description) {
-      throw new Error(`Release manifest does not include metadata for ${templateName}.`);
+    if (!definition || typeof definition === "string") {
+      throw new Error(`Release manifest does not include v0.5 metadata for ${templateName}.`);
+    }
+
+    validateTemplateDefinition(definition);
+  }
+}
+
+function validateTemplateDefinition(definition) {
+  const requiredStringFields = ["name", "title", "description", "node"];
+  const requiredListFields = ["tags", "recommendedFor", "packageManagers", "nextSteps"];
+
+  for (const field of requiredStringFields) {
+    if (typeof definition[field] !== "string" || !definition[field]) {
+      throw new Error(`Release manifest template ${definition.name ?? "<unknown>"} is missing ${field}.`);
     }
   }
 
-  if (!manifest.templates.find((template) => (typeof template === "string" ? template === "vue3" : template.name === "vue3" && template.description))) {
-    throw new Error("Release manifest does not include template details.");
+  for (const field of requiredListFields) {
+    if (!Array.isArray(definition[field]) || definition[field].length === 0 || definition[field].some((item) => typeof item !== "string" || !item)) {
+      throw new Error(`Release manifest template ${definition.name} is missing ${field}.`);
+    }
   }
 }
 
@@ -288,6 +315,10 @@ async function generateReleaseProject(template, { projectRoot, tempRoot }) {
 
   if (metadata.template.repository !== "local/tsu") {
     throw new Error(`Generated metadata records repository ${metadata.template.repository}, expected local/tsu.`);
+  }
+
+  if (typeof metadata.generatedAt !== "string" || !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/.test(metadata.generatedAt)) {
+    throw new Error("Generated metadata does not include a valid generatedAt timestamp.");
   }
 }
 

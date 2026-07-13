@@ -159,11 +159,12 @@ Generated projects include `.tsu/template.json` so tooling can identify their te
     "version": "1.0.4",
     "source": "remote",
     "repository": "company/frontend-templates"
-  }
+  },
+  "generatedAt": "2026-07-13T12:00:00.000Z"
 }
 ```
 
-This metadata is used by `tsu-cli doctor` and can support upgrade checks in future releases.
+This metadata is used by `tsu-cli doctor` and upgrade checks. `generatedAt` records when the project was created; authentication tokens are never written to generated projects.
 
 ## Template Versions
 
@@ -195,6 +196,8 @@ Inspect template details from a specific release version:
 tsu-cli template info vue3 --version 1.0.4
 ```
 
+Template release archives include `manifest.json` with schema version `0.5`. Each template entry includes `name`, `title`, `description`, `tags`, `recommendedFor`, `node`, `packageManagers`, and `nextSteps`; `template info` reads those fields so users can inspect a template before initializing a project.
+
 ## Private Template Repositories
 
 Teams can host their own template releases and point Tsu at that repository:
@@ -210,6 +213,21 @@ TSU_TEMPLATE_REPOSITORY=company/frontend-templates tsu-cli init crm-web --templa
 ```
 
 For private GitHub repositories or higher API rate limits, set `GITHUB_TOKEN` or `GH_TOKEN` in your shell or CI environment. The CLI automatically sends it on GitHub API and Release asset requests. Do not write tokens into generated projects.
+
+A private template repository must publish releases with this contract:
+
+- tag: `template-v<version>`
+- asset: `tsu-templates-v<version>.tar.gz`
+- archive root directory: `tsu-templates-v<version>/`
+- manifest: `tsu-templates-v<version>/manifest.json`
+- template directories: `tsu-templates-v<version>/<template-name>/...`
+
+Troubleshooting:
+
+- `Failed to resolve GitHub Release`: check `--repo`, release tag, repository permissions, and `GITHUB_TOKEN` / `GH_TOKEN`.
+- `No tsu template asset found`: upload `tsu-templates-v<version>.tar.gz` to the release.
+- `Template "<name>" is not available`: confirm the template name appears in `manifest.json` and the matching directory exists in the archive.
+- Stale template content: retry with `--refresh`, or bypass the cache once with `--no-cache`.
 
 ## Generated Project Workflow
 

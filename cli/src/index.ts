@@ -92,6 +92,7 @@ export interface TemplateMetadata {
     source: TemplateSource;
     repository?: string;
   };
+  generatedAt?: string;
 }
 
 export interface DoctorResult {
@@ -230,6 +231,7 @@ export function createTemplateInfoMessage(templateName: string) {
 
   return [
     `Template: ${definition.name}`,
+    `Title: ${definition.title}`,
     `Description: ${definition.description}`,
     `Tags: ${definition.tags.join(", ")}`,
     `Recommended for: ${definition.recommendedFor.join(", ")}`,
@@ -244,6 +246,7 @@ export function createTemplateInfoMessage(templateName: string) {
 export function createRemoteTemplateInfoMessage(options: TemplateInfoOptions, definition: RemoteTemplateDefinition) {
   const lines = [
     `Template: ${definition.name}`,
+    `Title: ${definition.title ?? "Not provided"}`,
     `Version: ${options.version}`,
     `Repository: ${options.repository}`,
     `Description: ${definition.description ?? "Not provided"}`,
@@ -720,7 +723,8 @@ export function createTemplateMetadata(options: InitProjectOptions): string {
       version: normalizeTemplateVersion(options.version ?? "latest"),
       source: options.source ?? "remote",
       ...(options.repository ? { repository: options.repository } : {})
-    }
+    },
+    generatedAt: new Date().toISOString()
   };
 
   return `${JSON.stringify(metadata, null, 2)}\n`;

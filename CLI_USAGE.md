@@ -566,6 +566,36 @@ git push origin template-v1.0.0
 
 脚本会通过 GitHub API 创建或复用 `template-v<version>` Release，并上传 `tsu-templates-v<version>.tar.gz`。
 
+模板压缩包内需要包含 `tsu-templates-v<version>/manifest.json`。当前 manifest schema version 为 `0.5`，示例：
+
+```json
+{
+  "name": "tsuz-template",
+  "schemaVersion": "0.5",
+  "version": "1.0.4",
+  "asset": "tsu-templates-v1.0.4.tar.gz",
+  "templates": [
+    {
+      "name": "vue3",
+      "title": "Vue 3 Web App",
+      "description": "Vue 3 app with Vite, Router, Pinia, ESLint, Docker, and CI",
+      "tags": ["vue", "vite", "spa", "docker"],
+      "recommendedFor": ["admin", "dashboard", "web app"],
+      "node": ">=20",
+      "packageManagers": ["pnpm"],
+      "nextSteps": ["pnpm install", "pnpm dev"]
+    }
+  ]
+}
+```
+
+私有模板仓库排查重点：
+
+- `Failed to resolve GitHub Release`：检查仓库、tag、权限和 `GITHUB_TOKEN` / `GH_TOKEN`。
+- `No tsu template asset found`：确认 Release asset 名称是 `tsu-templates-v<version>.tar.gz`。
+- `Template "<name>" is not available`：确认 manifest 和压缩包目录都包含该模板。
+- 缓存内容过旧：使用 `--refresh` 或 `--no-cache`。
+
 CLI 使用远程模板：
 
 ```bash

@@ -24,12 +24,16 @@ export interface TemplateAssetSource extends GitHubReleaseAsset {
 }
 
 export interface RemoteTemplateManifest {
+  name?: string;
+  schemaVersion?: string;
   version: string;
+  asset?: string;
   templates: Array<string | RemoteTemplateDefinition>;
 }
 
 export interface RemoteTemplateDefinition {
   name: string;
+  title?: string;
   description?: string;
   tags?: string[];
   recommendedFor?: string[];
