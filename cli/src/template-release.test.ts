@@ -4,6 +4,8 @@ import test from "node:test";
 import {
   compareTemplateVersions,
   createGitHubHeaders,
+  downloadFile,
+  fetchGitHubRelease,
   findRemoteTemplateDefinition,
   findTemplateAsset,
   findTemplateVersionsFromReleases,
@@ -80,6 +82,30 @@ test("createGitHubHeaders includes token for GitHub hosts", () => {
   }
 });
 
+test("release resolution errors include private repository guidance", async () => {
+  const originalFetch = globalThis.fetch;
+
+  try {
+    globalThis.fetch = async () => new Response("forbidden", { status: 403, statusText: "Forbidden" });
+
+    await assert.rejects(() => fetchGitHubRelease("company/templates", "1.2.3"), /set GITHUB_TOKEN or GH_TOKEN with repository read access/);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("template asset download errors include release asset guidance", async () => {
+  const originalFetch = globalThis.fetch;
+
+  try {
+    globalThis.fetch = async () => new Response("missing", { status: 404, statusText: "Not Found" });
+
+    await assert.rejects(() => downloadFile("https://github.com/company/templates/releases/download/template-v1.2.3/tsu-templates-v1.2.3.tar.gz", "/tmp/tsu-missing-template.tar.gz"), /tsu-templates-v<version>\.tar\.gz/);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
 test("getTemplateCachePaths keeps repositories isolated", () => {
   const originalCacheDir = process.env.TSU_TEMPLATE_CACHE_DIR;
 
@@ -104,7 +130,7 @@ test("findTemplateAsset finds the template archive", () => {
     }).name,
     "tsu-templates-v1.2.3.tar.gz"
   );
-  assert.throws(() => findTemplateAsset({ tag_name: "template-v1.2.3", assets: [] }), /No tsu template asset found/);
+  assert.throws(() => findTemplateAsset({ tag_name: "template-v1.2.3", assets: [] }), /Upload an asset named tsu-templates-v<version>\.tar\.gz/);
 });
 
 test("findTemplateVersionsFromReleases keeps only template assets", () => {

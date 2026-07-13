@@ -657,6 +657,59 @@ test("runCli initializes remote templates from direct URLs and reuses cache", as
   const cacheDir = await mkdtemp(join(tmpdir(), "quick-start-cache-"));
   const originalFetch = globalThis.fetch;
   const originalCacheDir = process.env.TSU_TEMPLATE_CACHE_DIR;
+  const originalGithubToken = process.env.GITHUB_TOKEN;
+  const archiveName = "tsu-templates-v1.2.3.tar.gz";
+  const bundleDir = join(archiveRoot, "tsu-templates-v1.2.3");
+  const archivePath = join(archiveRoot, archiveName);
+  const requestedUrls: string[] = [];
+  const requestedAuthorization: Array<string | undefined> = [];
+
+  try {
+    process.env.TSU_TEMPLATE_CACHE_DIR = cacheDir;
+    process.env.GITHUB_TOKEN = "private-token";
+    await mkdir(join(bundleDir, "vue3", "src"), { recursive: true });
+    await writeFile(join(bundleDir, "manifest.json"), JSON.stringify({ version: "1.2.3", templates: ["vue3"] }), "utf8");
+    await writeFile(join(bundleDir, "vue3", "package.json"), '{"name":"remote-template"}\n', "utf8");
+    await writeFile(join(bundleDir, "vue3", "src", "index.js"), 'console.log("remote-template");\n', "utf8");
+    await execFileAsync("tar", ["-czf", archiveName, "-C", dirname(bundleDir), "tsu-templates-v1.2.3"], { cwd: archiveRoot });
+    const archiveBytes = await readFile(archivePath);
+
+    globalThis.fetch = async (input, init) => {
+      requestedUrls.push(String(input));
+      requestedAuthorization.push((init?.headers as Record<string, string> | undefined)?.Authorization);
+      return new Response(archiveBytes, { status: 200 });
+    };
+
+    const firstMessage = await runCli(["init", "demo-one", "--template", "vue3", "--version", "1.2.3", "--repo", "company/templates"], cwd);
+    const secondMessage = await runCli(["init", "demo-two", "--template", "vue3", "--version", "1.2.3", "--repo", "company/templates"], cwd);
+
+    assert.deepEqual(requestedUrls, ["https://github.com/company/templates/releases/download/template-v1.2.3/tsu-templates-v1.2.3.tar.gz"]);
+    assert.deepEqual(requestedAuthorization, ["Bearer private-token"]);
+    assert.match(firstMessage, /^Created demo-one from vue3@1\.2\.3/);
+    assert.match(secondMessage, /^Created demo-two from vue3@1\.2\.3/);
+    assert.equal(await readFile(join(cwd, "demo-one", "package.json"), "utf8"), '{"name":"remote-template"}\n');
+    assert.equal(await readFile(join(cwd, "demo-two", "src", "index.js"), "utf8"), 'console.log("remote-template");\n');
+
+    const metadata = JSON.parse(await readFile(join(cwd, "demo-one", ".tsu", "template.json"), "utf8"));
+    assert.equal(metadata.template.repository, "company/templates");
+    assert.doesNotMatch(JSON.stringify(metadata), /private-token/);
+  } finally {
+    globalThis.fetch = originalFetch;
+    restoreEnv("TSU_TEMPLATE_CACHE_DIR", originalCacheDir);
+    restoreEnv("GITHUB_TOKEN", originalGithubToken);
+    await rm(cwd, { force: true, recursive: true });
+    await rm(archiveRoot, { force: true, recursive: true });
+    await rm(cacheDir, { force: true, recursive: true });
+  }
+});
+
+test("runCli initializes remote templates from TSU_TEMPLATE_REPOSITORY", async () => {
+  const cwd = await mkdtemp(join(tmpdir(), "quick-start-"));
+  const archiveRoot = await mkdtemp(join(tmpdir(), "quick-start-release-"));
+  const cacheDir = await mkdtemp(join(tmpdir(), "quick-start-cache-"));
+  const originalFetch = globalThis.fetch;
+  const originalCacheDir = process.env.TSU_TEMPLATE_CACHE_DIR;
+  const originalRepository = process.env.TSU_TEMPLATE_REPOSITORY;
   const archiveName = "tsu-templates-v1.2.3.tar.gz";
   const bundleDir = join(archiveRoot, "tsu-templates-v1.2.3");
   const archivePath = join(archiveRoot, archiveName);
@@ -664,10 +717,10 @@ test("runCli initializes remote templates from direct URLs and reuses cache", as
 
   try {
     process.env.TSU_TEMPLATE_CACHE_DIR = cacheDir;
-    await mkdir(join(bundleDir, "vue3", "src"), { recursive: true });
-    await writeFile(join(bundleDir, "manifest.json"), JSON.stringify({ version: "1.2.3", templates: ["vue3"] }), "utf8");
-    await writeFile(join(bundleDir, "vue3", "package.json"), '{"name":"remote-template"}\n', "utf8");
-    await writeFile(join(bundleDir, "vue3", "src", "index.js"), 'console.log("remote-template");\n', "utf8");
+    process.env.TSU_TEMPLATE_REPOSITORY = "company/env-templates";
+    await mkdir(join(bundleDir, "react"), { recursive: true });
+    await writeFile(join(bundleDir, "manifest.json"), JSON.stringify({ version: "1.2.3", templates: ["react"] }), "utf8");
+    await writeFile(join(bundleDir, "react", "package.json"), '{"name":"env-template"}\n', "utf8");
     await execFileAsync("tar", ["-czf", archiveName, "-C", dirname(bundleDir), "tsu-templates-v1.2.3"], { cwd: archiveRoot });
     const archiveBytes = await readFile(archivePath);
 
@@ -676,14 +729,42 @@ test("runCli initializes remote templates from direct URLs and reuses cache", as
       return new Response(archiveBytes, { status: 200 });
     };
 
-    const firstMessage = await runCli(["init", "demo-one", "--template", "vue3", "--version", "1.2.3", "--repo", "company/templates"], cwd);
-    const secondMessage = await runCli(["init", "demo-two", "--template", "vue3", "--version", "1.2.3", "--repo", "company/templates"], cwd);
+    await runCli(["init", "env-demo", "--template", "react", "--version", "1.2.3"], cwd);
 
-    assert.deepEqual(requestedUrls, ["https://github.com/company/templates/releases/download/template-v1.2.3/tsu-templates-v1.2.3.tar.gz"]);
-    assert.match(firstMessage, /^Created demo-one from vue3@1\.2\.3/);
-    assert.match(secondMessage, /^Created demo-two from vue3@1\.2\.3/);
-    assert.equal(await readFile(join(cwd, "demo-one", "package.json"), "utf8"), '{"name":"remote-template"}\n');
-    assert.equal(await readFile(join(cwd, "demo-two", "src", "index.js"), "utf8"), 'console.log("remote-template");\n');
+    assert.deepEqual(requestedUrls, ["https://github.com/company/env-templates/releases/download/template-v1.2.3/tsu-templates-v1.2.3.tar.gz"]);
+    const metadata = JSON.parse(await readFile(join(cwd, "env-demo", ".tsu", "template.json"), "utf8"));
+    assert.equal(metadata.template.repository, "company/env-templates");
+  } finally {
+    globalThis.fetch = originalFetch;
+    restoreEnv("TSU_TEMPLATE_CACHE_DIR", originalCacheDir);
+    restoreEnv("TSU_TEMPLATE_REPOSITORY", originalRepository);
+    await rm(cwd, { force: true, recursive: true });
+    await rm(archiveRoot, { force: true, recursive: true });
+    await rm(cacheDir, { force: true, recursive: true });
+  }
+});
+
+test("runCli reports private template manifest misses with troubleshooting guidance", async () => {
+  const cwd = await mkdtemp(join(tmpdir(), "quick-start-"));
+  const archiveRoot = await mkdtemp(join(tmpdir(), "quick-start-release-"));
+  const cacheDir = await mkdtemp(join(tmpdir(), "quick-start-cache-"));
+  const originalFetch = globalThis.fetch;
+  const originalCacheDir = process.env.TSU_TEMPLATE_CACHE_DIR;
+  const archiveName = "tsu-templates-v1.2.3.tar.gz";
+  const bundleDir = join(archiveRoot, "tsu-templates-v1.2.3");
+  const archivePath = join(archiveRoot, archiveName);
+
+  try {
+    process.env.TSU_TEMPLATE_CACHE_DIR = cacheDir;
+    await mkdir(join(bundleDir, "react"), { recursive: true });
+    await writeFile(join(bundleDir, "manifest.json"), JSON.stringify({ version: "1.2.3", templates: ["react"] }), "utf8");
+    await writeFile(join(bundleDir, "react", "package.json"), '{"name":"react-only"}\n', "utf8");
+    await execFileAsync("tar", ["-czf", archiveName, "-C", dirname(bundleDir), "tsu-templates-v1.2.3"], { cwd: archiveRoot });
+    const archiveBytes = await readFile(archivePath);
+
+    globalThis.fetch = async () => new Response(archiveBytes, { status: 200 });
+
+    await assert.rejects(() => runCli(["init", "missing-demo", "--template", "vue3", "--version", "1.2.3", "--repo", "company/templates", "--no-cache"], cwd), /Check manifest\.json and the template directories inside the archive/);
   } finally {
     globalThis.fetch = originalFetch;
     restoreEnv("TSU_TEMPLATE_CACHE_DIR", originalCacheDir);

@@ -710,7 +710,7 @@ export async function resolveRemoteTemplateInfo(options: TemplateInfoOptions) {
   const definition = findRemoteTemplateDefinition(manifest, options.templateName);
 
   if (!definition) {
-    throw new Error(`Template "${options.templateName}" is not available in ${asset.name}. Available templates: ${remoteManifestTemplateNames(manifest).join(", ")}.`);
+    throw new Error(`Template "${options.templateName}" is not available in ${asset.name}. Available templates: ${remoteManifestTemplateNames(manifest).join(", ")}. Check manifest.json and the template directories inside the archive.`);
   }
 
   return definition;
@@ -1035,7 +1035,7 @@ async function downloadTemplateFiles(options: InitProjectOptions): Promise<Templ
   const templateName = options.templateName ?? "default";
 
   if (!remoteManifestIncludesTemplate(bundle.manifest, templateName)) {
-    throw new Error(`Template "${templateName}" is not available in ${asset.name}. Available templates: ${remoteManifestTemplateNames(bundle.manifest).join(", ")}.`);
+    throw new Error(`Template "${templateName}" is not available in ${asset.name}. Available templates: ${remoteManifestTemplateNames(bundle.manifest).join(", ")}. Check manifest.json and the template directories inside the archive.`);
   }
 
   const tempDir = await mkdtemp(join(tmpdir(), "tsu-template-"));

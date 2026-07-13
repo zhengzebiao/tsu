@@ -200,6 +200,8 @@ Template release archives include `manifest.json` with schema version `0.5`. Eac
 
 ## Private Template Repositories
 
+For full setup, manifest schema, token, and troubleshooting details, see [Private Template Repository Guide](PRIVATE_TEMPLATE_REPOSITORY.zh-CN.md).
+
 Teams can host their own template releases and point Tsu at that repository:
 
 ```bash

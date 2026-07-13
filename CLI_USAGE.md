@@ -566,6 +566,8 @@ git push origin template-v1.0.0
 
 脚本会通过 GitHub API 创建或复用 `template-v<version>` Release，并上传 `tsu-templates-v<version>.tar.gz`。
 
+完整配置、token 和排障说明见 [私有模板仓库使用指南](PRIVATE_TEMPLATE_REPOSITORY.zh-CN.md)。
+
 模板压缩包内需要包含 `tsu-templates-v<version>/manifest.json`。当前 manifest schema version 为 `0.5`，示例：
 
 ```json

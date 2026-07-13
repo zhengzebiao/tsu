@@ -198,6 +198,8 @@ tsu-cli template info vue3 --version 1.0.4
 
 ## 私有模板仓库
 
+完整配置、manifest schema、token 和排障说明见 [私有模板仓库使用指南](PRIVATE_TEMPLATE_REPOSITORY.zh-CN.md)。
+
 团队可以维护自己的模板 release 仓库，并让 Tsu 指向该仓库：
 
 ```bash

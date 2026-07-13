@@ -138,7 +138,7 @@ export function findTemplateAsset(release: GitHubRelease) {
   const asset = release.assets.find((item) => templateAssetNamePattern.test(item.name));
 
   if (!asset) {
-    throw new Error(`No tsu template asset found in GitHub Release ${release.tag_name}.`);
+    throw new Error(`No tsu template asset found in GitHub Release ${release.tag_name}. Upload an asset named tsu-templates-v<version>.tar.gz to the release.`);
   }
 
   return asset;
@@ -218,7 +218,7 @@ export async function fetchGitHubRelease(repository: string, version: string): P
   });
 
   if (!response.ok) {
-    throw new Error(`Failed to resolve GitHub Release ${releasePath}: ${response.status} ${response.statusText}`);
+    throw new Error(createGitHubReleaseErrorMessage("Failed to resolve GitHub Release", repository, releasePath, response));
   }
 
   return (await response.json()) as GitHubRelease;
@@ -230,7 +230,7 @@ export async function fetchGitHubReleases(repository: string): Promise<GitHubRel
   });
 
   if (!response.ok) {
-    throw new Error(`Failed to resolve GitHub Releases: ${response.status} ${response.statusText}`);
+    throw new Error(createGitHubReleaseErrorMessage("Failed to resolve GitHub Releases", repository, "releases", response));
   }
 
   return (await response.json()) as GitHubRelease[];
@@ -242,7 +242,7 @@ export async function downloadFile(url: string, destination: string) {
   });
 
   if (!response.ok) {
-    throw new Error(`Failed to download template asset: ${response.status} ${response.statusText}`);
+    throw new Error(createTemplateAssetDownloadErrorMessage(url, response));
   }
 
   await writeFile(destination, new Uint8Array(await response.arrayBuffer()));
@@ -340,6 +340,34 @@ export function compareTemplateVersions(a: string, b: string) {
   }
 
   return normalizeTemplateVersion(a).localeCompare(normalizeTemplateVersion(b));
+}
+
+function createGitHubReleaseErrorMessage(action: string, repository: string, releasePath: string, response: Response) {
+  const base = `${action} ${releasePath} from ${repository}: ${response.status} ${response.statusText}.`;
+
+  if (response.status === 401 || response.status === 403) {
+    return `${base} For private template repositories, set GITHUB_TOKEN or GH_TOKEN with repository read access.`;
+  }
+
+  if (response.status === 404) {
+    return `${base} Check --repo, TSU_TEMPLATE_REPOSITORY, the template-v<version> release tag, and whether the repository is private.`;
+  }
+
+  return `${base} Check GitHub availability and retry with --refresh if cached metadata is stale.`;
+}
+
+function createTemplateAssetDownloadErrorMessage(url: string, response: Response) {
+  const base = `Failed to download template asset from ${url}: ${response.status} ${response.statusText}.`;
+
+  if (response.status === 401 || response.status === 403) {
+    return `${base} For private template repositories, set GITHUB_TOKEN or GH_TOKEN with repository read access.`;
+  }
+
+  if (response.status === 404) {
+    return `${base} Check that the release asset is named tsu-templates-v<version>.tar.gz and that the release exists.`;
+  }
+
+  return `${base} Retry with --refresh or --no-cache if the local template cache may be stale.`;
 }
 
 function shouldAttachGitHubAuth(url: string | undefined) {
