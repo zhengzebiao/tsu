@@ -196,4 +196,29 @@ shasum -a 256 -c dist/template-release/tsu-templates-v1.0.0.tar.gz.sha256
 
 ## 迁移审计附录
 
-尚未导出。删除任何历史 GitHub Release 或 remote tag 前，必须先填写本节并完成人工核对。
+### 删除前审计（2026-07-14T15:26:27Z）
+
+审计范围固定为以下 8 个精确 tag。tag SHA 由 GitHub Git refs API、`git ls-remote` 与本地 tag 交叉核对；Release 元数据由 GitHub Releases API 导出；现存 asset 的 digest 另经下载并用 SHA-256 独立复算，均与 GitHub 记录一致。
+
+| Tag | Tag commit SHA | Release URL | Published at (UTC) | Asset | Size (bytes) | SHA-256 |
+| --- | --- | --- | --- | --- | ---: | --- |
+| `template-v1.0.0` | `858a1f7bd062a2ffb4f59cc40e0876b41306cc89` | 不存在 | 不存在 | 无 | — | — |
+| `template-v1.0.1` | `7949155f9e41068081f39ff459bc084cd4f8ba61` | 不存在 | 不存在 | 无 | — | — |
+| `template-v1.0.2` | `178c889d836fd4ce98a78d682f5975973d6e8819` | 不存在 | 不存在 | 无 | — | — |
+| `template-v1.0.3` | `3bdc9415fb6d19c678f109ceb04d696701511a6d` | <https://github.com/zhengzebiao/tsu/releases/tag/template-v1.0.3> | `2026-05-27T05:53:50Z` | `tsu-templates-v1.0.3.tar.gz` | 2,260 | `8e5938922b6ac0ef3c6d0d0b7b15acebb17423b76d1522a3c547190659fdac4f` |
+| `template-v1.0.4` | `7f626e64920b6a1e9342863fc60782d96191f16f` | <https://github.com/zhengzebiao/tsu/releases/tag/template-v1.0.4> | `2026-06-01T08:39:01Z` | `tsu-templates-v1.0.4.tar.gz` | 12,350 | `a4ee765bff3773b03e9892695ca7535087b5f655b5dc913d541519ff8be6ffe0` |
+| `template-v1.0.5` | `e5ce74e3d8f76fbdb3d636a0e43f932b7e2b75f0` | <https://github.com/zhengzebiao/tsu/releases/tag/template-v1.0.5> | `2026-06-06T06:14:12Z` | `tsu-templates-v1.0.5.tar.gz` | 21,725 | `2083f5f618da0dc930ef24fae60da9eac4d1aa010b32c6c439e864a9a0597791` |
+| `template-v1.0.6` | `4ef2c6108cac8d285a7c4c5ea78d7c0285c548c9` | <https://github.com/zhengzebiao/tsu/releases/tag/template-v1.0.6> | `2026-06-06T08:56:54Z` | `tsu-templates-v1.0.6.tar.gz` | 22,028 | `a949706c73d1cec45aa4aa2baf537131b786e20813cda4afb739101c0d0a179c` |
+| `template-v1.0.7` | `8661a04c7a41505d16160c3e13ebcab725b289a1` | <https://github.com/zhengzebiao/tsu/releases/tag/template-v1.0.7> | `2026-06-26T12:43:55Z` | `tsu-templates-v1.0.7.tar.gz` | 23,120 | `aab52ea153bcde1994cbb40ae732413231ff326761ba0d3cb581025588b9a810` |
+
+核对结果：
+
+- 审计表恰好包含 `template-v1.0.0`～`template-v1.0.7` 八行，没有使用模糊删除范围。
+- 八个 remote tags 和同名 local tags 均存在，且各自指向上表的 commit SHA；均为 lightweight tag。
+- GitHub Releases 仅存在 `template-v1.0.3`～`template-v1.0.7` 五个；`template-v1.0.0`～`template-v1.0.2` 的 release API 返回 `404 Not Found`，因此这三项没有 Release URL、发布时间或 asset。
+- 五个现存 Releases 均为非 draft、非 prerelease，且各包含一个上表所列 archive asset。
+- 删除操作必须只删除上述五个 Releases 和八个精确 tags，不触碰任何其他 `template-v*` Release/tag。
+
+### 删除后验证
+
+尚未执行。完成精确删除并重新查询 GitHub Releases、remote refs 与 local refs 后填写。
