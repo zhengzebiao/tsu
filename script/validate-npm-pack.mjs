@@ -45,7 +45,7 @@ async function validatePack(packagePath, packageName) {
   }
 
   if (packageName === "@tsuz/cli") {
-    const requiredCliFiles = ["dist/index.js", "dist/template.js"];
+    const requiredCliFiles = ["dist/contracts.js", "dist/index.js", "dist/template.js", "dist/template-release.js"];
     const missing = requiredCliFiles.filter((file) => !files.includes(file));
 
     if (missing.length > 0) {

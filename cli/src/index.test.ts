@@ -6,6 +6,7 @@ import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import test from "node:test";
 import { promisify } from "node:util";
+import { decodeRemoteTemplateManifest } from "./contracts.js";
 import { compareTemplateVersions, createCliMessage, createDoctorMessage, createHelpMessage, createRemoteTemplateInfoMessage, createTemplateInfoHelpMessage, createTemplateInfoMessage, createTemplateListMessage, createTemplateMetadata, createTemplateVersionsMessage, createUpgradeCheckMessage, createVersionMessage, doctorProject, findRemoteTemplateDefinition, findTemplateAsset, findTemplateVersionsFromReleases, getReleaseTag, initProject, newestTemplateVersion, normalizeEntrypointPath, normalizeTemplateVersion, parseDoctorArgs, parseInitArgs, parseTemplateAssetVersion, parseTemplateInfoArgs, parseTemplateVersionsArgs, parseUpgradeCheckArgs, remoteManifestIncludesTemplate, remoteManifestTemplateNames, runCli, runInteractiveInit, upgradeCheckProject } from "./index.js";
 
 const execFileAsync = promisify(execFile);
@@ -480,12 +481,14 @@ test("release helpers normalize versions and find assets", () => {
   );
 });
 
-test("remote manifest helpers support old and rich template shapes", () => {
-  assert.deepEqual(remoteManifestTemplateNames({ version: "1.0.0", templates: ["default", "vue3"] }), ["default", "vue3"]);
+test("remote manifest helpers support normalized legacy and rich template shapes", () => {
+  const legacy = decodeRemoteTemplateManifest({ version: "1.0.0", templates: ["default", "vue3"] }, { location: "legacy manifest" });
+
+  assert.deepEqual(remoteManifestTemplateNames(legacy), ["default", "vue3"]);
   assert.deepEqual(remoteManifestTemplateNames({ version: "1.0.0", templates: [{ name: "default" }, { name: "react" }] }), ["default", "react"]);
   assert.equal(remoteManifestIncludesTemplate({ version: "1.0.0", templates: [{ name: "default" }, { name: "react" }] }, "react"), true);
   assert.equal(remoteManifestIncludesTemplate({ version: "1.0.0", templates: [{ name: "default" }, { name: "react" }] }, "vue3"), false);
-  assert.deepEqual(findRemoteTemplateDefinition({ version: "1.0.0", templates: ["vue3"] }, "vue3"), { name: "vue3" });
+  assert.deepEqual(findRemoteTemplateDefinition(legacy, "vue3"), { name: "vue3" });
   assert.deepEqual(findRemoteTemplateDefinition({ version: "1.0.0", templates: [{ name: "vue3", description: "Vue release" }] }, "vue3"), {
     name: "vue3",
     description: "Vue release"
@@ -940,6 +943,24 @@ test("doctorProject reports generated mfe-app projects", async () => {
         ["Template metadata", "pass"],
         ["Template files", "pass"]
       ]
+    );
+  } finally {
+    await rm(cwd, { force: true, recursive: true });
+  }
+});
+
+test("doctorProject rejects malformed template metadata with a contract error", async () => {
+  const cwd = await mkdtemp(join(tmpdir(), "tsu-doctor-invalid-metadata-"));
+
+  try {
+    await mkdir(join(cwd, ".tsu"), { recursive: true });
+    await writeFile(join(cwd, "package.json"), '{"name":"demo"}\n', "utf8");
+    await writeFile(join(cwd, "README.md"), "# demo\n", "utf8");
+    await writeFile(join(cwd, ".tsu", "template.json"), '{"template":null}\n', "utf8");
+
+    await assert.rejects(
+      () => doctorProject({ cwd }),
+      (error: unknown) => error instanceof Error && /Invalid template metadata/.test(error.message) && !/TypeError/.test(error.message)
     );
   } finally {
     await rm(cwd, { force: true, recursive: true });

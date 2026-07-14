@@ -1,6 +1,9 @@
 import assert from "node:assert/strict";
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
+import { decodeRemoteTemplateManifest } from "./contracts.js";
 import {
   compareTemplateVersions,
   createGitHubHeaders,
@@ -14,6 +17,7 @@ import {
   getTemplateReleaseAssetUrl,
   getReleaseTag,
   isExplicitTemplateVersion,
+  ensureTemplateBundle,
   newestTemplateVersion,
   normalizeTemplateVersion,
   parseTemplateAssetVersion,
@@ -30,10 +34,12 @@ function restoreEnv(name: string, value: string | undefined) {
   process.env[name] = value;
 }
 
-test("normalizeTemplateVersion strips v prefix and keeps latest", () => {
+test("normalizeTemplateVersion accepts strict SemVer selectors", () => {
   assert.equal(normalizeTemplateVersion("v1.2.3"), "1.2.3");
-  assert.equal(normalizeTemplateVersion("1.2.3"), "1.2.3");
+  assert.equal(normalizeTemplateVersion("1.2.3-rc.1"), "1.2.3-rc.1");
   assert.equal(normalizeTemplateVersion("latest"), "latest");
+  assert.throws(() => normalizeTemplateVersion("1.2"), /complete SemVer/);
+  assert.throws(() => normalizeTemplateVersion("1.2.3+build.1"), /complete SemVer/);
 });
 
 test("getReleaseTag maps versions to release tags", () => {
@@ -42,8 +48,10 @@ test("getReleaseTag maps versions to release tags", () => {
   assert.equal(getReleaseTag("v1.2.3"), "template-v1.2.3");
 });
 
-test("parseTemplateAssetVersion reads template archive versions", () => {
+test("parseTemplateAssetVersion reads only valid template archive versions", () => {
   assert.equal(parseTemplateAssetVersion("tsu-templates-v1.2.3.tar.gz"), "1.2.3");
+  assert.equal(parseTemplateAssetVersion("tsu-templates-v1.2.3-rc.1.tar.gz"), "1.2.3-rc.1");
+  assert.equal(parseTemplateAssetVersion("tsu-templates-vnot-a-version.tar.gz"), undefined);
   assert.equal(parseTemplateAssetVersion("other.tar.gz"), undefined);
 });
 
@@ -155,12 +163,14 @@ test("findTemplateVersionsFromReleases keeps only template assets", () => {
   );
 });
 
-test("remote manifest helpers support old and rich template shapes", () => {
-  assert.deepEqual(remoteManifestTemplateNames({ version: "1.0.0", templates: ["default", "vue3"] }), ["default", "vue3"]);
+test("remote manifest helpers support normalized legacy and rich template shapes", () => {
+  const legacy = decodeRemoteTemplateManifest({ version: "1.0.0", templates: ["default", "vue3"] }, { location: "legacy manifest" });
+
+  assert.deepEqual(remoteManifestTemplateNames(legacy), ["default", "vue3"]);
   assert.deepEqual(remoteManifestTemplateNames({ version: "1.0.0", templates: [{ name: "default" }, { name: "react" }] }), ["default", "react"]);
   assert.equal(remoteManifestIncludesTemplate({ version: "1.0.0", templates: [{ name: "react" }] }, "react"), true);
   assert.equal(remoteManifestIncludesTemplate({ version: "1.0.0", templates: [{ name: "react" }] }, "vue3"), false);
-  assert.deepEqual(findRemoteTemplateDefinition({ version: "1.0.0", templates: ["vue3"] }, "vue3"), { name: "vue3" });
+  assert.deepEqual(findRemoteTemplateDefinition(legacy, "vue3"), { name: "vue3" });
   assert.deepEqual(findRemoteTemplateDefinition({ version: "1.0.0", templates: [{ name: "vue3", description: "Vue release" }] }, "vue3"), {
     name: "vue3",
     description: "Vue release"
@@ -168,10 +178,33 @@ test("remote manifest helpers support old and rich template shapes", () => {
   assert.equal(findRemoteTemplateDefinition({ version: "1.0.0", templates: [{ name: "react" }] }, "vue3"), undefined);
 });
 
-test("version comparison orders numeric segments", () => {
+test("cached malformed manifests fail instead of becoming cache misses", async () => {
+  const root = await mkdtemp(join(tmpdir(), "tsu-contract-cache-"));
+  const originalCacheDir = process.env.TSU_TEMPLATE_CACHE_DIR;
+  const assetName = "tsu-templates-v1.2.3.tar.gz";
+
+  try {
+    process.env.TSU_TEMPLATE_CACHE_DIR = root;
+    const cachePaths = getTemplateCachePaths("company/templates", assetName);
+    await mkdir(cachePaths.bundleDir, { recursive: true });
+    await writeFile(join(cachePaths.bundleDir, "manifest.json"), JSON.stringify({ version: "1.2.3", templates: {} }), "utf8");
+
+    await assert.rejects(
+      () => ensureTemplateBundle("company/templates", assetName, "https://example.com/template.tar.gz"),
+      (error: unknown) => error instanceof Error && /templates must be a non-empty array/.test(error.message)
+    );
+  } finally {
+    restoreEnv("TSU_TEMPLATE_CACHE_DIR", originalCacheDir);
+    await rm(root, { force: true, recursive: true });
+  }
+});
+
+test("version comparison follows SemVer precedence", () => {
   assert.equal(compareTemplateVersions("1.10.0", "1.2.0") > 0, true);
   assert.equal(compareTemplateVersions("1.0.0", "1.0.0"), 0);
-  assert.equal(compareTemplateVersions("1.2.0", "1.10.0") < 0, true);
-  assert.equal(newestTemplateVersion(["1.0.0", "1.10.0", "1.2.0"]), "1.10.0");
+  assert.equal(compareTemplateVersions("1.0.0-alpha", "1.0.0") < 0, true);
+  assert.equal(compareTemplateVersions("1.0.0-beta.2", "1.0.0-beta.11") < 0, true);
+  assert.equal(newestTemplateVersion(["1.0.0-alpha", "1.0.0", "1.0.0-beta.11"]), "1.0.0");
+  assert.throws(() => compareTemplateVersions("1.foo.2", "1.0.0"), /complete SemVer/);
   assert.equal(newestTemplateVersion([]), undefined);
 });

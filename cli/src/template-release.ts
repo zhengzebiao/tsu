@@ -3,44 +3,28 @@ import { mkdir, mkdtemp, readFile, rename, rm, writeFile } from "node:fs/promise
 import { homedir, platform, tmpdir } from "node:os";
 import { basename, dirname, join, relative } from "node:path";
 import { promisify } from "node:util";
+import { compare as compareSemVer } from "semver";
+import {
+  decodeGitHubRelease,
+  decodeGitHubReleases,
+  normalizeConcreteTemplateVersion,
+  normalizeTemplateVersionSelector,
+  parseRemoteTemplateManifest,
+  type GitHubRelease,
+  type GitHubReleaseAsset,
+  type RemoteTemplateDefinition,
+  type RemoteTemplateManifest
+} from "./contracts.js";
 
 const execFileAsync = promisify(execFile);
 const templateAssetNamePattern = /^tsu-templates-v(.+)\.tar\.gz$/;
 
-export interface GitHubRelease {
-  tag_name: string;
-  assets: GitHubReleaseAsset[];
-}
-
-export interface GitHubReleaseAsset {
-  name: string;
-  browser_download_url: string;
-}
+export type { GitHubRelease, GitHubReleaseAsset, RemoteTemplateDefinition, RemoteTemplateManifest } from "./contracts.js";
 
 export interface TemplateAssetSource extends GitHubReleaseAsset {
   tag: string;
   version: string;
   resolvedBy: "direct" | "release-api";
-}
-
-export interface RemoteTemplateManifest {
-  name?: string;
-  schemaVersion?: string;
-  version: string;
-  asset?: string;
-  changelog?: string[];
-  templates: Array<string | RemoteTemplateDefinition>;
-}
-
-export interface RemoteTemplateDefinition {
-  name: string;
-  title?: string;
-  description?: string;
-  tags?: string[];
-  recommendedFor?: string[];
-  node?: string;
-  packageManagers?: string[];
-  nextSteps?: string[];
 }
 
 export interface TemplateBundle {
@@ -68,7 +52,7 @@ export interface TemplateVersionInfo {
 }
 
 export function normalizeTemplateVersion(version: string) {
-  return version === "latest" ? "latest" : version.replace(/^v/, "");
+  return normalizeTemplateVersionSelector(version);
 }
 
 export function getReleaseTag(version: string) {
@@ -146,7 +130,17 @@ export function findTemplateAsset(release: GitHubRelease) {
 }
 
 export function parseTemplateAssetVersion(assetName: string) {
-  return templateAssetNamePattern.exec(assetName)?.[1];
+  const version = templateAssetNamePattern.exec(assetName)?.[1];
+
+  if (!version) {
+    return undefined;
+  }
+
+  try {
+    return normalizeConcreteTemplateVersion(version, `template asset ${assetName}`);
+  } catch {
+    return undefined;
+  }
 }
 
 export function findTemplateVersionsFromReleases(releases: GitHubRelease[]): TemplateVersionInfo[] {
@@ -171,7 +165,7 @@ export function findTemplateVersionsFromReleases(releases: GitHubRelease[]): Tem
 }
 
 export function remoteManifestTemplateNames(manifest: RemoteTemplateManifest) {
-  return manifest.templates.map((template) => (typeof template === "string" ? template : template.name));
+  return manifest.templates.map((template) => template.name);
 }
 
 export function remoteManifestIncludesTemplate(manifest: RemoteTemplateManifest, templateName: string) {
@@ -179,13 +173,7 @@ export function remoteManifestIncludesTemplate(manifest: RemoteTemplateManifest,
 }
 
 export function findRemoteTemplateDefinition(manifest: RemoteTemplateManifest, templateName: string): RemoteTemplateDefinition | undefined {
-  const template = manifest.templates.find((item) => (typeof item === "string" ? item : item.name) === templateName);
-
-  if (!template) {
-    return undefined;
-  }
-
-  return typeof template === "string" ? { name: template } : template;
+  return manifest.templates.find((template) => template.name === templateName);
 }
 
 export async function resolveTemplateAssetSource(repository: string, version: string): Promise<TemplateAssetSource> {
@@ -214,7 +202,8 @@ export async function resolveTemplateAssetSource(repository: string, version: st
 
 export async function fetchGitHubRelease(repository: string, version: string): Promise<GitHubRelease> {
   const releasePath = getReleaseTag(version) === "latest" ? "latest" : `tags/${getReleaseTag(version)}`;
-  const response = await fetch(`https://api.github.com/repos/${repository}/releases/${releasePath}`, {
+  const url = `https://api.github.com/repos/${repository}/releases/${releasePath}`;
+  const response = await fetch(url, {
     headers: createGitHubHeaders("application/vnd.github+json")
   });
 
@@ -222,11 +211,12 @@ export async function fetchGitHubRelease(repository: string, version: string): P
     throw new Error(createGitHubReleaseErrorMessage("Failed to resolve GitHub Release", repository, releasePath, response));
   }
 
-  return (await response.json()) as GitHubRelease;
+  return decodeGitHubRelease(await response.json(), url);
 }
 
 export async function fetchGitHubReleases(repository: string): Promise<GitHubRelease[]> {
-  const response = await fetch(`https://api.github.com/repos/${repository}/releases?per_page=100`, {
+  const url = `https://api.github.com/repos/${repository}/releases?per_page=100`;
+  const response = await fetch(url, {
     headers: createGitHubHeaders("application/vnd.github+json")
   });
 
@@ -234,7 +224,7 @@ export async function fetchGitHubReleases(repository: string): Promise<GitHubRel
     throw new Error(createGitHubReleaseErrorMessage("Failed to resolve GitHub Releases", repository, "releases", response));
   }
 
-  return (await response.json()) as GitHubRelease[];
+  return decodeGitHubReleases(await response.json(), url);
 }
 
 export async function downloadFile(url: string, destination: string) {
@@ -267,7 +257,7 @@ export async function ensureTemplateBundle(repository: string, assetName: string
   }
 
   const cachePaths = getTemplateCachePaths(repository, assetName);
-  const cachedManifest = options.refresh ? undefined : await readTemplateManifest(cachePaths.bundleDir);
+  const cachedManifest = options.refresh ? undefined : await readTemplateManifest(cachePaths.bundleDir, assetName);
 
   if (cachedManifest) {
     return {
@@ -286,7 +276,7 @@ export async function ensureTemplateBundle(repository: string, assetName: string
 
   return {
     bundleDir: cachePaths.bundleDir,
-    manifest: await readRequiredTemplateManifest(cachePaths.bundleDir)
+    manifest: await readRequiredTemplateManifest(cachePaths.bundleDir, assetName)
   };
 }
 
@@ -327,20 +317,7 @@ export function newestTemplateVersion(versions: string[]) {
 }
 
 export function compareTemplateVersions(a: string, b: string) {
-  const aParts = parseVersionParts(a);
-  const bParts = parseVersionParts(b);
-  const maxLength = Math.max(aParts.length, bParts.length);
-
-  for (let index = 0; index < maxLength; index += 1) {
-    const aPart = aParts[index] ?? 0;
-    const bPart = bParts[index] ?? 0;
-
-    if (aPart !== bPart) {
-      return aPart - bPart;
-    }
-  }
-
-  return normalizeTemplateVersion(a).localeCompare(normalizeTemplateVersion(b));
+  return compareSemVer(normalizeConcreteTemplateVersion(a), normalizeConcreteTemplateVersion(b));
 }
 
 function createGitHubReleaseErrorMessage(action: string, repository: string, releasePath: string, response: Response) {
@@ -401,7 +378,7 @@ async function createTemporaryTemplateBundle(assetName: string, assetUrl: string
 
     return {
       bundleDir,
-      manifest: await readRequiredTemplateManifest(bundleDir),
+      manifest: await readRequiredTemplateManifest(bundleDir, assetName),
       dispose: () => rm(tempDir, { force: true, recursive: true })
     };
   } catch (error: unknown) {
@@ -428,7 +405,7 @@ async function extractTemplateArchive(archivePath: string, repositoryDir: string
   try {
     await extractTarball(archivePath, stagingDir);
     const extractedBundleDir = join(stagingDir, bundleName);
-    await readRequiredTemplateManifest(extractedBundleDir);
+    await readRequiredTemplateManifest(extractedBundleDir, basename(archivePath));
     await rm(bundleDir, { force: true, recursive: true });
     await rename(extractedBundleDir, bundleDir);
   } finally {
@@ -436,20 +413,31 @@ async function extractTemplateArchive(archivePath: string, repositoryDir: string
   }
 }
 
-async function readTemplateManifest(bundleDir: string): Promise<RemoteTemplateManifest | undefined> {
+async function readTemplateManifest(bundleDir: string, assetName: string): Promise<RemoteTemplateManifest | undefined> {
   try {
-    return await readRequiredTemplateManifest(bundleDir);
+    return await readRequiredTemplateManifest(bundleDir, assetName);
   } catch (error: unknown) {
     if (isNodeError(error) && error.code === "ENOENT") {
       return undefined;
     }
 
-    return undefined;
+    throw error;
   }
 }
 
-async function readRequiredTemplateManifest(bundleDir: string) {
-  return JSON.parse(await readFile(join(bundleDir, "manifest.json"), "utf8")) as RemoteTemplateManifest;
+async function readRequiredTemplateManifest(bundleDir: string, assetName: string) {
+  const manifestPath = join(bundleDir, "manifest.json");
+  const expectedVersion = parseTemplateAssetVersion(assetName);
+
+  if (!expectedVersion) {
+    throw new Error(`Invalid template asset name ${assetName}. Expected tsu-templates-v<version>.tar.gz with a valid SemVer.`);
+  }
+
+  return parseRemoteTemplateManifest(await readFile(manifestPath, "utf8"), {
+    location: manifestPath,
+    expectedVersion,
+    expectedAsset: assetName
+  });
 }
 
 async function fileExists(filePath: string) {
@@ -467,11 +455,4 @@ async function fileExists(filePath: string) {
 
 function isNodeError(error: unknown): error is NodeJS.ErrnoException {
   return error instanceof Error && "code" in error;
-}
-
-function parseVersionParts(version: string) {
-  return normalizeTemplateVersion(version)
-    .split(/[.-]/)
-    .map((part) => Number.parseInt(part, 10))
-    .filter((part) => Number.isFinite(part));
 }

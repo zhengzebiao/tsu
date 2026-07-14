@@ -26,6 +26,13 @@ importers:
       '@tsuz/template':
         specifier: workspace:*
         version: link:../template
+      semver:
+        specifier: 7.8.1
+        version: 7.8.1
+    devDependencies:
+      '@types/semver':
+        specifier: 7.7.1
+        version: 7.7.1
 
   components:
     devDependencies:
@@ -39,7 +46,11 @@ importers:
         specifier: ^3.5.13
         version: 3.5.35(typescript@5.9.3)
 
-  script: {}
+  script:
+    dependencies:
+      semver:
+        specifier: 7.8.1
+        version: 7.8.1
 
   sdk: {}
 
@@ -383,6 +394,10 @@ packages:
     resolution: {integrity: sha512-esJiCAnl0kfpNdE69f3So4WJUXy95dLZydX0KwK46riIHDzHM7O9Vtf9xCHW0PXIqvgqNrswl522kA/5yx+F4w==}
     dependencies:
       csstype: 3.2.3
+    dev: true
+
+  /@types/semver@7.7.1:
+    resolution: {integrity: sha512-FmgJfu+MOcQ370SD0ev7EI8TlCAfKYU+B4m5T3yXc1CiRN94g/SZPtsCkk506aUDtlMnFZvasDwHHUcZUEaYuA==}
     dev: true
 
   /@vue/compiler-core@3.5.35:
@@ -871,7 +886,6 @@ packages:
     resolution: {integrity: sha512-rkVq3IXh+4FDGch+KwzX3aV9W3kO54GyEgpvBzSyctDA6Xtd7RJQV1xmXbeQp5v7+VzLOfVqiutSE6GICgPFvg==}
     engines: {node: '>=10'}
     hasBin: true
-    dev: true
 
   /shebang-command@2.0.0:
     resolution: {integrity: sha512-kHxr2zZpYtdmrN1qDjrrX/Z1rR1kG8Dx+gkpK1G4eXmvXswmcE1hTWBWYUzlraYw1/yZp6YuDY77YtvbN0dmDA==}

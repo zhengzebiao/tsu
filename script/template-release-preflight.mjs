@@ -1,15 +1,10 @@
 import { access } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { readTemplateReleaseVersion } from "./template-release-version.mjs";
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
-const version = process.argv.find((arg) => arg.startsWith("--version="))?.slice("--version=".length) ?? process.env.TEMPLATE_VERSION;
-
-if (!version) {
-  throw new Error("Missing template version. Use --version=<version> or TEMPLATE_VERSION.");
-}
-
-const normalizedVersion = version.replace(/^v/, "");
+const normalizedVersion = readTemplateReleaseVersion();
 const requiredPaths = [
   join(repoRoot, "script", "build-template-release.mjs"),
   join(repoRoot, "script", "generated-app-validation.mjs"),

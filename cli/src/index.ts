@@ -9,6 +9,7 @@ import { createRequire } from "node:module";
 import { createInterface } from "node:readline/promises";
 import { fileURLToPath } from "node:url";
 import { createTemplateFiles, renderTemplateFiles, templateDefinitions, templateManifest, templateNames, type TemplateFile, type TemplateName } from "./template.js";
+import { parseTemplateMetadata, stringifyTemplateMetadata, type TemplateMetadata, type TemplateSource } from "./contracts.js";
 import {
   compareTemplateVersions,
   downloadTemplateManifest,
@@ -55,7 +56,7 @@ export interface InitProjectOptions {
   refresh?: boolean;
 }
 
-export type TemplateSource = "remote" | "local";
+export type { TemplateMetadata, TemplateSource } from "./contracts.js";
 
 export interface ParsedInitOptions extends Required<Pick<InitProjectOptions, "cwd" | "projectName" | "templateName" | "version" | "force" | "source" | "cache" | "refresh">> {
   repository?: string;
@@ -83,16 +84,6 @@ export interface UpgradeCheckOptions {
   cwd: string;
   repository?: string;
   json?: boolean;
-}
-
-export interface TemplateMetadata {
-  template: {
-    name: string;
-    version: string;
-    source: TemplateSource;
-    repository?: string;
-  };
-  generatedAt?: string;
 }
 
 export interface DoctorResult {
@@ -744,7 +735,7 @@ export function createTemplateMetadata(options: InitProjectOptions): string {
     generatedAt: new Date().toISOString()
   };
 
-  return `${JSON.stringify(metadata, null, 2)}\n`;
+  return stringifyTemplateMetadata(metadata);
 }
 
 export async function upgradeCheckProject(options: UpgradeCheckOptions): Promise<UpgradeCheckResult> {
@@ -999,7 +990,10 @@ function detectTemplateName(readme: string | undefined) {
 }
 
 async function readTemplateMetadata(cwd: string) {
-  return readJsonFile<TemplateMetadata>(join(cwd, ".tsu", "template.json"));
+  const metadataPath = join(cwd, ".tsu", "template.json");
+  const content = await readTextFile(metadataPath);
+
+  return content === undefined ? undefined : parseTemplateMetadata(content, metadataPath);
 }
 
 async function missingTemplateFiles(cwd: string, templateName: string) {
@@ -1099,8 +1093,7 @@ async function collectTemplateFiles(root: string, directory: string, files: Temp
 }
 
 function getLocalTemplateChangelog() {
-  const manifest = templateManifest as unknown as { changelog?: string[] };
-  return Array.isArray(manifest.changelog) ? manifest.changelog : [];
+  return templateManifest.changelog;
 }
 
 function formatOptionalList(value: string[] | undefined) {

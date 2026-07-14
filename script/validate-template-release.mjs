@@ -4,12 +4,14 @@ import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
+import { parseRemoteTemplateManifest, parseTemplateMetadata } from "../cli/dist/contracts.js";
 import { initProject } from "../cli/dist/index.js";
 import { mfeAppTemplates, removeWithRetries, validateGeneratedApps } from "./generated-app-validation.mjs";
+import { readTemplateReleaseVersion } from "./template-release-version.mjs";
 
 const execFileAsync = promisify(execFile);
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
-const version = process.env.TEMPLATE_VERSION ?? "0.0.0";
+const version = readTemplateReleaseVersion();
 const validationMode = readValidationMode();
 const releaseDir = join(repoRoot, "dist", "template-release");
 const archiveName = `tsu-templates-v${version}.tar.gz`;
@@ -22,7 +24,12 @@ try {
   await execFileAsync("tar", ["-xzf", archiveName, "-C", tempDir], { cwd: releaseDir, maxBuffer: 10 * 1024 * 1024 });
 
   const bundleDir = join(tempDir, `tsu-templates-v${version}`);
-  const manifest = JSON.parse(await readFile(join(bundleDir, "manifest.json"), "utf8"));
+  const manifestPath = join(bundleDir, "manifest.json");
+  const manifest = parseRemoteTemplateManifest(await readFile(manifestPath, "utf8"), {
+    location: manifestPath,
+    expectedVersion: version,
+    expectedAsset: archiveName
+  });
 
   validateManifest(manifest);
 
@@ -242,7 +249,7 @@ function validateManifest(manifest) {
     throw new Error("Release manifest templates must be an array.");
   }
 
-  const templateNames = manifest.templates.map((template) => (typeof template === "string" ? template : template.name));
+  const templateNames = manifest.templates.map((template) => template.name);
   const expectedTemplates = ["default", "monorepo", "vue3", "mfe", "mfe-main", "mfe-app", "react", "python-main", "python-app"];
   const missingTemplates = expectedTemplates.filter((templateName) => !templateNames.includes(templateName));
 
@@ -251,9 +258,9 @@ function validateManifest(manifest) {
   }
 
   for (const templateName of expectedTemplates) {
-    const definition = manifest.templates.find((template) => (typeof template === "string" ? template : template.name) === templateName);
+    const definition = manifest.templates.find((template) => template.name === templateName);
 
-    if (!definition || typeof definition === "string") {
+    if (!definition) {
       throw new Error(`Release manifest does not include v0.5 metadata for ${templateName}.`);
     }
 
@@ -303,7 +310,8 @@ async function generateReleaseProject(template, { projectRoot, tempRoot }) {
     });
   });
 
-  const metadata = JSON.parse(await readFile(join(projectRoot, ".tsu", "template.json"), "utf8"));
+  const metadataPath = join(projectRoot, ".tsu", "template.json");
+  const metadata = parseTemplateMetadata(await readFile(metadataPath, "utf8"), metadataPath);
 
   if (metadata.template.name !== template.name) {
     throw new Error(`Generated metadata records ${metadata.template.name}, expected ${template.name}.`);

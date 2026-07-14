@@ -3,6 +3,7 @@ import { readFile, writeFile } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
+import { isTemplateReleasePrerelease, readTemplateReleaseVersion } from "./template-release-version.mjs";
 
 class ResponseError extends Error {
   constructor(status, statusText, body) {
@@ -13,7 +14,7 @@ class ResponseError extends Error {
 
 const execFileAsync = promisify(execFile);
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
-const version = readVersion();
+const version = readTemplateReleaseVersion();
 const tag = `template-v${version}`;
 const archivePath = join(repoRoot, "dist", "template-release", `tsu-templates-v${version}.tar.gz`);
 const repository = await readRepository();
@@ -27,17 +28,6 @@ const assetName = `tsu-templates-v${version}.tar.gz`;
 const release = await ensureRelease(repository, tag, token);
 await replaceReleaseAsset(release, assetName, archivePath, token);
 process.stdout.write(`Published ${archivePath} to GitHub Release ${tag}\n`);
-
-function readVersion() {
-  const versionArg = process.argv.find((arg) => arg.startsWith("--version="));
-  const value = versionArg?.slice("--version=".length) ?? process.env.TEMPLATE_VERSION;
-
-  if (!value) {
-    throw new Error("Missing template release version. Use --version=<version> or TEMPLATE_VERSION.");
-  }
-
-  return value.replace(/^v/, "");
-}
 
 async function readRepository() {
   const configured = process.env.TSU_TEMPLATE_REPOSITORY || process.env.GITHUB_REPOSITORY;
@@ -101,7 +91,7 @@ async function createRelease(repositoryInfo, tagName, authToken) {
       name: tagName,
       body: `Template release ${tagName}`,
       draft: false,
-      prerelease: false,
+      prerelease: isTemplateReleasePrerelease(version),
       generate_release_notes: false
     })
   });

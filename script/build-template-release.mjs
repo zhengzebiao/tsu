@@ -4,10 +4,11 @@ import { fileURLToPath } from "node:url";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { createTemplateSourceFiles, listTemplates, templateManifest } from "../template/dist/index.js";
+import { readTemplateReleaseVersion } from "./template-release-version.mjs";
 
 const execFileAsync = promisify(execFile);
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
-const version = readVersion();
+const version = readTemplateReleaseVersion();
 const releaseDir = join(repoRoot, "dist", "template-release");
 const bundleDir = join(releaseDir, `tsu-templates-v${version}`);
 const archivePath = join(releaseDir, `tsu-templates-v${version}.tar.gz`);
@@ -34,17 +35,6 @@ for (const templateName of listTemplates()) {
 
 await createTarball(bundleDir, archivePath, releaseDir);
 process.stdout.write(`${archivePath}\n`);
-
-function readVersion() {
-  const versionArg = process.argv.find((arg) => arg.startsWith("--version="));
-  const value = versionArg?.slice("--version=".length) ?? process.env.TEMPLATE_VERSION;
-
-  if (!value) {
-    throw new Error("Missing template release version. Use --version=<version> or TEMPLATE_VERSION.");
-  }
-
-  return value.replace(/^v/, "");
-}
 
 async function writeJson(filePath, value) {
   await writeFile(filePath, `${JSON.stringify(value, null, 2)}\n`, "utf8");
