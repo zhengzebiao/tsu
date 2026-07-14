@@ -219,6 +219,18 @@ shasum -a 256 -c dist/template-release/tsu-templates-v1.0.0.tar.gz.sha256
 - 五个现存 Releases 均为非 draft、非 prerelease，且各包含一个上表所列 archive asset。
 - 删除操作必须只删除上述五个 Releases 和八个精确 tags，不触碰任何其他 `template-v*` Release/tag。
 
-### 删除后验证
+### 删除后验证（2026-07-14T15:33:07Z）
 
-尚未执行。完成精确删除并重新查询 GitHub Releases、remote refs 与 local refs 后填写。
+已按审计记录完成精确删除：
+
+- 删除 GitHub Releases：`template-v1.0.3`～`template-v1.0.7`（Release IDs：`329941283`、`332373446`、`335315306`、`335363782`、`345310485`）；`template-v1.0.0`～`template-v1.0.2` 删除前即无 Release，因此未发出 Release 删除请求。
+- 删除 remote tags：精确删除 `template-v1.0.0`～`template-v1.0.7`，每次删除前均重新核对 GitHub ref SHA 与上表一致。
+- 删除 local tags：精确删除同名八个 lightweight tags。
+
+删除后独立验证：
+
+- GitHub Releases API 对八个精确 tag 均返回 `404 Not Found`。
+- `git ls-remote` 对八个精确 remote refs 返回空结果。
+- `git show-ref --verify` 确认八个精确 local refs 均不存在。
+- 全量复查仍保留的模板 Releases 与 remote tags 只有 `template-v0.3.0`、`template-v0.4.0`、`template-v0.5.0`，三者 Release/tag 均未被修改。
+- 未创建新的 `template-v1.0.0`；必须等待 v1.0 稳定化实现及所有 release gates 通过。
