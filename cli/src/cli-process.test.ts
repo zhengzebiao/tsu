@@ -24,7 +24,7 @@ test("CLI process initializes a local project with stable stdout", async () => {
   try {
     const result = await execFileAsync(process.execPath, [cliEntrypoint, "init", "demo", "--local"], { cwd });
 
-    assert.match(result.stdout, /^Created demo from default@\d+\.\d+\.\d+\nLocation: /);
+    assert.match(result.stdout, /^Created demo from default@\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?\nLocation: /);
     assert.match(result.stdout, /Next steps:\n  cd demo\n  pnpm dev\n$/);
     assert.equal(result.stderr, "");
     assert.match(await readFile(join(cwd, "demo", ".tsu", "template.json"), "utf8"), /"source": "local"/);
