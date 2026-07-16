@@ -382,6 +382,8 @@ function createMonorepoTemplateFiles(packageName: string): TemplateFile[] {
         test: "node -e \"console.log('No tests configured for @tsuz/components')\""
       }
     }),
+    ...createNestedPackageFiles("components", "vue", "vue component package is ready"),
+    ...createNestedPackageFiles("components", "react", "react component package is ready"),
     ...createTopLevelPackageFiles("utils", "@tsuz/utils", undefined, {
       exports: {
         "./js": {
@@ -396,32 +398,9 @@ function createMonorepoTemplateFiles(packageName: string): TemplateFile[] {
         test: "node -e \"console.log('No tests configured for @tsuz/utils')\""
       }
     }),
+    ...createNestedPackageFiles("utils", "js", "utility package is ready"),
     ...createTopLevelPackageFiles("sdk", "@tsuz/sdk", "sdk package is ready"),
-    {
-      path: "template/package.json",
-      content: packageJson({
-        name: "@tsuz/template",
-        version: "0.0.0",
-        type: "module",
-        exports: {
-          ".": {
-            types: "./dist/index.d.ts",
-            import: "./dist/index.js"
-          }
-        },
-        types: "./dist/index.d.ts",
-        files: ["dist/*.js", "dist/*.d.ts"],
-        scripts: {
-          build: "tsc -p tsconfig.json",
-          lint: "tsc -p tsconfig.json --noEmit",
-          test: "node --test dist/index.test.js"
-        },
-        repository: {
-          type: "git",
-          url: "https://github.com/zhengzebiao/tsu"
-        }
-      })
-    },
+    ...createTopLevelPackageFiles("template", "@tsuz/template", "template package is ready"),
     {
       path: "tests/package.json",
       content: packageJson({
@@ -437,6 +416,28 @@ function createMonorepoTemplateFiles(packageName: string): TemplateFile[] {
         private: true,
         type: "module"
       })
+    }
+  ];
+}
+
+function createNestedPackageFiles(directory: string, subpath: string, message: string): TemplateFile[] {
+  const packageRoot = `${directory}/${subpath}`;
+
+  return [
+    {
+      path: `${packageRoot}/tsconfig.json`,
+      content: packageJson({
+        extends: "../../tsconfig.base.json",
+        compilerOptions: {
+          rootDir: "src",
+          outDir: `../dist/${subpath}`
+        },
+        include: ["src"]
+      })
+    },
+    {
+      path: `${packageRoot}/src/index.ts`,
+      content: `export const message = "${message}";\n`
     }
   ];
 }
