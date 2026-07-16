@@ -1,9 +1,13 @@
+import { createRequire } from "node:module";
 import { createMfeAppTemplateFiles } from "./mfe-app.js";
 import { createMfeMainTemplateFiles } from "./mfe-main.js";
 import { createMfeTemplateFiles } from "./mfe.js";
 import { createPythonAppTemplateFiles, createPythonMainTemplateFiles } from "./python.js";
 import { createReactTemplateFiles } from "./react.js";
 import { createVue3TemplateFiles } from "./vue3.js";
+
+const require = createRequire(import.meta.url);
+const templatePackageJson = require("../package.json") as { version: string };
 
 export interface TemplateManifest {
   name: string;
@@ -130,11 +134,12 @@ export const templateDefinitions: TemplateDefinition[] = [
 ];
 export const templateNames = templateDefinitions.map((template) => template.name);
 export const templateProjectNameToken = "__tsu_project_name__";
+export const templatePackageVersion = templatePackageJson.version;
 
 export const templateManifest: TemplateManifest = {
   name: "tsuz-template",
   schemaVersion: "0.5",
-  version: "0.0.0",
+  version: templatePackageVersion,
   changelog: [
     "Add manifest v0.5 metadata for template discovery.",
     "Add private template repository workflow documentation."

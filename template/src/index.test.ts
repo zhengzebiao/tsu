@@ -1,10 +1,15 @@
 import assert from "node:assert/strict";
+import { createRequire } from "node:module";
 import test from "node:test";
-import { createTemplateFiles, createTemplateSourceFiles, listTemplates, renderTemplateFiles, templateManifest, templateProjectNameToken } from "./index.js";
+import { createTemplateFiles, createTemplateSourceFiles, listTemplates, renderTemplateFiles, templateManifest, templatePackageVersion, templateProjectNameToken } from "./index.js";
+
+const packageJson = createRequire(import.meta.url)("../package.json") as { version: string };
 
 test("template manifest exposes package metadata", () => {
+  assert.equal(templatePackageVersion, packageJson.version);
   assert.equal(templateManifest.name, "tsuz-template");
   assert.equal(templateManifest.schemaVersion, "0.5");
+  assert.equal(templateManifest.version, packageJson.version);
   assert.deepEqual(templateManifest.changelog, [
     "Add manifest v0.5 metadata for template discovery.",
     "Add private template repository workflow documentation."

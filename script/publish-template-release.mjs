@@ -3,6 +3,7 @@ import { readFile, writeFile } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
+import { assertTemplateReleaseAssetAvailable } from "./template-release-publish.mjs";
 import { isTemplateReleasePrerelease, readTemplateReleaseVersion } from "./template-release-version.mjs";
 
 class ResponseError extends Error {
@@ -25,8 +26,8 @@ if (!token) {
 }
 
 const assetName = `tsu-templates-v${version}.tar.gz`;
-const release = await ensureRelease(repository, tag, token);
-await replaceReleaseAsset(release, assetName, archivePath, token);
+const release = await ensureImmutableRelease(repository, tag, assetName, token);
+await uploadReleaseAsset(release, assetName, archivePath, token);
 process.stdout.write(`Published ${archivePath} to GitHub Release ${tag}\n`);
 
 async function readRepository() {
@@ -59,16 +60,19 @@ function parseRepository(value) {
   return { owner, repo };
 }
 
-async function ensureRelease(repositoryInfo, tagName, authToken) {
-  const releaseFile = join(repoRoot, "dist", "template-release", `${tagName}.json`);
-  const release = await getReleaseByTag(repositoryInfo, tagName, authToken).catch(async (error) => {
+async function ensureImmutableRelease(repositoryInfo, tagName, assetName, authToken) {
+  const existingRelease = await getReleaseByTag(repositoryInfo, tagName, authToken).catch((error) => {
     if (error instanceof ResponseError && error.status === 404) {
-      return createRelease(repositoryInfo, tagName, authToken);
+      return undefined;
     }
 
     throw error;
   });
 
+  assertTemplateReleaseAssetAvailable(existingRelease, tagName, assetName);
+
+  const release = existingRelease ?? (await createRelease(repositoryInfo, tagName, authToken));
+  const releaseFile = join(repoRoot, "dist", "template-release", `${tagName}.json`);
   await writeFile(releaseFile, `${JSON.stringify({ tag: tagName, archive: archivePath }, null, 2)}\n`, "utf8");
   return release;
 }
@@ -97,16 +101,7 @@ async function createRelease(repositoryInfo, tagName, authToken) {
   });
 }
 
-async function replaceReleaseAsset(release, assetName, filePath, authToken) {
-  const existingAsset = release.assets?.find((asset) => asset.name === assetName);
-
-  if (existingAsset) {
-    await request(existingAsset.url, {
-      method: "DELETE",
-      headers: authHeaders(authToken)
-    });
-  }
-
+async function uploadReleaseAsset(release, assetName, filePath, authToken) {
   const uploadUrl = new URL(release.upload_url.replace(/\{\?name,label\}$/, ""));
   uploadUrl.searchParams.set("name", assetName);
 

@@ -232,20 +232,22 @@ tsu-cli template info --help
 
 | 参数 | 示例 | 说明 |
 | --- | --- | --- |
-| `<projectName>` | `tsu-cli init demo-app` | 项目目录名，默认 `quick-start-app` |
+| `<projectName>` | `tsu-cli init demo-app` | 单个项目目录名，默认 `quick-start-app`；拒绝绝对路径、`.`、`..` 和路径分隔符 |
 | `--template` / `-t` | `tsu-cli init platform --template monorepo` | 指定模板名，目前支持 `default`、`vue3`、`react`、`mfe`、`mfe-main`、`mfe-app`、`monorepo`、`python-main`、`python-app` |
 | `--version` / `-v` | `tsu-cli init platform --template monorepo --version 1.2.3` | 指定模板 Release 版本；明确指定版本时会直接下载对应的 GitHub Release asset |
 | `--repo` | `tsu-cli init platform --repo owner/repo` | 指定 GitHub 仓库，默认读取 `TSU_TEMPLATE_REPOSITORY`、`GITHUB_REPOSITORY`，否则使用 `zhengzebiao/tsu` |
-| `--local` | `tsu-cli init demo-app --local` | 强制使用本地模板，适合离线或开发调试 |
-| `--cwd` | `tsu-cli init demo-app --cwd ./apps` | 指定项目生成的父目录 |
-| `--force` / `-f` | `tsu-cli init demo-app --force` | 目标目录已存在时先删除再重新生成 |
+| `--local` | `tsu-cli init demo-app --local` | 强制使用本地模板，不能与 `--version`、`--repo`、`--no-cache` 或 `--refresh` 组合 |
+| `--cwd` | `tsu-cli init demo-app --cwd ./apps` | 指定项目生成的父目录；目标必须是它的直接子目录 |
+| `--force` / `-f` | `tsu-cli init demo-app --force` | 目标目录已存在时先删除再重新生成，路径安全校验在删除前执行 |
 
 明确指定 `--version` 时，CLI 会直接下载对应的 GitHub Release asset；`latest` 仍然会先访问 GitHub API 查找最新 release。CLI 会自动读取 `GITHUB_TOKEN` 或 `GH_TOKEN` 作为认证头，并把已下载的模板包缓存到本地复用。
 
-如果想控制缓存行为，可以在 `init`、`template info`、`template versions` 里使用：
+如果想控制缓存行为，可以在远程 `init`、`template info`、`template versions` 里使用：
 
 - `--no-cache`：本次不读写本地缓存，直接走临时目录
 - `--refresh`：忽略已缓存内容，强制重新下载并刷新缓存
+
+`--no-cache` 与 `--refresh` 不能同时使用；这两个参数也不能与 `--local` 组合。远程 `latest` 解析成功后，输出和 `.tsu/template.json` 都记录实际具体版本，而不是字符串 `latest`。
 
 示例：
 
@@ -269,6 +271,14 @@ Target directory already exists: <path>. Use --force to overwrite.
 tsu-cli init demo-app --force
 ```
 
+## doctor、upgrade-check 与进程输出
+
+`doctor` 会按模板类型检查项目：Node 模板检查 `package.json`，Python 模板检查 `pyproject.toml`；带有效 `.tsu/template.json` 的私有模板不会被强制套用内置模板文件规则。
+
+`upgrade-check` 只比较远程来源项目，并且只考虑 manifest 中包含当前模板的 Release。本地来源或当前版本高于最新匹配 Release 时返回 `unknown`。
+
+CLI 成功输出写入 stdout；参数、网络、schema 或其他执行失败写入 stderr，并以退出码 `2` 结束。`--json` 当前只用于 `doctor` 和 `upgrade-check` 的成功结果，fatal error 仍为 stderr 文本。
+
 ## 常用开发命令
 
 ```bash
@@ -288,15 +298,15 @@ pnpm --filter @tsuz/cli test
 
 ```bash
 pnpm build
-node cli/dist/index.js init demo-app --template default --cwd ./tmp
-node cli/dist/index.js init web-app --template vue3 --cwd ./tmp
-node cli/dist/index.js init react-app --template react --cwd ./tmp
-node cli/dist/index.js init mfe-app --template mfe --cwd ./tmp
-node cli/dist/index.js init mfe-main-platform --template mfe-main --cwd ./tmp
-node cli/dist/index.js init mfe-business-app --template mfe-app --cwd ./tmp
-node cli/dist/index.js init platform --template monorepo --cwd ./tmp
-node cli/dist/index.js init auth-service --template python-main --cwd ./tmp
-node cli/dist/index.js init business-service --template python-app --cwd ./tmp
+node cli/dist/index.js init demo-app --template default --cwd ./tmp --local
+node cli/dist/index.js init web-app --template vue3 --cwd ./tmp --local
+node cli/dist/index.js init react-app --template react --cwd ./tmp --local
+node cli/dist/index.js init mfe-app --template mfe --cwd ./tmp --local
+node cli/dist/index.js init mfe-main-platform --template mfe-main --cwd ./tmp --local
+node cli/dist/index.js init mfe-business-app --template mfe-app --cwd ./tmp --local
+node cli/dist/index.js init platform --template monorepo --cwd ./tmp --local
+node cli/dist/index.js init auth-service --template python-main --cwd ./tmp --local
+node cli/dist/index.js init business-service --template python-app --cwd ./tmp --local
 ```
 
 ## 验证生成后的 monorepo
@@ -448,14 +458,10 @@ where tsu-cli
 验证基础输出：
 
 ```bash
-tsu-cli
+tsu-cli --help
 ```
 
-预期输出：
-
-```text
-tsu-cli is ready to pull templates
-```
+在非交互环境中直接执行 `tsu-cli` 也会输出同一份帮助；在交互式 TTY 中，不带参数会进入项目名和模板选择提示。
 
 验证远程模板：
 
@@ -509,7 +515,7 @@ tsu-cli init react-test --template react --version 1.0.4
    预期输出：
 
    ```text
-   tsu-cli is ready to pull templates
+   Tsu CLI - create versioned project templates.
    ```
 
 4. 如果仍异常，直接用 Node 执行全局安装目录下的入口文件，判断是 shim 问题还是包入口问题：
@@ -564,7 +570,7 @@ git push origin template-v1.0.0
 - `GITHUB_TOKEN` 或 `GH_TOKEN`
 - `TSU_TEMPLATE_REPOSITORY` 或 `GITHUB_REPOSITORY`
 
-脚本会通过 GitHub API 创建或复用 `template-v<version>` Release，并上传 `tsu-templates-v<version>.tar.gz`。
+脚本会通过 GitHub API 创建 `template-v<version>` Release，并上传 `tsu-templates-v<version>.tar.gz`。如果此前上传失败，脚本可以复用尚未包含目标 archive 的同名 Release；一旦版本化 archive 已存在，就不会被替换，必须改用新的 patch 版本。
 
 完整配置、token 和排障说明见 [私有模板仓库使用指南](PRIVATE_TEMPLATE_REPOSITORY.zh-CN.md)。
 

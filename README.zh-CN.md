@@ -104,9 +104,13 @@ tsu-cli init admin-console --template vue3
 | `--repo <owner/repo>` | 承载模板 release asset 的 GitHub 仓库 |
 | `--cwd <path>` | 项目创建目录 |
 | `--local` | 使用 CLI 内置模板，而不是 GitHub release asset |
+| `--no-cache` | 本次远程操作跳过模板缓存 |
+| `--refresh` | 重新下载并刷新远程模板缓存 |
 | `-f, --force` | 覆盖目标目录 |
 
-如果在交互式终端中直接运行 `tsu-cli` 且不带参数，CLI 会询问项目名称和模板。
+项目名称必须是单个目录名。绝对路径、`.`、`..`、`/`、`\\` 都会被拒绝；CLI 还会在 `--force` 删除任何内容之前确认解析后的目标仍是 `--cwd` 的直接子目录。`--local` 不能与远程专用参数（`--version`、`--repo`、`--no-cache`、`--refresh`）组合，`--no-cache` 也不能与 `--refresh` 组合。
+
+如果在交互式终端中直接运行 `tsu-cli` 且不带参数，CLI 会询问项目名称和模板；没有 TTY 时，不带参数会输出帮助信息。
 
 ### `doctor`
 
@@ -116,7 +120,7 @@ tsu-cli init admin-console --template vue3
 tsu-cli doctor --cwd admin-console
 ```
 
-当前版本只做本地静态检查。它会读取 `.tsu/template.json` 展示模板名称、版本、来源和仓库，并检查预期模板文件是否仍然存在。
+它会读取 `.tsu/template.json` 展示模板名称、版本、来源和仓库，并按项目类型检查工程结构和预期文件。Python 模板通过 `pyproject.toml` 检查；带有效元数据的私有模板使用元数据作为身份，不会被强制套用内置 Node 或 README 检查；没有元数据的旧项目仍可使用 README 标记作为兼容回退。
 
 加 `--json` 可输出机器可读结果，便于 CI 流水线消费：
 
@@ -128,7 +132,7 @@ JSON 包含 `status`（`ok` / `warning` / `error`）、解析出的模板元数�
 
 ### `upgrade-check`
 
-检查生成项目是否有更新的模板 release 可用。该命令只读，不会修改项目文件。
+检查远程模板生成项目是否有更新且包含当前模板的 release 可用。该命令只读，不会修改项目文件。通过 `--local` 生成的项目会返回 `unknown`，因为已安装的 `@tsuz/template` 版本不能与远程 release asset 直接比较；远程检查只考虑 manifest 中确实包含当前模板的版本。如果项目记录版本高于最新匹配 release，也会返回 `unknown`，而不是误报为已是最新版本。
 
 ```bash
 tsu-cli upgrade-check --cwd admin-console
@@ -174,7 +178,7 @@ tsu-cli init admin-console --template vue3 --version 1.0.4
 
 CLI 会解析到 GitHub release tag `template-v1.0.4`，并直接下载 `tsu-templates-v1.0.4.tar.gz` 这个 GitHub Release asset。明确指定版本时会跳过 GitHub Release API 查询；使用 `latest` 时仍会通过 GitHub API 解析最新模板 release。
 
-已下载的模板包会缓存在本地；后续请求同一仓库和版本时会复用缓存。可以使用 `--no-cache` 跳过缓存，或者使用 `--refresh` 强制重新下载并刷新缓存。
+已下载的模板包会缓存在本地；后续请求同一仓库和版本时会复用缓存。可以使用 `--no-cache` 跳过缓存，或者使用 `--refresh` 强制重新下载并刷新缓存。`latest` 只作为输入选择器；解析完成后，生成项目元数据和成功输出会记录实际 archive 的具体版本。
 
 查看可用模板 release 版本：
 
@@ -228,6 +232,12 @@ TSU_TEMPLATE_REPOSITORY=company/frontend-templates tsu-cli init crm-web --templa
 - `No tsu template asset found`：确认 Release 已上传 `tsu-templates-v<version>.tar.gz`。
 - `Template "<name>" is not available`：确认模板名已经写入 `manifest.json`，且压缩包内存在对应模板目录。
 - 模板内容不是最新：使用 `--refresh` 重拉，或用 `--no-cache` 单次跳过缓存。
+
+模板 release asset 不可变。发布脚本可以在上传失败后继续使用尚未包含目标 archive 的同名 Release，但不会替换已经存在的版本化 archive；需要修复已发布内容时应发布新的 patch 版本。
+
+## CLI 进程契约
+
+帮助、版本、列表、初始化、`doctor` 和 `upgrade-check` 成功结果写入 stdout，并以换行结束。参数、网络、schema 和其他执行失败写入 stderr，退出码为 `2`。当前稳定的 `--json` 范围仅包含 `doctor` 和 `upgrade-check` 的成功 domain result；fatal error 仍使用 stderr 文本，而不是 JSON error envelope。
 
 ## 生成项目后的工作流
 

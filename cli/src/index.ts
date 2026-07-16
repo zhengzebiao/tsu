@@ -2,14 +2,29 @@
 
 import { stdin as input, stdout as output } from "node:process";
 import { existsSync, realpathSync } from "node:fs";
-import { cp, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
-import { tmpdir } from "node:os";
-import { dirname, join, resolve } from "node:path";
+import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import { dirname, isAbsolute, join, relative, resolve } from "node:path";
 import { createRequire } from "node:module";
 import { createInterface } from "node:readline/promises";
 import { fileURLToPath } from "node:url";
-import { createTemplateFiles, renderTemplateFiles, templateDefinitions, templateManifest, templateNames, type TemplateFile, type TemplateName } from "./template.js";
-import { parseTemplateMetadata, stringifyTemplateMetadata, type TemplateMetadata, type TemplateSource } from "./contracts.js";
+import {
+  createTemplateFiles,
+  renderTemplateFiles,
+  templateDefinitions,
+  templateManifest,
+  templateNames,
+  templatePackageVersion,
+  type TemplateDefinition,
+  type TemplateFile,
+  type TemplateName
+} from "./template.js";
+import {
+  normalizeConcreteTemplateVersion,
+  parseTemplateMetadata,
+  stringifyTemplateMetadata,
+  type TemplateMetadata,
+  type TemplateSource
+} from "./contracts.js";
 import {
   compareTemplateVersions,
   downloadTemplateManifest,
@@ -18,7 +33,6 @@ import {
   findTemplateAsset,
   newestTemplateVersion,
   normalizeTemplateVersion,
-  remoteManifestIncludesTemplate,
   remoteManifestTemplateNames,
   resolveTemplateAssetSource,
   resolveTemplateVersions,
@@ -60,6 +74,18 @@ export type { TemplateMetadata, TemplateSource } from "./contracts.js";
 
 export interface ParsedInitOptions extends Required<Pick<InitProjectOptions, "cwd" | "projectName" | "templateName" | "version" | "force" | "source" | "cache" | "refresh">> {
   repository?: string;
+}
+
+interface ResolvedTemplateContext {
+  name: string;
+  version: string;
+  source: TemplateSource;
+  repository?: string;
+  tag?: string;
+  asset?: string;
+  definition: RemoteTemplateDefinition | TemplateDefinition;
+  nextSteps: string[];
+  files: TemplateFile[];
 }
 
 export interface TemplateInfoOptions {
@@ -112,6 +138,7 @@ export interface UpgradeCheckResult {
 }
 
 export interface RemoteTemplateInfo extends RemoteTemplateDefinition {
+  version: string;
   changelog?: string[];
 }
 
@@ -248,7 +275,7 @@ export function createRemoteTemplateInfoMessage(options: TemplateInfoOptions, de
   const lines = [
     `Template: ${definition.name}`,
     `Title: ${definition.title ?? "Not provided"}`,
-    `Version: ${options.version}`,
+    `Version: ${definition.version}`,
     `Repository: ${options.repository}`,
     `Description: ${definition.description ?? "Not provided"}`,
     `Tags: ${formatOptionalList(definition.tags)}`,
@@ -288,12 +315,11 @@ export function createTemplateVersionsMessage(options: TemplateVersionsOptions, 
   return [title, header, divider, ...lines].join("\n");
 }
 
-export function createSuccessMessage(options: ParsedInitOptions, targetDir: string) {
-  const definition = getTemplateDefinition(options.templateName);
-  const nextSteps = [`cd ${options.projectName}`, ...definition.nextSteps];
+export function createSuccessMessage(projectName: string, targetDir: string, context: ResolvedTemplateContext) {
+  const nextSteps = [`cd ${projectName}`, ...context.nextSteps];
 
   return [
-    `Created ${options.projectName} from ${options.templateName}@${options.version}`,
+    `Created ${projectName} from ${context.name}@${context.version}`,
     `Location: ${targetDir}`,
     "",
     "Next steps:",
@@ -343,6 +369,8 @@ export function parseInitArgs(args: string[], cwd = process.cwd()): ParsedInitOp
   let cache = true;
   let refresh = false;
   let hasProjectName = false;
+  let hasVersionOption = false;
+  let hasRepositoryOption = false;
 
   for (let index = 0; index < args.length; index += 1) {
     const arg = args[index];
@@ -375,12 +403,14 @@ export function parseInitArgs(args: string[], cwd = process.cwd()): ParsedInitOp
 
     if (arg === "--version" || arg === "-v") {
       version = normalizeTemplateVersion(readOptionValue(args, index, arg));
+      hasVersionOption = true;
       index += 1;
       continue;
     }
 
     if (arg === "--repo") {
       repository = readOptionValue(args, index, arg);
+      hasRepositoryOption = true;
       index += 1;
       continue;
     }
@@ -402,6 +432,9 @@ export function parseInitArgs(args: string[], cwd = process.cwd()): ParsedInitOp
     projectName = arg;
     hasProjectName = true;
   }
+
+  validateProjectName(projectName);
+  validateInitOptionCombinations({ source, cache, refresh, hasVersionOption, hasRepositoryOption });
 
   return {
     cwd: targetCwd,
@@ -525,6 +558,8 @@ export function parseTemplateInfoArgs(args: string[]): TemplateInfoOptions {
     throw new Error(`Unexpected argument: ${arg}`);
   }
 
+  validateCacheOptions(cache, refresh);
+
   return {
     repository,
     templateName,
@@ -570,6 +605,8 @@ export function parseTemplateVersionsArgs(args: string[]): TemplateVersionsOptio
     templateName = arg;
   }
 
+  validateCacheOptions(cache, refresh);
+
   return {
     repository,
     cache,
@@ -579,8 +616,8 @@ export function parseTemplateVersionsArgs(args: string[]): TemplateVersionsOptio
 }
 
 export async function initProject(options: InitProjectOptions) {
-  const targetDir = join(options.cwd, options.projectName);
-  const files = await resolveTemplateFiles(options);
+  const targetDir = resolveProjectTarget(options.cwd, options.projectName);
+  const context = await resolveTemplateContext(options);
 
   if (options.force) {
     await rm(targetDir, { force: true, recursive: true });
@@ -590,7 +627,7 @@ export async function initProject(options: InitProjectOptions) {
     await createProjectDirectory(targetDir);
   }
 
-  for (const file of files) {
+  for (const file of context.files) {
     const filePath = join(targetDir, file.path);
     await mkdir(dirname(filePath), { recursive: true });
     await writeFile(filePath, file.content, "utf8");
@@ -598,11 +635,12 @@ export async function initProject(options: InitProjectOptions) {
 
   const metadataPath = join(targetDir, ".tsu", "template.json");
   await mkdir(dirname(metadataPath), { recursive: true });
-  await writeFile(metadataPath, createTemplateMetadata(options), "utf8");
+  await writeFile(metadataPath, createTemplateMetadata(context), "utf8");
 
   return {
     targetDir,
-    files: [...files.map((file) => file.path), ".tsu/template.json"]
+    context,
+    files: [...context.files.map((file) => file.path), ".tsu/template.json"]
   };
 }
 
@@ -672,7 +710,7 @@ export async function runCli(args: string[], cwd = process.cwd()) {
 
     const options = parseInitArgs(commandArgs, cwd);
     const result = await initProject(options);
-    return createSuccessMessage(options, result.targetDir);
+    return createSuccessMessage(options.projectName, result.targetDir, result.context);
   }
 
   throw new Error(`Unknown command: ${command}. Run tsu-cli --help for usage.`);
@@ -689,7 +727,7 @@ export async function runInteractiveInit(cwd = process.cwd(), prompts?: Interact
     const options = parseInitArgs([projectName, "--template", templateName, ...(source === "local" ? ["--local"] : [])], cwd);
     const result = await initProject(options);
 
-    return createSuccessMessage(options, result.targetDir);
+    return createSuccessMessage(options.projectName, result.targetDir, result.context);
   } finally {
     rl.close();
   }
@@ -720,17 +758,18 @@ export async function resolveRemoteTemplateInfo(options: TemplateInfoOptions): P
 
   return {
     ...definition,
+    version: asset.version,
     changelog: manifest.changelog
   };
 }
 
-export function createTemplateMetadata(options: InitProjectOptions): string {
+export function createTemplateMetadata(context: Pick<ResolvedTemplateContext, "name" | "version" | "source" | "repository">): string {
   const metadata: TemplateMetadata = {
     template: {
-      name: options.templateName ?? "default",
-      version: normalizeTemplateVersion(options.version ?? "latest"),
-      source: options.source ?? "remote",
-      ...(options.repository ? { repository: options.repository } : {})
+      name: context.name,
+      version: normalizeConcreteTemplateVersion(context.version),
+      source: context.source,
+      ...(context.source === "remote" && context.repository ? { repository: context.repository } : {})
     },
     generatedAt: new Date().toISOString()
   };
@@ -753,11 +792,24 @@ export async function upgradeCheckProject(options: UpgradeCheckOptions): Promise
     };
   }
 
+  const currentVersion = normalizeTemplateVersion(metadata.template.version);
+
+  if (metadata.template.source === "local") {
+    return {
+      cwd: options.cwd,
+      status: "unknown",
+      templateName: metadata.template.name,
+      currentVersion,
+      availableVersions: [],
+      warnings: ["This project uses the locally installed @tsuz/template package, so it cannot be compared with remote template releases."],
+      nextSteps: ["Upgrade @tsuz/template and regenerate the project locally to compare changes."]
+    };
+  }
+
   const repository = options.repository ?? metadata.template.repository ?? process.env.TSU_TEMPLATE_REPOSITORY ?? process.env.GITHUB_REPOSITORY ?? "zhengzebiao/tsu";
-  const versions = await resolveTemplateVersions({ repository });
+  const versions = await resolveTemplateVersions({ repository, templateName: metadata.template.name, cache: false });
   const availableVersions = versions.map((version) => version.version);
   const latestVersion = newestTemplateVersion(availableVersions);
-  const currentVersion = normalizeTemplateVersion(metadata.template.version);
 
   if (!latestVersion) {
     return {
@@ -792,7 +844,23 @@ export async function upgradeCheckProject(options: UpgradeCheckOptions): Promise
     };
   }
 
-  const hasUpdate = compareTemplateVersions(latestVersion, currentVersion) > 0;
+  const comparison = compareTemplateVersions(latestVersion, currentVersion);
+
+  if (comparison < 0) {
+    return {
+      cwd: options.cwd,
+      status: "unknown",
+      templateName: metadata.template.name,
+      currentVersion,
+      latestVersion,
+      repository,
+      availableVersions,
+      warnings: [`Current template version ${currentVersion} is newer than the latest matching remote release ${latestVersion}.`],
+      nextSteps: [`Run tsu-cli template versions ${metadata.template.name} --repo ${repository} to inspect available releases.`]
+    };
+  }
+
+  const hasUpdate = comparison > 0;
 
   return {
     cwd: options.cwd,
@@ -818,6 +886,7 @@ export async function doctorProject(options: DoctorOptions): Promise<DoctorResul
   const warnings: string[] = [];
   const nextSteps: string[] = [];
   const packageJson = await readJsonFile<{ name?: string }>(join(options.cwd, "package.json"));
+  const pyproject = await readTextFile(join(options.cwd, "pyproject.toml"));
   const readme = await readTextFile(join(options.cwd, "README.md"));
   const metadata = await readTemplateMetadata(options.cwd);
   const readmeTemplateName = detectTemplateName(readme);
@@ -825,16 +894,29 @@ export async function doctorProject(options: DoctorOptions): Promise<DoctorResul
   const templateVersion = metadata?.template.version;
   const templateSource = metadata?.template.source;
   const templateRepository = metadata?.template.repository;
+  const builtInTemplate = Boolean(templateName && (templateSource === "local" || (!metadata && templateDefinitions.some((definition) => definition.name === templateName))));
+  const pythonTemplate = templateName === "python-main" || templateName === "python-app";
+  const projectName = packageJson?.name ?? (pythonTemplate ? detectPyprojectName(pyproject) : undefined);
 
-  checks.push(packageJson ? pass("package.json", `Found ${packageJson.name ?? "unnamed package"}`) : fail("package.json", "Missing package.json"));
-  checks.push(readmeTemplateName ? pass("Tsu README marker", `Generated from ${readmeTemplateName}`) : fail("Tsu README marker", "README.md does not include a Tsu generated marker"));
+  if (pythonTemplate) {
+    checks.push(pyproject ? pass("pyproject.toml", `Found ${projectName ?? "unnamed project"}`) : fail("pyproject.toml", "Missing pyproject.toml"));
+  } else if (builtInTemplate || !metadata) {
+    checks.push(packageJson ? pass("package.json", `Found ${packageJson.name ?? "unnamed package"}`) : fail("package.json", "Missing package.json"));
+  }
+
+  if (metadata && builtInTemplate) {
+    checks.push(readmeTemplateName ? pass("Tsu README marker", `Generated from ${readmeTemplateName}`) : warn("Tsu README marker", "README.md does not include a Tsu generated marker"));
+  } else if (!metadata) {
+    checks.push(readmeTemplateName ? pass("Tsu README marker", `Generated from ${readmeTemplateName}`) : fail("Tsu README marker", "README.md does not include a Tsu generated marker"));
+  }
+
   checks.push(metadata ? pass("Template metadata", `.tsu/template.json records ${metadata.template.name}@${metadata.template.version}`) : warn("Template metadata", "Missing .tsu/template.json"));
 
   if (!templateVersion) {
     warnings.push("Template version metadata is not recorded in this project yet.");
   }
 
-  if (templateName) {
+  if (templateName && builtInTemplate) {
     const missingFiles = await missingTemplateFiles(options.cwd, templateName);
 
     if (missingFiles.length) {
@@ -846,7 +928,7 @@ export async function doctorProject(options: DoctorOptions): Promise<DoctorResul
     }
   }
 
-  if (!packageJson || !templateName) {
+  if ((!packageJson && !pyproject && !metadata) || !templateName) {
     nextSteps.push("Run this command inside a project generated by tsu-cli, or pass --cwd to one.");
   }
 
@@ -858,7 +940,7 @@ export async function doctorProject(options: DoctorOptions): Promise<DoctorResul
 
   return {
     cwd: options.cwd,
-    ...(packageJson?.name ? { projectName: packageJson.name } : {}),
+    ...(projectName ? { projectName } : {}),
     ...(templateName ? { templateName } : {}),
     ...(templateVersion ? { templateVersion } : {}),
     ...(templateSource ? { templateSource } : {}),
@@ -989,6 +1071,10 @@ function detectTemplateName(readme: string | undefined) {
   return readme?.match(/Generated by Tsu from the `([^`]+)` template/)?.[1];
 }
 
+function detectPyprojectName(pyproject: string | undefined) {
+  return pyproject?.match(/^name\s*=\s*["']([^"']+)["']/m)?.[1];
+}
+
 async function readTemplateMetadata(cwd: string) {
   const metadataPath = join(cwd, ".tsu", "template.json");
   const content = await readTextFile(metadataPath);
@@ -1024,46 +1110,53 @@ async function readTextFile(filePath: string) {
   }
 }
 
-async function resolveTemplateFiles(options: InitProjectOptions) {
-  if (options.source === "local") {
-    return createTemplateFiles({ projectName: options.projectName, templateName: options.templateName });
-  }
-
-  try {
-    return await downloadTemplateFiles(options);
-  } catch (error: unknown) {
-    if (options.repository) {
-      throw error;
-    }
-
-    return createTemplateFiles({ projectName: options.projectName, templateName: options.templateName });
-  }
+async function resolveTemplateContext(options: InitProjectOptions): Promise<ResolvedTemplateContext> {
+  return options.source === "local" ? resolveLocalTemplateContext(options) : resolveRemoteTemplateContext(options);
 }
 
-async function downloadTemplateFiles(options: InitProjectOptions): Promise<TemplateFile[]> {
+function resolveLocalTemplateContext(options: InitProjectOptions): ResolvedTemplateContext {
+  const name = options.templateName ?? "default";
+  const definition = getTemplateDefinition(name);
+
+  return {
+    name,
+    version: normalizeConcreteTemplateVersion(templatePackageVersion, "installed @tsuz/template version"),
+    source: "local",
+    definition,
+    nextSteps: [...definition.nextSteps],
+    files: createTemplateFiles({ projectName: options.projectName, templateName: name })
+  };
+}
+
+async function resolveRemoteTemplateContext(options: InitProjectOptions): Promise<ResolvedTemplateContext> {
   if (!options.repository) {
     throw new Error("Missing GitHub repository. Set TSU_TEMPLATE_REPOSITORY or GITHUB_REPOSITORY, or pass --repo owner/name.");
   }
 
   const asset = await resolveTemplateAssetSource(options.repository, options.version ?? "latest");
   const bundle = await ensureTemplateBundle(options.repository, asset.name, asset.browser_download_url, options);
-  const templateName = options.templateName ?? "default";
-
-  if (!remoteManifestIncludesTemplate(bundle.manifest, templateName)) {
-    throw new Error(`Template "${templateName}" is not available in ${asset.name}. Available templates: ${remoteManifestTemplateNames(bundle.manifest).join(", ")}. Check manifest.json and the template directories inside the archive.`);
-  }
-
-  const tempDir = await mkdtemp(join(tmpdir(), "tsu-template-"));
+  const name = options.templateName ?? "default";
 
   try {
-    const templateDir = join(bundle.bundleDir, templateName);
-    const stagingDir = join(tempDir, "rendered");
-    await cp(templateDir, stagingDir, { recursive: true });
+    const definition = findRemoteTemplateDefinition(bundle.manifest, name);
 
-    return renderTemplateFiles(await readTemplateDirectory(stagingDir), options.projectName);
+    if (!definition) {
+      throw new Error(`Template "${name}" is not available in ${asset.name}. Available templates: ${remoteManifestTemplateNames(bundle.manifest).join(", ")}. Check manifest.json and the template directories inside the archive.`);
+    }
+
+    return {
+      name,
+      version: asset.version,
+      source: "remote",
+      repository: options.repository,
+      tag: asset.tag,
+      asset: asset.name,
+      definition,
+      nextSteps: [...(definition.nextSteps ?? [])],
+      files: renderTemplateFiles(await readTemplateDirectory(join(bundle.bundleDir, name)), options.projectName)
+    };
   } finally {
     await bundle.dispose?.();
-    await rm(tempDir, { force: true, recursive: true });
   }
 }
 
@@ -1098,6 +1191,38 @@ function getLocalTemplateChangelog() {
 
 function formatOptionalList(value: string[] | undefined) {
   return value?.length ? value.join(", ") : "Not provided";
+}
+
+function validateProjectName(projectName: string) {
+  if (!projectName.trim() || projectName === "." || projectName === ".." || isAbsolute(projectName) || projectName.includes("/") || projectName.includes("\\") || projectName.includes("\0")) {
+    throw new Error("Invalid project name. Use a single directory name without path separators, such as my-app or My App.");
+  }
+}
+
+function validateCacheOptions(cache: boolean, refresh: boolean) {
+  if (!cache && refresh) {
+    throw new Error("--no-cache cannot be combined with --refresh.");
+  }
+}
+
+function validateInitOptionCombinations(options: { source: TemplateSource; cache: boolean; refresh: boolean; hasVersionOption: boolean; hasRepositoryOption: boolean }) {
+  validateCacheOptions(options.cache, options.refresh);
+
+  if (options.source === "local" && (options.hasVersionOption || options.hasRepositoryOption || !options.cache || options.refresh)) {
+    throw new Error("--local cannot be combined with --version, --repo, --no-cache, or --refresh.");
+  }
+}
+
+function resolveProjectTarget(cwd: string, projectName: string) {
+  validateProjectName(projectName);
+  const resolvedCwd = resolve(cwd);
+  const targetDir = resolve(resolvedCwd, projectName);
+
+  if (dirname(targetDir) !== resolvedCwd || relative(resolvedCwd, targetDir) !== projectName) {
+    throw new Error("Invalid project name. The target directory must be a direct child of --cwd.");
+  }
+
+  return targetDir;
 }
 
 function readCommandValue(args: string[], index: number, command: string) {
@@ -1146,7 +1271,7 @@ if (isCliEntrypoint()) {
     })
     .catch((error: unknown) => {
       console.error(error instanceof Error ? error.message : String(error));
-      process.exitCode = 1;
+      process.exitCode = 2;
     });
 }
 

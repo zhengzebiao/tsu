@@ -191,11 +191,16 @@ export async function resolveTemplateAssetSource(repository: string, version: st
 
   const release = await fetchGitHubRelease(repository, version);
   const asset = findTemplateAsset(release);
+  const resolvedVersion = parseTemplateAssetVersion(asset.name);
+
+  if (!resolvedVersion) {
+    throw new Error(`Template asset ${asset.name} in GitHub Release ${release.tag_name} does not contain a valid concrete SemVer.`);
+  }
 
   return {
     ...asset,
     tag: release.tag_name,
-    version: parseTemplateAssetVersion(asset.name) ?? normalizeTemplateVersion(version),
+    version: resolvedVersion,
     resolvedBy: "release-api"
   };
 }

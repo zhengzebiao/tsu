@@ -5,6 +5,7 @@ export {
   templateDefinitions,
   templateManifest,
   templateNames,
+  templatePackageVersion,
   type CreateTemplateFilesOptions,
   type TemplateDefinition,
   type TemplateFile,
